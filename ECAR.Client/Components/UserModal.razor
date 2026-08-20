@@ -1,0 +1,204 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Usuario" : "Crear Nuevo Usuario")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudTextField T="string" Label="Nombre" @bind-Value="nombre" 
+                Variant="Variant.Outlined" Required="true" RequiredError="El nombre es requerido"
+                MaxLength="200" Immediate="true" Class="mb-3" />
+
+            <MudTextField T="string" Label="Correo" @bind-Value="correo" 
+                Variant="Variant.Outlined" Required="true" RequiredError="El correo es requerido"
+                MaxLength="150" Immediate="true" Class="mb-3" />
+
+            <MudTextField T="string" Label="Password" @bind-Value="password" 
+                Variant="Variant.Outlined" Required="@(!IsEditMode)" RequiredError="El password es requerido"
+                InputType="InputType.Password" Immediate="true" Class="mb-3"
+                HelperText="@(IsEditMode ? "Dejar en blanco para mantener el password actual" : "")" />
+
+            <MudTextField T="string" Label="Usuario AD" @bind-Value="usuarioAD" 
+                Variant="Variant.Outlined" MaxLength="100" Immediate="true" Class="mb-3" />
+
+            <MudSelect T="long" Label="Roles" @bind-Values="selectedRoleIds" MultiSelection="true" 
+                Variant="Variant.Outlined" Class="mb-3">
+                @if (availableRoles != null)
+                {
+                    @foreach (var role in availableRoles)
+                    {
+                        <MudSelectItem T="long" Value="@role.IdRol">@role.Nombre</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+
+            @if (IsEditMode)
+            {
+                <MudSwitch T="bool" Label="Activo" @bind-Value="activo" Color="Color.Primary" />
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+    
+    [Parameter]
+    public UsuarioDto? Usuario { get; set; }
+    
+    [Parameter]
+    public List<RolDto>? AvailableRoles { get; set; }
+
+    private bool IsEditMode => Usuario != null;
+    private string nombre = string.Empty;
+    private string correo = string.Empty;
+    private string password = string.Empty;
+    private string? usuarioAD;
+    private bool activo = true;
+    private List<long> selectedRoleIds = new();
+    private List<RolDto>? availableRoles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        availableRoles = AvailableRoles ?? new List<RolDto>();
+        
+        if (IsEditMode && Usuario != null)
+        {
+            nombre = Usuario.Nombre;
+            correo = Usuario.Correo;
+            usuarioAD = Usuario.UsuarioAD;
+            activo = Usuario.Activo;
+            
+            // Load existing roles
+            if (Usuario.Roles != null)
+            {
+                var roleNames = Usuario.Roles.ToList();
+                selectedRoleIds = availableRoles
+                    .Where(r => roleNames.Contains(r.Nombre))
+                    .Select(r => r.IdRol)
+                    .ToList();
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            if (IsEditMode && Usuario != null)
+            {
+                var updateDto = new UpdateUsuarioDto
+                {
+                    Nombre = nombre,
+                    Correo = correo,
+                    UsuarioAD = usuarioAD,
+                    Password = string.IsNullOrEmpty(password) ? null : password,
+                    Activo = activo,
+                    RoleIds = selectedRoleIds.Any() ? selectedRoleIds : null
+                };
+
+                var result = await HttpClientService.UpdateUsuarioAsync(Usuario.IdUsuario, updateDto);
+                
+                if (result != null && result.Success)
+                {
+                    Snackbar.Add("Usuario actualizado exitosamente", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add(result?.Message ?? "Error al actualizar usuario", Severity.Error);
+                }
+            }
+            else
+            {
+                var createDto = new CreateUsuarioDto
+                {
+                    Nombre = nombre,
+                    Correo = correo,
+                    Password = password,
+                    UsuarioAD = usuarioAD,
+                    RoleIds = selectedRoleIds.Any() ? selectedRoleIds : null
+                };
+
+                var result = await HttpClientService.CreateUsuarioAsync(createDto);
+                
+                if (result != null && result.Success)
+                {
+                    Snackbar.Add("Usuario creado exitosamente", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add(result?.Message ?? "Error al crear usuario", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+
+.activo-checkbox {
+    background-color: transparent !important;
+}
+
+::deep .activo-checkbox .mud-checkbox {
+    background-color: transparent !important;
+}
+</style>

@@ -1,0 +1,101 @@
+:root {
+    --primary: #397FDE;
+    --primary-dark: #2A5FB8;
+    --primary-light: #6BA0E6;
+    --secondary: #79B75D;
+    --secondary-dark: #5A9144;
+    --secondary-light: #96C982;
+    --info: #17A2B8;
+    --success: #28A745;
+    --warning: #FFC107;
+    --error: #DC3545;
+    --background: #F4F5F7;
+    --surface: #FFFFFF;
+    --text-primary: #16438C;
+    --text-secondary: #5A6A7C;
+    --border: #E0E6ED;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--background);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0;
+}
+
+.mud-appbar {
+    background-color: var(--primary) !important;
+}
+
+.mud-button-root {
+    background-color: var(--primary) !important;
+}
+
+.mud-button-root:hover {
+    background-color: var(--primary-dark) !important;
+}
+
+.mud-primary-text {
+    color: var(--primary) !important;
+}
+
+.mud-primary-color {
+    background-color: var(--primary) !important;
+}
+
+/* Login page specific styles */
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
+.login-card {
+    max-width: 450px;
+    width: 100%;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.logo-container {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.logo-image {
+    max-height: 80px;
+    margin-bottom: 1rem;
+}
+
+.ecar-title {
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 1.8rem;
+    margin: 0;
+}
+
+.ecar-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* Sidebar logo styles */
+.ecar-logo {
+    max-height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.sidebar {
+    background-color: var(--primary-dark) !important;
+}

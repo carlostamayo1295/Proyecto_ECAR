@@ -1,0 +1,133 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject AuthorizationService AuthorizationService
+@inject AuthService AuthService
+
+@using MudBlazor
+
+<MudLayout>
+    <MudThemeProvider />
+    <MudDialogProvider />
+    <MudPopoverProvider />
+    <MudSnackbarProvider />
+    
+    <MudAppBar Elevation="3" Class="app-bar">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        <MudSpacer />
+        <img src="images/logo-ecar.png" alt="ECAR Logo" class="app-bar-logo" />
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="https://localhost:7296/scalar/v1" Target="_blank">
+            <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
+            API Scalar
+        </MudButton>
+        @if (isAuthenticated)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="HandleLogout">
+                <MudIcon Icon="@Icons.Material.Filled.Logout" Class="mr-2" />
+                Logout
+            </MudButton>
+        }
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Class="sidebar">
+        <MudList T="string">
+            <MudListItem T="string" Text="Home" Icon="@Icons.Material.Filled.Home" Href="/" Class="nav-item" />
+            
+            @if (isAdmin)
+            {
+                <MudListItem T="string" Text="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" Class="nav-item admin-section" />
+                <MudListItem T="string" Text="Usuarios" Icon="@Icons.Material.Filled.People" Href="/admin/users" Class="nav-item admin-item" />
+                <MudListItem T="string" Text="Roles" Icon="@Icons.Material.Filled.AssignmentInd" Href="/admin/roles" Class="nav-item admin-item" />
+            }
+        </MudList>
+    </MudDrawer>
+
+    <MudMainContent Class="main-content">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="content">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+<style>
+.app-bar {
+    background-color: #397FDE !important;
+}
+
+.app-bar-logo {
+    max-height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+
+.sidebar {
+    background-color: #2A5FB8 !important;
+}
+
+.main-content {
+    background-color: #F4F5F7;
+    min-height: 100vh;
+}
+
+.content {
+    padding: 2rem;
+}
+
+.nav-item {
+    color: white !important;
+    border-radius: 8px !important;
+    margin: 4px 8px !important;
+    transition: all 0.2s ease !important;
+}
+
+.nav-item:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    transform: translateX(4px) !important;
+}
+
+.admin-section {
+    font-weight: 600;
+    margin-top: 1rem;
+    background-color: rgba(0, 0, 0, 0.1) !important;
+    border-radius: 8px !important;
+    margin: 4px 8px !important;
+}
+
+.admin-item {
+    padding-left: 2rem !important;
+    border-radius: 8px !important;
+    margin: 4px 8px !important;
+    transition: all 0.2s ease !important;
+}
+
+.admin-item:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    transform: translateX(4px) !important;
+}
+</style>
+
+@code {
+    private bool drawerOpen = true;
+    private bool isAdmin = false;
+    private bool isAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isAuthenticated = await AuthService.IsAuthenticated();
+        if (isAuthenticated)
+        {
+            isAdmin = await AuthorizationService.IsAdminAsync();
+        }
+    }
+
+    private void ToggleDrawer()
+    {
+        drawerOpen = !drawerOpen;
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.ClearTokenAsync();
+        NavigationManager.NavigateTo("/login", forceLoad: true);
+    }
+}

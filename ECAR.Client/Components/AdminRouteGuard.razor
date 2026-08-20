@@ -1,0 +1,39 @@
+@inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool isAuthorized = false;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAdmin = await AuthorizationService.IsAdminAsync();
+        
+        if (!isAdmin)
+        {
+            Snackbar.Add("Acceso no autorizado. Solo administradores pueden acceder a esta página.", Severity.Error);
+            NavigationManager.NavigateTo("/");
+        }
+        else
+        {
+            isAuthorized = true;
+        }
+        
+        isLoading = false;
+    }
+}
+
+@if (isLoading)
+{
+    <MudContainer Class="d-flex justify-center align-center" Style="min-height: 100vh;">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    </MudContainer>
+}
+else if (isAuthorized)
+{
+    @ChildContent
+}

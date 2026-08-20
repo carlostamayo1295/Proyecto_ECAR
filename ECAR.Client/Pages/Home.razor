@@ -1,0 +1,160 @@
+﻿@page "/"
+@inject NavigationManager NavigationManager
+
+@using MudBlazor
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="home-container">
+    <MudCard Class="welcome-card">
+        <MudCardContent>
+            <MudText Typo="Typo.h3" Class="welcome-title">Bienvenido al Sistema de Auditoría de Equipos</MudText>
+            <MudText Typo="Typo.body1" Class="welcome-subtitle">Sistema de gestión de equipos e inspecciones para Laboratorios ECAR S.A.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="login-button" OnClick="GoToLogin">
+                Iniciar Sesión
+            </MudButton>
+        </MudCardContent>
+    </MudCard>
+
+    <MudGrid Spacing="6" Class="features-grid">
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Class="feature-card">
+                <MudCardContent>
+                    <MudIcon Icon="@Icons.Material.Filled.Devices" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
+                    <MudText Typo="Typo.h5" Class="feature-title">Equipos</MudText>
+                    <MudText Typo="Typo.body2" Class="feature-description">Gestión completa del inventario de equipos y sus ubicaciones.</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Class="feature-card">
+                <MudCardContent>
+                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" Class="feature-icon" />
+                    <MudText Typo="Typo.h5" Class="feature-title">Inspecciones</MudText>
+                    <MudText Typo="Typo.body2" Class="feature-description">Programación y ejecución de inspecciones periódicas de equipos.</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Class="feature-card">
+                <MudCardContent>
+                    <MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
+                    <MudText Typo="Typo.h5" Class="feature-title">Reportes</MudText>
+                    <MudText Typo="Typo.body2" Class="feature-description">Generación de reportes de cumplimiento y auditoría regulatoria.</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <div class="api-link">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="https://localhost:7296/scalar/v1" Target="_blank" Class="api-button">
+            <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
+            Probar API con Scalar
+        </MudButton>
+    </div>
+</MudContainer>
+
+<style>
+.home-container {
+    padding: 2rem;
+    background: linear-gradient(135deg, #F4F5F7 0%, #E9EBF0 100%);
+    min-height: 100vh;
+}
+
+.welcome-card {
+    margin-bottom: 2rem;
+    text-align: center;
+    border: 2px solid #E0E6ED;
+    background: white;
+}
+
+.welcome-title {
+    color: #16438C;
+    margin-bottom: 1rem;
+    font-weight: 700;
+}
+
+.welcome-subtitle {
+    color: #79B75D;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+}
+
+.features-grid {
+    margin-bottom: 2rem;
+}
+
+.feature-card {
+    height: 100%;
+    text-align: center;
+    border: 1px solid #E0E6ED;
+    background: white;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.feature-title {
+    color: #16438C;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.feature-description {
+    color: #5A6A7C;
+}
+
+.login-button {
+    height: 48px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    background-color: #397FDE !important;
+    color: white !important;
+    border-radius: 12px !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(57, 127, 222, 0.3);
+    transition: all 0.3s ease;
+}
+
+.login-button:hover {
+    background-color: #2A5FB8 !important;
+    box-shadow: 0 6px 16px rgba(57, 127, 222, 0.4);
+    transform: translateY(-2px);
+}
+
+.api-link {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.api-button {
+    font-weight: 500;
+    background-color: #397FDE !important;
+    color: white !important;
+    border-radius: 12px !important;
+    border: none !important;
+    transition: all 0.3s ease;
+}
+
+.api-button:hover {
+    background-color: #2A5FB8 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(57, 127, 222, 0.3);
+}
+</style>
+
+@code {
+    private void GoToLogin()
+    {
+        NavigationManager.NavigateTo("/login");
+    }
+}

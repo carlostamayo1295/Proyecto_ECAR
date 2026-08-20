@@ -1,0 +1,125 @@
+using BCrypt.Net;
+using ECAR.Infrastructure.Data;
+using ECAR.Infrastructure.Entities;
+using ECAR.Shared.DTOs;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+
+namespace ECAR.API.Services;
+
+public class AuthService : IAuthService
+{
+    private readonly ECARDbContext _context;
+    private readonly IConfiguration _configuration;
+
+    public AuthService(ECARDbContext context, IConfiguration configuration)
+    {
+        _context = context;
+        _configuration = configuration;
+    }
+
+    public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
+    {
+        // Buscar usuario por correo o UsuarioAD
+        var usuario = await _context.Usuarios
+            .Include(u => u.UsuarioRoles)
+            .ThenInclude(ur => ur.Rol)
+            .FirstOrDefaultAsync(u => 
+                u.Correo == loginDto.CorreoOrUsuarioAD || 
+                u.UsuarioAD == loginDto.CorreoOrUsuarioAD);
+
+        if (usuario == null || !usuario.Activo)
+        {
+            return null;
+        }
+
+        // Validar password
+        if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, usuario.PasswordHash))
+        {
+            return null;
+        }
+
+        // Obtener roles del usuario
+        var roles = usuario.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList();
+
+        // Generar token JWT
+        var token = GenerateJwtToken(usuario, roles);
+
+        return new LoginResponseDto
+        {
+            Token = token,
+            Correo = usuario.Correo,
+            Nombre = usuario.Nombre,
+            Roles = roles,
+            Expiration = DateTime.UtcNow.AddHours(GetJwtExpirationHours())
+        };
+    }
+
+    public Task<bool> ValidateTokenAsync(string token)
+    {
+        try
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var jwtSecret = _configuration["JWT:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
+            var key = Encoding.UTF8.GetBytes(jwtSecret);
+
+            tokenHandler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ValidateIssuer = true,
+                ValidIssuer = _configuration["JWT:Issuer"],
+                ValidateAudience = true,
+                ValidAudience = _configuration["JWT:Audience"],
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            }, out _);
+
+            return Task.FromResult(true);
+        }
+        catch
+        {
+            return Task.FromResult(false);
+        }
+    }
+
+    private string GenerateJwtToken(Usuario usuario, List<string> roles)
+    {
+        var jwtSecret = _configuration["JWT:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
+        var key = Encoding.UTF8.GetBytes(jwtSecret);
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, usuario.IdUsuario.ToString()),
+            new Claim(ClaimTypes.Email, usuario.Correo),
+            new Claim(ClaimTypes.Name, usuario.Nombre)
+        };
+
+        // Agregar roles como claims
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
+
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(key),
+            SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _configuration["JWT:Issuer"],
+            audience: _configuration["JWT:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(GetJwtExpirationHours()),
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private int GetJwtExpirationHours()
+    {
+        return int.TryParse(_configuration["JWT:ExpirationHours"], out var hours) ? hours : 24;
+    }
+}

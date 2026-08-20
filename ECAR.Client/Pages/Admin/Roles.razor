@@ -1,0 +1,188 @@
+@page "/admin/roles"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<AdminRouteGuard>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Gestión de Roles</MudText>
+                <MudText Typo="Typo.body2">Administrar los roles del sistema</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nuevo Rol
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined" 
+                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                Class="mb-4" />
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (roles != null && roles.Any())
+            {
+                <MudTable Items="roles" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Nombre</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IdRol.ToString()</MudTd>
+                        <MudTd>@context.Nombre</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" 
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" 
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteRole(context)" Class="action-button">
+                                Eliminar
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage" 
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay roles para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+    </MudContainer>
+</AdminRouteGuard>
+
+@code {
+    private List<RolDto>? roles;
+    private string searchText = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRolesAsync();
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        isLoading = true;
+        
+        try
+        {
+            var result = await HttpClientService.GetRolesAsync(currentPage, pageSize, searchText);
+            
+            if (result != null && result.Success && result.Data != null)
+            {
+                roles = result.Data.Data ?? new List<RolDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar roles", Severity.Error);
+                roles = new List<RolDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            roles = new List<RolDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadRolesAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<RoleModal>("Crear Nuevo Rol");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadRolesAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(RolDto rol)
+    {
+        var parameters = new DialogParameters { ["Rol"] = rol };
+        var dialog = await DialogService.ShowAsync<RoleModal>("Editar Rol", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadRolesAsync();
+        }
+    }
+
+    private async Task DeleteRole(RolDto role)
+    {
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar el rol '{role.Nombre}'?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await HttpClientService.DeleteRolAsync(role.IdRol);
+                
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Rol eliminado exitosamente", Severity.Success);
+                    await LoadRolesAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar rol", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>

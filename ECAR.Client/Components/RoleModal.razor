@@ -1,0 +1,120 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Rol" : "Crear Nuevo Rol")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudTextField T="string" Label="Nombre del Rol" @bind-Value="nombre" 
+                Variant="Variant.Outlined" Required="true" RequiredError="El nombre del rol es requerido"
+                MaxLength="50" Immediate="true" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+    private string nombre = string.Empty;
+
+    [Parameter]
+    public RolDto? Rol { get; set; }
+
+    private bool IsEditMode => Rol != null;
+
+    protected override void OnInitialized()
+    {
+        if (IsEditMode && Rol != null)
+        {
+            nombre = Rol.Nombre;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (IsEditMode && Rol != null)
+        {
+            var updateDto = new UpdateRolDto { Nombre = nombre };
+            var result = await HttpClientService.UpdateRolAsync(Rol.IdRol, updateDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Rol actualizado exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al actualizar rol", Severity.Error);
+            }
+        }
+        else
+        {
+            var createDto = new CreateRolDto { Nombre = nombre };
+            var result = await HttpClientService.CreateRolAsync(createDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Rol creado exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al crear rol", Severity.Error);
+            }
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>
