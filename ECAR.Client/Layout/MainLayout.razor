@@ -36,8 +36,10 @@
             @if (isAdmin)
             {
                 <MudListItem T="string" Text="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" Class="nav-item admin-section" />
+                <MudListItem T="string" Text="Equipos" Icon="@Icons.Material.Filled.Devices" Href="/admin/equipos" Class="nav-item admin-item" />
                 <MudListItem T="string" Text="Usuarios" Icon="@Icons.Material.Filled.People" Href="/admin/users" Class="nav-item admin-item" />
                 <MudListItem T="string" Text="Roles" Icon="@Icons.Material.Filled.AssignmentInd" Href="/admin/roles" Class="nav-item admin-item" />
+                <MudListItem T="string" Text="Roles de Usuario" Icon="@Icons.Material.Filled.ManageAccounts" Href="/admin/usuarios-roles" Class="nav-item admin-item" />
             }
         </MudList>
     </MudDrawer>
