@@ -1,0 +1,230 @@
+@page "/evidencias"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Evidencias</MudText>
+                <MudText Typo="Typo.body2">Evidencias fotográficas y documentales cargadas en inspecciones</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Cargar Evidencia
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudGrid Class="mb-2">
+                <MudItem xs="12" sm="9">
+                    <MudTextField T="string" Label="Buscar por equipo o usuario" @bind-Value="searchText" Variant="Variant.Outlined"
+                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                        OnKeyUp="OnSearchKeyUp" />
+                </MudItem>
+                <MudItem xs="12" sm="3" Class="d-flex align-center justify-end">
+                    <MudToggleGroup T="string" @bind-Value="vistaActual" Color="Color.Primary" Size="Size.Small">
+                        <MudToggleItem Value="@("galeria")" Text="Galería" />
+                        <MudToggleItem Value="@("tabla")" Text="Tabla" />
+                    </MudToggleGroup>
+                </MudItem>
+            </MudGrid>
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (evidencias != null && evidencias.Any())
+            {
+                @if (vistaActual == "galeria")
+                {
+                    <MudGrid>
+                        @foreach (var evidencia in evidencias)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCard Outlined="true">
+                                    <MudCardMedia Image="@evidencia.Archivo" Height="180" />
+                                    <MudCardContent>
+                                        <MudText Typo="Typo.subtitle2">@evidencia.NombreEquipo</MudText>
+                                        <MudText Typo="Typo.caption">
+                                            Inspección #@evidencia.IdInspeccion · @evidencia.UsuarioCarga · @evidencia.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy")
+                                        </MudText>
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
+                                            StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(evidencia)">
+                                            Eliminar
+                                        </MudButton>
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else
+                {
+                    <MudTable Items="evidencias" Hover="true" Striped="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>ID</MudTh>
+                            <MudTh>Vista previa</MudTh>
+                            <MudTh>Equipo</MudTh>
+                            <MudTh>Inspección</MudTh>
+                            <MudTh>Subido por</MudTh>
+                            <MudTh>Fecha de carga</MudTh>
+                            <MudTh>Acciones</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.IdEvidencia</MudTd>
+                            <MudTd>
+                                <MudAvatar Square="true" Size="Size.Medium">
+                                    <MudImage Src="@context.Archivo" />
+                                </MudAvatar>
+                            </MudTd>
+                            <MudTd>@context.NombreEquipo</MudTd>
+                            <MudTd>#@context.IdInspeccion</MudTd>
+                            <MudTd>@context.UsuarioCarga</MudTd>
+                            <MudTd>@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                            <MudTd>
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(context)" Class="action-button">
+                                    Eliminar
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay evidencias para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<EvidenciaDto>? evidencias;
+    private string searchText = string.Empty;
+    private string vistaActual = "galeria";
+    private int currentPage = 1;
+    private int pageSize = 12;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEvidenciasAsync();
+    }
+
+    private async Task LoadEvidenciasAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await HttpClientService.GetEvidenciasAsync(currentPage, pageSize, searchText);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                evidencias = result.Data.Data ?? new List<EvidenciaDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar evidencias", Severity.Error);
+                evidencias = new List<EvidenciaDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            evidencias = new List<EvidenciaDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadEvidenciasAsync();
+        }
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadEvidenciasAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<EvidenciaModal>("Cargar Evidencia");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadEvidenciasAsync();
+        }
+    }
+
+    private async Task DeleteEvidencia(EvidenciaDto evidencia)
+    {
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la evidencia #{evidencia.IdEvidencia}?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await HttpClientService.DeleteEvidenciaAsync(evidencia.IdEvidencia);
+
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Evidencia eliminada exitosamente", Severity.Success);
+                    await LoadEvidenciasAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar evidencia", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>

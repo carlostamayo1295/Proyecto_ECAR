@@ -1,0 +1,88 @@
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Hallazgo #@Hallazgo?.IdHallazgo</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Hallazgo != null)
+        {
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Equipo</MudText>
+                    <MudText Typo="Typo.body1">@Hallazgo.NombreEquipo</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Inspección asociada</MudText>
+                    <MudText Typo="Typo.body1">#@Hallazgo.IdInspeccion</MudText>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Criticidad</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                        Color="@CriticidadColor(Hallazgo.Criticidad)" Text="@(Hallazgo.Criticidad ?? "-")" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Estado</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                        Color="@(Hallazgo.Estado == "Cerrado" ? Color.Success : Color.Warning)" Text="@(Hallazgo.Estado ?? "-")" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption">Fecha de registro</MudText>
+                    <MudText Typo="Typo.body1">@Hallazgo.FechaRegistro.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Descripción</MudText>
+            <MudPaper Elevation="0" Class="value-box pa-3">
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@Hallazgo.Descripcion</MudText>
+            </MudPaper>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public HallazgoDto? Hallazgo { get; set; }
+
+    private void Close()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private static Color CriticidadColor(string? criticidad) => (criticidad ?? string.Empty).ToLowerInvariant() switch
+    {
+        "alta" => Color.Error,
+        "media" => Color.Warning,
+        "baja" => Color.Info,
+        _ => Color.Default
+    };
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.value-box {
+    border: 1px solid #E0E6ED !important;
+    border-radius: 8px !important;
+    background-color: #F4F5F7 !important;
+    min-height: 60px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+</style>

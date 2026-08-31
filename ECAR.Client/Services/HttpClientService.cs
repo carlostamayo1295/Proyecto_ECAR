@@ -453,4 +453,322 @@ public class HttpClientService
             return null;
         }
     }
+
+    // Equipos API Methods
+    public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100, string? search = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/equipos?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<EquipoDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting equipos: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Inspecciones API Methods
+    public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10, string? search = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/inspecciones?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<InspeccionDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting inspecciones: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<InspeccionDto>?> GetInspeccionAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/inspecciones/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<InspeccionDto>?> CreateInspeccionAsync(CreateInspeccionDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/inspecciones", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<InspeccionDto>?> UpdateInspeccionAsync(long id, UpdateInspeccionDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeleteInspeccionAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/inspecciones/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Evidencias API Methods
+    public async Task<ApiResponse<PagedResultDto<EvidenciaDto>>?> GetEvidenciasAsync(int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/evidencias?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+            if (idInspeccion.HasValue)
+            {
+                query += $"&idInspeccion={idInspeccion.Value}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<EvidenciaDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting evidencias: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EvidenciaDto>?> GetEvidenciaAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/evidencias/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EvidenciaDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting evidencia: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EvidenciaDto>?> CreateEvidenciaAsync(CreateEvidenciaDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/evidencias", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EvidenciaDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating evidencia: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeleteEvidenciaAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/evidencias/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting evidencia: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Hallazgos API Methods
+    public async Task<ApiResponse<PagedResultDto<HallazgoDto>>?> GetHallazgosAsync(int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null, string? estado = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/hallazgos?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+            if (idInspeccion.HasValue)
+            {
+                query += $"&idInspeccion={idInspeccion.Value}";
+            }
+            if (!string.IsNullOrEmpty(estado))
+            {
+                query += $"&estado={Uri.EscapeDataString(estado)}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<HallazgoDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting hallazgos: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<HallazgoDto>?> GetHallazgoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/hallazgos/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<HallazgoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting hallazgo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<HallazgoDto>?> CreateHallazgoAsync(CreateHallazgoDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/hallazgos", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<HallazgoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating hallazgo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<HallazgoDto>?> UpdateHallazgoAsync(long id, UpdateHallazgoDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/hallazgos/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<HallazgoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating hallazgo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeleteHallazgoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/hallazgos/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting hallazgo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
 }
