@@ -1,0 +1,221 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Checklist" : "Crear Nuevo Checklist")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudTextField T="string" Label="Nombre" @bind-Value="nombre"
+                Variant="Variant.Outlined" Required="true" RequiredError="El nombre es requerido"
+                MaxLength="200" Immediate="true" Class="mb-3" />
+
+            <MudTextField T="string" Label="Versión" @bind-Value="version"
+                Variant="Variant.Outlined" Required="true" RequiredError="La versión es requerida"
+                MaxLength="20" Immediate="true" Class="mb-3" />
+
+            @if (IsEditMode)
+            {
+                <MudSwitch T="bool" Label="Activo" @bind-Value="activo" Color="Color.Primary" Class="mb-3" />
+            }
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Preguntas del Checklist</MudText>
+
+            @if (preguntas.Any())
+            {
+                @for (var i = 0; i < preguntas.Count; i++)
+                {
+                    var index = i;
+                    <MudPaper Elevation="0" Class="pregunta-row mb-3 pa-3">
+                        <MudGrid>
+                            <MudItem xs="12" sm="5">
+                                <MudTextField T="string" Label="Pregunta" @bind-Value="preguntas[index].Pregunta"
+                                    Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
+                                    Immediate="true" />
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudTextField T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
+                                    Variant="Variant.Outlined" Required="true" RequiredError="Requerido"
+                                    Immediate="true" />
+                            </MudItem>
+                            <MudItem xs="4" sm="3" Class="d-flex align-center">
+                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria" Color="Color.Primary" />
+                            </MudItem>
+                            <MudItem xs="2" sm="1" Class="d-flex align-center justify-end">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemovePregunta(index)" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                }
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-3">Este checklist no tiene preguntas todavía</MudAlert>
+            }
+
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPregunta">
+                Agregar Pregunta
+            </MudButton>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public ChecklistDto? Checklist { get; set; }
+
+    private bool IsEditMode => Checklist != null;
+    private string nombre = string.Empty;
+    private string version = string.Empty;
+    private bool activo = true;
+    private List<PreguntaFormItem> preguntas = new();
+
+    protected override void OnInitialized()
+    {
+        if (IsEditMode && Checklist != null)
+        {
+            nombre = Checklist.Nombre;
+            version = Checklist.Version;
+            activo = Checklist.Activo;
+            preguntas = Checklist.Preguntas
+                .Select(p => new PreguntaFormItem { Pregunta = p.Pregunta, TipoRespuesta = p.TipoRespuesta, Obligatoria = p.Obligatoria })
+                .ToList();
+        }
+    }
+
+    private void AddPregunta()
+    {
+        preguntas.Add(new PreguntaFormItem());
+    }
+
+    private void RemovePregunta(int index)
+    {
+        preguntas.RemoveAt(index);
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (preguntas.Any(p => string.IsNullOrWhiteSpace(p.Pregunta) || string.IsNullOrWhiteSpace(p.TipoRespuesta)))
+        {
+            Snackbar.Add("Todas las preguntas deben tener texto y tipo de respuesta", Severity.Warning);
+            return;
+        }
+
+        var preguntasDto = preguntas
+            .Select(p => new CreatePreguntaChecklistDto { Pregunta = p.Pregunta, TipoRespuesta = p.TipoRespuesta, Obligatoria = p.Obligatoria })
+            .ToList();
+
+        if (IsEditMode && Checklist != null)
+        {
+            var updateDto = new UpdateChecklistDto
+            {
+                Nombre = nombre,
+                Version = version,
+                Activo = activo,
+                Preguntas = preguntasDto
+            };
+
+            var result = await HttpClientService.UpdateChecklistAsync(Checklist.IdChecklist, updateDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Checklist actualizado exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al actualizar checklist", Severity.Error);
+            }
+        }
+        else
+        {
+            var createDto = new CreateChecklistDto
+            {
+                Nombre = nombre,
+                Version = version,
+                Preguntas = preguntasDto
+            };
+
+            var result = await HttpClientService.CreateChecklistAsync(createDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Checklist creado exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al crear checklist", Severity.Error);
+            }
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+
+    private class PreguntaFormItem
+    {
+        public string Pregunta { get; set; } = string.Empty;
+        public string TipoRespuesta { get; set; } = string.Empty;
+        public bool Obligatoria { get; set; }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+
+.pregunta-row {
+    border: 1px solid #E0E6ED !important;
+    border-radius: 8px !important;
+    background-color: #F4F5F7 !important;
+}
+</style>

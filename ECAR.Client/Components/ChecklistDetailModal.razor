@@ -1,0 +1,84 @@
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Checklist?.Nombre</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Checklist != null)
+        {
+            <MudGrid Class="mb-4">
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Versión</MudText>
+                    <MudText Typo="Typo.body1">@Checklist.Version</MudText>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Estado</MudText>
+                    <MudChip T="string" Color="@(Checklist.Activo ? Color.Success : Color.Error)"
+                        Size="Size.Small" Variant="Variant.Outlined" Text="@(Checklist.Activo ? "Activo" : "Inactivo")" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption">Fecha de Creación</MudText>
+                    <MudText Typo="Typo.body1">@Checklist.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Preguntas (@Checklist.Preguntas.Count)</MudText>
+
+            @if (Checklist.Preguntas.Any())
+            {
+                <MudTable Items="Checklist.Preguntas" Hover="true" Striped="true" Elevation="0" Dense="true">
+                    <HeaderContent>
+                        <MudTh>#</MudTh>
+                        <MudTh>Pregunta</MudTh>
+                        <MudTh>Tipo de Respuesta</MudTh>
+                        <MudTh>Obligatoria</MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="pregunta">
+                        <MudTd>@(Checklist.Preguntas.IndexOf(pregunta) + 1)</MudTd>
+                        <MudTd>@pregunta.Pregunta</MudTd>
+                        <MudTd>@pregunta.TipoRespuesta</MudTd>
+                        <MudTd>
+                            <MudIcon Icon="@(pregunta.Obligatoria ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
+                                Color="@(pregunta.Obligatoria ? Color.Success : Color.Default)" Size="Size.Small" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info">Este checklist no tiene preguntas todavía</MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public ChecklistDto? Checklist { get; set; }
+
+    private void Close()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+</style>
