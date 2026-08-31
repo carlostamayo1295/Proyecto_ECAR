@@ -4,6 +4,7 @@ using ECAR.Infrastructure.Entities;
 using ECAR.Shared.DTOs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -14,30 +15,66 @@ public class AuthService : IAuthService
 {
     private readonly ECARDbContext _context;
     private readonly IConfiguration _configuration;
+    private readonly IActiveDirectoryAuthService _activeDirectoryAuthService;
+    private readonly EcarAuthenticationOptions _authenticationOptions;
 
-    public AuthService(ECARDbContext context, IConfiguration configuration)
+    public AuthService(
+        ECARDbContext context,
+        IConfiguration configuration,
+        IActiveDirectoryAuthService activeDirectoryAuthService,
+        IOptions<EcarAuthenticationOptions> authenticationOptions)
     {
         _context = context;
         _configuration = configuration;
+        _activeDirectoryAuthService = activeDirectoryAuthService;
+        _authenticationOptions = authenticationOptions.Value;
     }
 
     public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
     {
+        var identity = loginDto.CorreoOrUsuarioAD.Trim();
+
         // Buscar usuario por correo o UsuarioAD
         var usuario = await _context.Usuarios
             .Include(u => u.UsuarioRoles)
             .ThenInclude(ur => ur.Rol)
-            .FirstOrDefaultAsync(u => 
-                u.Correo == loginDto.CorreoOrUsuarioAD || 
-                u.UsuarioAD == loginDto.CorreoOrUsuarioAD);
+            .FirstOrDefaultAsync(u =>
+                u.Correo == identity ||
+                u.UsuarioAD == identity);
 
         if (usuario == null || !usuario.Activo)
         {
             return null;
         }
 
-        // Validar password
-        if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, usuario.PasswordHash))
+        var mode = _authenticationOptions.GetMode();
+        var localAuthenticationSucceeded = false;
+        var activeDirectoryAuthenticationSucceeded = false;
+
+        if (mode is EcarAuthenticationMode.Local or EcarAuthenticationMode.Hybrid)
+        {
+            try
+            {
+                localAuthenticationSucceeded = !string.IsNullOrWhiteSpace(usuario.PasswordHash) &&
+                                               BCrypt.Net.BCrypt.Verify(loginDto.Password, usuario.PasswordHash);
+            }
+            catch (SaltParseException)
+            {
+                // Un hash legado o dañado debe producir credenciales inválidas, no un error 500.
+                localAuthenticationSucceeded = false;
+            }
+        }
+
+        if (!localAuthenticationSucceeded &&
+            (mode is EcarAuthenticationMode.ActiveDirectory or EcarAuthenticationMode.Hybrid) &&
+            !string.IsNullOrWhiteSpace(usuario.UsuarioAD))
+        {
+            activeDirectoryAuthenticationSucceeded = await _activeDirectoryAuthService.AuthenticateAsync(
+                usuario.UsuarioAD,
+                loginDto.Password);
+        }
+
+        if (!localAuthenticationSucceeded && !activeDirectoryAuthenticationSucceeded)
         {
             return null;
         }

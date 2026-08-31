@@ -9,69 +9,83 @@ public static class DataSeeder
 {
     public static async Task SeedDataAsync(ECARDbContext context, IConfiguration configuration)
     {
-        // Verificar si ya existen datos
-        if (await context.Roles.AnyAsync())
+        // Cada bloque es independiente para poder completar una base parcialmente poblada.
+        var requiredRoleNames = new[] { "Administrador", "Técnico", "Auditor" };
+        var existingRoleNames = await context.Roles.Select(r => r.Nombre).ToListAsync();
+        var missingRoles = requiredRoleNames
+            .Except(existingRoleNames, StringComparer.OrdinalIgnoreCase)
+            .Select(nombre => new Rol { Nombre = nombre })
+            .ToList();
+        if (missingRoles.Count > 0)
         {
-            return; // Ya hay datos, no hacer seed
+            await context.Roles.AddRangeAsync(missingRoles);
+            await context.SaveChangesAsync();
         }
 
-        // Crear roles según el SRS
-        var roles = new List<Rol>
+        var adminUsuario = await context.Usuarios
+            .FirstOrDefaultAsync(u => u.Correo == "admin@ecar.com");
+        if (adminUsuario == null)
         {
-            new Rol { Nombre = "Administrador" },
-            new Rol { Nombre = "Técnico" },
-            new Rol { Nombre = "Auditor" }
-        };
+            var adminPassword = configuration["AdminPassword"] ??
+                throw new InvalidOperationException("AdminPassword no está configurado en User Secrets");
+            adminUsuario = new Usuario
+            {
+                Nombre = "Administrador ECAR",
+                Correo = "admin@ecar.com",
+                UsuarioAD = "admin",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                Activo = true
+            };
+            await context.Usuarios.AddAsync(adminUsuario);
+            await context.SaveChangesAsync();
+        }
 
-        await context.Roles.AddRangeAsync(roles);
-        await context.SaveChangesAsync();
-
-        // Crear usuario administrador
-        var adminPassword = configuration["AdminPassword"] ?? throw new InvalidOperationException("AdminPassword not configured in UserSecrets");
-        var adminPasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
-        var adminUsuario = new Usuario
+        var adminRol = await context.Roles.SingleAsync(r => r.Nombre == "Administrador");
+        if (!await context.UsuarioRoles.AnyAsync(ur =>
+                ur.IdUsuario == adminUsuario.IdUsuario && ur.IdRol == adminRol.IdRol))
         {
-            Nombre = "Administrador ECAR",
-            Correo = "admin@ecar.com",
-            UsuarioAD = "admin",
-            PasswordHash = adminPasswordHash,
-            Activo = true
-        };
-
-        await context.Usuarios.AddAsync(adminUsuario);
-        await context.SaveChangesAsync();
-
-        // Asignar rol de Administrador al usuario admin
-        var adminRol = await context.Roles.FirstOrDefaultAsync(r => r.Nombre == "Administrador");
-        if (adminRol != null)
-        {
-            var usuarioRol = new UsuarioRol
+            await context.UsuarioRoles.AddAsync(new UsuarioRol
             {
                 IdUsuario = adminUsuario.IdUsuario,
                 IdRol = adminRol.IdRol
-            };
-
-            await context.UsuarioRoles.AddAsync(usuarioRol);
+            });
             await context.SaveChangesAsync();
         }
 
-        // Datos base para el módulo de Equipos
-        if (!await context.CategoriasEquipo.AnyAsync())
+        var requiredCategories = new[]
         {
-            await context.CategoriasEquipo.AddRangeAsync(
-                new CategoriaEquipo { Nombre = "Instrumentación", Descripcion = "Equipos de medición y control" },
-                new CategoriaEquipo { Nombre = "Equipos de Laboratorio", Descripcion = "Equipos analíticos y de ensayo" },
-                new CategoriaEquipo { Nombre = "Equipos de Producción", Descripcion = "Maquinaria de línea de producción" },
-                new CategoriaEquipo { Nombre = "Servicios Industriales", Descripcion = "Compresores, calderas, HVAC" });
+            new CategoriaEquipo { Nombre = "Instrumentación", Descripcion = "Equipos de medición y control" },
+            new CategoriaEquipo { Nombre = "Equipos de Laboratorio", Descripcion = "Equipos analíticos y de ensayo" },
+            new CategoriaEquipo { Nombre = "Equipos de Producción", Descripcion = "Maquinaria de línea de producción" },
+            new CategoriaEquipo { Nombre = "Servicios Industriales", Descripcion = "Compresores, calderas, HVAC" }
+        };
+        var existingCategoryNames = await context.CategoriasEquipo.Select(c => c.Nombre).ToListAsync();
+        var missingCategories = requiredCategories
+            .Where(required => !existingCategoryNames.Contains(required.Nombre, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (missingCategories.Count > 0)
+        {
+            await context.CategoriasEquipo.AddRangeAsync(missingCategories);
             await context.SaveChangesAsync();
         }
 
-        if (!await context.Ubicaciones.AnyAsync())
+        var requiredLocations = new[]
         {
-            await context.Ubicaciones.AddRangeAsync(
-                new Ubicacion { Planta = "Planta Principal", Area = "Producción", Descripcion = "Área de manufactura" },
-                new Ubicacion { Planta = "Planta Principal", Area = "Control de Calidad", Descripcion = "Laboratorio de QC" },
-                new Ubicacion { Planta = "Planta Principal", Area = "Almacén", Descripcion = "Bodega de insumos y producto terminado" });
+            new Ubicacion { Planta = "Planta Principal", Area = "Producción", Descripcion = "Área de manufactura" },
+            new Ubicacion { Planta = "Planta Principal", Area = "Control de Calidad", Descripcion = "Laboratorio de QC" },
+            new Ubicacion { Planta = "Planta Principal", Area = "Almacén", Descripcion = "Bodega de insumos y producto terminado" }
+        };
+        var existingLocations = await context.Ubicaciones
+            .Select(u => new { u.Planta, u.Area })
+            .ToListAsync();
+        var missingLocations = requiredLocations
+            .Where(required => !existingLocations.Any(existing =>
+                string.Equals(existing.Planta, required.Planta, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(existing.Area, required.Area, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        if (missingLocations.Count > 0)
+        {
+            await context.Ubicaciones.AddRangeAsync(missingLocations);
             await context.SaveChangesAsync();
         }
     }

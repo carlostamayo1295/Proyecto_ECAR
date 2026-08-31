@@ -13,9 +13,8 @@ public class CreateUsuarioDto
     [MaxLength(150, ErrorMessage = "El correo no puede exceder 150 caracteres")]
     public string Correo { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "El password es requerido")]
     [MinLength(6, ErrorMessage = "El password debe tener al menos 6 caracteres")]
-    public string Password { get; set; } = string.Empty;
+    public string? Password { get; set; }
 
     [MaxLength(100, ErrorMessage = "El usuario AD no puede exceder 100 caracteres")]
     public string? UsuarioAD { get; set; }
