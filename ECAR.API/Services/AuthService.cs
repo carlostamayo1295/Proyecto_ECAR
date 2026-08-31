@@ -4,6 +4,7 @@ using ECAR.Infrastructure.Entities;
 using ECAR.Shared.DTOs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -14,38 +15,74 @@ public class AuthService : IAuthService
 {
     private readonly ECARDbContext _context;
     private readonly IConfiguration _configuration;
+    private readonly IActiveDirectoryAuthService _activeDirectoryAuthService;
+    private readonly EcarAuthenticationOptions _authenticationOptions;
 
-    public AuthService(ECARDbContext context, IConfiguration configuration)
+    public AuthService(
+        ECARDbContext context,
+        IConfiguration configuration,
+        IActiveDirectoryAuthService activeDirectoryAuthService,
+        IOptions<EcarAuthenticationOptions> authenticationOptions)
     {
         _context = context;
         _configuration = configuration;
+        _activeDirectoryAuthService = activeDirectoryAuthService;
+        _authenticationOptions = authenticationOptions.Value;
     }
 
     public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
     {
-        // Buscar usuario por correo o UsuarioAD
+        var identity = loginDto.CorreoOrUsuarioAD.Trim();
+
+        // A user can sign in with an email address or an AD username.
         var usuario = await _context.Usuarios
             .Include(u => u.UsuarioRoles)
             .ThenInclude(ur => ur.Rol)
-            .FirstOrDefaultAsync(u => 
-                u.Correo == loginDto.CorreoOrUsuarioAD || 
-                u.UsuarioAD == loginDto.CorreoOrUsuarioAD);
+            .FirstOrDefaultAsync(u =>
+                u.Correo == identity ||
+                u.UsuarioAD == identity);
 
         if (usuario == null || !usuario.Activo)
         {
             return null;
         }
 
-        // Validar password
-        if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, usuario.PasswordHash))
+        var mode = _authenticationOptions.GetMode();
+        var localAuthenticationSucceeded = false;
+        var activeDirectoryAuthenticationSucceeded = false;
+
+        if (mode is EcarAuthenticationMode.Local or EcarAuthenticationMode.Hybrid)
+        {
+            try
+            {
+                localAuthenticationSucceeded = !string.IsNullOrWhiteSpace(usuario.PasswordHash) &&
+                                               BCrypt.Net.BCrypt.Verify(loginDto.Password, usuario.PasswordHash);
+            }
+            catch (SaltParseException)
+            {
+                // A damaged legacy hash must fail authentication instead of returning HTTP 500.
+                localAuthenticationSucceeded = false;
+            }
+        }
+
+        if (!localAuthenticationSucceeded &&
+            (mode is EcarAuthenticationMode.ActiveDirectory or EcarAuthenticationMode.Hybrid) &&
+            !string.IsNullOrWhiteSpace(usuario.UsuarioAD))
+        {
+            activeDirectoryAuthenticationSucceeded = await _activeDirectoryAuthService.AuthenticateAsync(
+                usuario.UsuarioAD,
+                loginDto.Password);
+        }
+
+        if (!localAuthenticationSucceeded && !activeDirectoryAuthenticationSucceeded)
         {
             return null;
         }
 
-        // Obtener roles del usuario
+        // Add the saved roles to the token.
         var roles = usuario.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList();
 
-        // Generar token JWT
+        // Create the JWT returned to the client.
         var token = GenerateJwtToken(usuario, roles);
 
         return new LoginResponseDto
@@ -97,7 +134,7 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Name, usuario.Nombre)
         };
 
-        // Agregar roles como claims
+        // ASP.NET reads these claims when an endpoint requires a role.
         foreach (var role in roles)
         {
             claims.Add(new Claim(ClaimTypes.Role, role));

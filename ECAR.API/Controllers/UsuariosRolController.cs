@@ -26,6 +26,10 @@ public class UsuariosRolController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null)
     {
+        if (page < 1 || pageSize is < 1 or > 100)
+            return BadRequest(ApiResponse<PagedResultDto<UsuarioRolDto>>.ErrorResponse(
+                "La página debe ser mayor que cero y el tamaño debe estar entre 1 y 100"));
+
         var query = _context.UsuarioRoles
             .Include(ur => ur.Usuario)
             .Include(ur => ur.Rol)
@@ -121,11 +125,22 @@ public class UsuariosRolController : ControllerBase
     [HttpPut("{id}")]
     public async Task<ActionResult<ApiResponse<UsuarioRolDto>>> UpdateUsuarioRol(long id, UpdateUsuarioRolDto updateDto)
     {
-        var asignacion = await _context.UsuarioRoles.FindAsync(id);
+        var asignacion = await _context.UsuarioRoles
+            .Include(ur => ur.Usuario)
+            .Include(ur => ur.Rol)
+            .FirstOrDefaultAsync(ur => ur.Id == id);
 
         if (asignacion == null)
         {
             return NotFound(ApiResponse<UsuarioRolDto>.ErrorResponse("Asignación no encontrada"));
+        }
+
+        if (asignacion.Usuario.Activo && asignacion.Rol.Nombre == "Administrador" &&
+            (asignacion.IdUsuario != updateDto.IdUsuario || asignacion.IdRol != updateDto.IdRol) &&
+            !await HasAnotherActiveAdministrator(asignacion.IdUsuario))
+        {
+            return BadRequest(ApiResponse<UsuarioRolDto>.ErrorResponse(
+                "No se puede retirar la asignación del último administrador activo"));
         }
 
         if (!await _context.Usuarios.AnyAsync(u => u.IdUsuario == updateDto.IdUsuario))
@@ -148,20 +163,35 @@ public class UsuariosRolController : ControllerBase
         asignacion.IdRol = updateDto.IdRol;
         await _context.SaveChangesAsync();
 
-        await _context.Entry(asignacion).Reference(ur => ur.Usuario).LoadAsync();
-        await _context.Entry(asignacion).Reference(ur => ur.Rol).LoadAsync();
+        var asignacionActualizada = await _context.UsuarioRoles
+            .AsNoTracking()
+            .Include(ur => ur.Usuario)
+            .Include(ur => ur.Rol)
+            .SingleAsync(ur => ur.Id == id);
 
-        return Ok(ApiResponse<UsuarioRolDto>.SuccessResponse(MapToDto(asignacion), "Asignación actualizada exitosamente"));
+        return Ok(ApiResponse<UsuarioRolDto>.SuccessResponse(
+            MapToDto(asignacionActualizada),
+            "Asignación actualizada exitosamente"));
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteUsuarioRol(long id)
     {
-        var asignacion = await _context.UsuarioRoles.FindAsync(id);
+        var asignacion = await _context.UsuarioRoles
+            .Include(ur => ur.Usuario)
+            .Include(ur => ur.Rol)
+            .FirstOrDefaultAsync(ur => ur.Id == id);
 
         if (asignacion == null)
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Asignación no encontrada"));
+        }
+
+        if (asignacion.Usuario.Activo && asignacion.Rol.Nombre == "Administrador" &&
+            !await HasAnotherActiveAdministrator(asignacion.IdUsuario))
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(
+                "No se puede retirar la asignación del último administrador activo"));
         }
 
         _context.UsuarioRoles.Remove(asignacion);
@@ -201,4 +231,10 @@ public class UsuariosRolController : ControllerBase
         IdRol = ur.IdRol,
         RolNombre = ur.Rol?.Nombre ?? string.Empty
     };
+
+    private Task<bool> HasAnotherActiveAdministrator(long excludedUserId) =>
+        _context.UsuarioRoles.AnyAsync(ur =>
+            ur.IdUsuario != excludedUserId &&
+            ur.Usuario.Activo &&
+            ur.Rol.Nombre == "Administrador");
 }

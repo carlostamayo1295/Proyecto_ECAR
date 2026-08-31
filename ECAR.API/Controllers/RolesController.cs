@@ -2,6 +2,7 @@ using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +10,14 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador")]
 public class RolesController : ControllerBase
 {
+    private static readonly HashSet<string> SystemRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Administrador", "Técnico", "Auditor"
+    };
+
     private readonly ECARDbContext _context;
 
     public RolesController(ECARDbContext context)
@@ -21,6 +28,12 @@ public class RolesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<RolDto>>>> GetRoles([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
+        if (page < 1 || pageSize is < 1 or > 100)
+        {
+            return BadRequest(ApiResponse<PagedResultDto<RolDto>>.ErrorResponse(
+                "La página debe ser mayor que cero y el tamaño debe estar entre 1 y 100"));
+        }
+
         var query = _context.Roles.AsQueryable();
 
         // Apply search filter
@@ -74,9 +87,17 @@ public class RolesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ApiResponse<RolDto>>> CreateRol(CreateRolDto createDto)
     {
+        var nombre = createDto.Nombre.Trim();
+        if (nombre.Length == 0)
+            return BadRequest(ApiResponse<RolDto>.ErrorResponse("El nombre del rol es requerido"));
+        if (await _context.Roles.AnyAsync(r => r.Nombre == nombre))
+        {
+            return BadRequest(ApiResponse<RolDto>.ErrorResponse("Ya existe un rol con ese nombre"));
+        }
+
         var rol = new Rol
         {
-            Nombre = createDto.Nombre
+            Nombre = nombre
         };
 
         _context.Roles.Add(rol);
@@ -88,7 +109,7 @@ public class RolesController : ControllerBase
             Nombre = rol.Nombre
         };
 
-        return CreatedAtAction(nameof(GetRol), new { id = rol.IdRol }, 
+        return CreatedAtAction(nameof(GetRol), new { id = rol.IdRol },
             ApiResponse<RolDto>.SuccessResponse(rolDto, "Rol creado exitosamente"));
     }
 
@@ -102,7 +123,21 @@ public class RolesController : ControllerBase
             return NotFound(ApiResponse<RolDto>.ErrorResponse("Rol no encontrado"));
         }
 
-        rol.Nombre = updateDto.Nombre;
+        if (SystemRoles.Contains(rol.Nombre))
+        {
+            return BadRequest(ApiResponse<RolDto>.ErrorResponse(
+                "Los roles base de ECAR no se pueden renombrar porque forman parte de las reglas de autorización"));
+        }
+
+        var nombre = updateDto.Nombre.Trim();
+        if (nombre.Length == 0)
+            return BadRequest(ApiResponse<RolDto>.ErrorResponse("El nombre del rol es requerido"));
+        if (await _context.Roles.AnyAsync(r => r.Nombre == nombre && r.IdRol != id))
+        {
+            return BadRequest(ApiResponse<RolDto>.ErrorResponse("Ya existe un rol con ese nombre"));
+        }
+
+        rol.Nombre = nombre;
         await _context.SaveChangesAsync();
 
         var rolDto = new RolDto
@@ -122,6 +157,18 @@ public class RolesController : ControllerBase
         if (rol == null)
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Rol no encontrado"));
+        }
+
+        if (SystemRoles.Contains(rol.Nombre))
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(
+                "Los roles base de ECAR no se pueden eliminar"));
+        }
+
+        if (await _context.UsuarioRoles.AnyAsync(ur => ur.IdRol == id))
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(
+                "El rol no puede eliminarse porque está asignado a uno o más usuarios"));
         }
 
         _context.Roles.Remove(rol);
