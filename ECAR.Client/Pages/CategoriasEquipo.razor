@@ -1,0 +1,188 @@
+@page "/categorias-equipo"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Categorías de Equipos</MudText>
+                <MudText Typo="Typo.body2">Administrar las categorías de equipos del sistema</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nueva Categoría
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                Class="mb-4" />
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (categorias != null && categorias.Any())
+            {
+                <MudTable Items="categorias" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Nombre</MudTh>
+                        <MudTh>Descripción</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IdCategoria.ToString()</MudTd>
+                        <MudTd>@context.Nombre</MudTd>
+                        <MudTd>@(context.Descripcion ?? "-")</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteCategoria(context)" Class="action-button">
+                                Eliminar
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay categorías de equipos para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<CategoriaEquipoDto>? categorias;
+    private string searchText = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategoriasAsync();
+    }
+
+    private async Task LoadCategoriasAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await HttpClientService.GetCategoriasEquipoAsync(currentPage, pageSize, searchText);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                categorias = result.Data.Data ?? new List<CategoriaEquipoDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar categorías de equipos", Severity.Error);
+                categorias = new List<CategoriaEquipoDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            categorias = new List<CategoriaEquipoDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadCategoriasAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<CategoriaEquipoModal>("Crear Nueva Categoría");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadCategoriasAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(CategoriaEquipoDto categoria)
+    {
+        var parameters = new DialogParameters { ["Categoria"] = categoria };
+        var dialog = await DialogService.ShowAsync<CategoriaEquipoModal>("Editar Categoría", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadCategoriasAsync();
+        }
+    }
+
+    private async Task DeleteCategoria(CategoriaEquipoDto categoria)
+    {
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la categoría '{categoria.Nombre}'?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await HttpClientService.DeleteCategoriaEquipoAsync(categoria.IdCategoria);
+
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Categoría eliminada exitosamente", Severity.Success);
+                    await LoadCategoriasAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar categoría", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>
