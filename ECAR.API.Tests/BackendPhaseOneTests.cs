@@ -172,7 +172,8 @@ public class BackendPhaseOneTests
         Assert.Equal(3, await context.Roles.CountAsync());
         Assert.Equal(1, await context.Usuarios.CountAsync(u => u.Correo == "admin@ecar.com"));
         Assert.Equal(1, await context.UsuarioRoles.CountAsync());
-        Assert.Equal(4, await context.CategoriasEquipo.CountAsync());
+        Assert.Equal(7, await context.CategoriasEquipo.CountAsync());
+        Assert.Equal(4, await context.Equipos.CountAsync());
         Assert.Equal(3, await context.Ubicaciones.CountAsync());
     }
 

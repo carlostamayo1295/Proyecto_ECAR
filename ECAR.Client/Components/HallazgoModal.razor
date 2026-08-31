@@ -1,0 +1,180 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Hallazgo" : "Registrar Nuevo Hallazgo")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudSelect T="long" Label="Inspección" @bind-Value="idInspeccion" Variant="Variant.Outlined"
+                Required="true" RequiredError="La inspección es requerida" Disabled="IsEditMode" Class="mb-3">
+                @foreach (var inspeccion in inspecciones)
+                {
+                    <MudSelectItem T="long" Value="inspeccion.IdInspeccion">
+                        #@inspeccion.IdInspeccion - @inspeccion.NombreEquipo (@inspeccion.FechaInspeccion.ToString("dd/MM/yyyy"))
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField T="string" Label="Descripción" @bind-Value="descripcion"
+                Variant="Variant.Outlined" Required="true" RequiredError="La descripción es requerida"
+                Lines="3" Immediate="true" Class="mb-3" />
+
+            <MudSelect T="string" Label="Criticidad" @bind-Value="criticidad" Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem T="string" Value="@("Alta")">Alta</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Media")">Media</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Baja")">Baja</MudSelectItem>
+            </MudSelect>
+
+            @if (IsEditMode)
+            {
+                <MudSelect T="string" Label="Estado" @bind-Value="estado" Variant="Variant.Outlined">
+                    <MudSelectItem T="string" Value="@("Abierto")">Abierto</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Cerrado")">Cerrado</MudSelectItem>
+                </MudSelect>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public HallazgoDto? Hallazgo { get; set; }
+
+    [Parameter]
+    public long? IdInspeccionPredefinida { get; set; }
+
+    private bool IsEditMode => Hallazgo != null;
+
+    private List<InspeccionDto> inspecciones = new();
+    private long idInspeccion;
+    private string descripcion = string.Empty;
+    private string? criticidad = "Media";
+    private string? estado = "Abierto";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await HttpClientService.GetInspeccionesAsync(1, 200);
+        inspecciones = result?.Data?.Data ?? new List<InspeccionDto>();
+
+        if (IsEditMode && Hallazgo != null)
+        {
+            idInspeccion = Hallazgo.IdInspeccion;
+            descripcion = Hallazgo.Descripcion;
+            criticidad = Hallazgo.Criticidad ?? "Media";
+            estado = Hallazgo.Estado ?? "Abierto";
+        }
+        else if (IdInspeccionPredefinida.HasValue)
+        {
+            idInspeccion = IdInspeccionPredefinida.Value;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (IsEditMode && Hallazgo != null)
+        {
+            var updateDto = new UpdateHallazgoDto
+            {
+                Descripcion = descripcion,
+                Criticidad = criticidad,
+                Estado = estado
+            };
+
+            var result = await HttpClientService.UpdateHallazgoAsync(Hallazgo.IdHallazgo, updateDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Hallazgo actualizado exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al actualizar hallazgo", Severity.Error);
+            }
+        }
+        else
+        {
+            if (idInspeccion == 0)
+            {
+                Snackbar.Add("Debe seleccionar una inspección", Severity.Warning);
+                return;
+            }
+
+            var createDto = new CreateHallazgoDto
+            {
+                IdInspeccion = idInspeccion,
+                Descripcion = descripcion,
+                Criticidad = criticidad
+            };
+
+            var result = await HttpClientService.CreateHallazgoAsync(createDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Hallazgo registrado exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al registrar hallazgo", Severity.Error);
+            }
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>
