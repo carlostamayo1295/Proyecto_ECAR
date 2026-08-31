@@ -1,4 +1,4 @@
-﻿namespace ECAR.Shared.DTOs;
+namespace ECAR.Shared.DTOs;
 
 public class PreguntaChecklistDto
 {

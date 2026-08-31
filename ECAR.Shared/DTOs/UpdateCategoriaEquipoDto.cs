@@ -4,7 +4,7 @@ namespace ECAR.Shared.DTOs;
 
 public class UpdateCategoriaEquipoDto
 {
-    [Required(ErrorMessage = "El nombre es requerido")]
+    [Required(ErrorMessage = "El nombre de la categoría es requerido")]
     [MaxLength(100, ErrorMessage = "El nombre no puede exceder 100 caracteres")]
     public string Nombre { get; set; } = string.Empty;
 
