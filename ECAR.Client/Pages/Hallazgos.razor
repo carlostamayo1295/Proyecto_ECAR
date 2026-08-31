@@ -1,0 +1,249 @@
+@page "/hallazgos"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Hallazgos</MudText>
+                <MudText Typo="Typo.body2">Novedades registradas durante las inspecciones</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nuevo Hallazgo
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudGrid Class="mb-2">
+                <MudItem xs="12" sm="8">
+                    <MudTextField T="string" Label="Buscar por equipo, descripción o criticidad" @bind-Value="searchText" Variant="Variant.Outlined"
+                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                        OnKeyUp="OnSearchKeyUp" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined"
+                        Clearable="true" ValueChanged="OnEstadoChanged">
+                        <MudSelectItem T="string" Value="@("Abierto")">Abierto</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Cerrado")">Cerrado</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (hallazgos != null && hallazgos.Any())
+            {
+                <MudTable Items="hallazgos" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Equipo</MudTh>
+                        <MudTh>Descripción</MudTh>
+                        <MudTh>Criticidad</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh>Fecha</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IdHallazgo</MudTd>
+                        <MudTd>@context.NombreEquipo</MudTd>
+                        <MudTd>@Truncar(context.Descripcion)</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@CriticidadColor(context.Criticidad)"
+                                Size="Size.Small" Variant="Variant.Filled" Text="@(context.Criticidad ?? "-")" />
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@(context.Estado == "Cerrado" ? Color.Success : Color.Warning)"
+                                Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Estado ?? "-")" />
+                        </MudTd>
+                        <MudTd>@context.FechaRegistro.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
+                                Ver
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteHallazgo(context)" Class="action-button">
+                                Eliminar
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay hallazgos para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<HallazgoDto>? hallazgos;
+    private string searchText = string.Empty;
+    private string? estadoFiltro;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHallazgosAsync();
+    }
+
+    private async Task LoadHallazgosAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await HttpClientService.GetHallazgosAsync(currentPage, pageSize, searchText, null, estadoFiltro);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                hallazgos = result.Data.Data ?? new List<HallazgoDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar hallazgos", Severity.Error);
+                hallazgos = new List<HallazgoDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            hallazgos = new List<HallazgoDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadHallazgosAsync();
+        }
+    }
+
+    private async Task OnEstadoChanged(string? value)
+    {
+        estadoFiltro = value;
+        currentPage = 1;
+        await LoadHallazgosAsync();
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadHallazgosAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<HallazgoModal>("Registrar Nuevo Hallazgo");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadHallazgosAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(HallazgoDto hallazgo)
+    {
+        var parameters = new DialogParameters { ["Hallazgo"] = hallazgo };
+        var dialog = await DialogService.ShowAsync<HallazgoModal>("Editar Hallazgo", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadHallazgosAsync();
+        }
+    }
+
+    private async Task OpenViewDialog(HallazgoDto hallazgo)
+    {
+        var parameters = new DialogParameters { ["Hallazgo"] = hallazgo };
+        await DialogService.ShowAsync<HallazgoDetailModal>("Detalle del Hallazgo", parameters);
+    }
+
+    private async Task DeleteHallazgo(HallazgoDto hallazgo)
+    {
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar el hallazgo #{hallazgo.IdHallazgo}?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await HttpClientService.DeleteHallazgoAsync(hallazgo.IdHallazgo);
+
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Hallazgo eliminado exitosamente", Severity.Success);
+                    await LoadHallazgosAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar hallazgo", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+
+    private static string Truncar(string texto) =>
+        texto.Length > 60 ? texto[..60] + "…" : texto;
+
+    private static Color CriticidadColor(string? criticidad) => (criticidad ?? string.Empty).ToLowerInvariant() switch
+    {
+        "alta" => Color.Error,
+        "media" => Color.Warning,
+        "baja" => Color.Info,
+        _ => Color.Default
+    };
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>

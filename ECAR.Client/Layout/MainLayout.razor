@@ -32,7 +32,13 @@
     <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Class="sidebar">
         <MudList T="string">
             <MudListItem T="string" Text="Home" Icon="@Icons.Material.Filled.Home" Href="/" Class="nav-item" />
-            
+            <MudListItem T="string" Text="Inspecciones" Icon="@Icons.Material.Filled.Assignment" Href="/inspecciones" Class="nav-item" />
+            <MudListItem T="string" Text="Evidencias" Icon="@Icons.Material.Filled.PhotoLibrary" Href="/evidencias" Class="nav-item" />
+            <MudListItem T="string" Text="Hallazgos" Icon="@Icons.Material.Filled.ReportProblem" Href="/hallazgos" Class="nav-item" />
+            <MudListItem T="string" Text="Checklists" Icon="@Icons.Material.Filled.PlaylistAddCheck" Href="/checklists" Class="nav-item" />
+            <MudListItem T="string" Text="Categoría de Equipos" Icon="@Icons.Material.Filled.Category" Href="/categorias-equipo" Class="nav-item" />
+            <MudListItem T="string" Text="Auditoría" Icon="@Icons.Material.Filled.History" Href="/auditoria" Class="nav-item" />
+
             @if (isAdmin)
             {
                 <MudListItem T="string" Text="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" Class="nav-item admin-section" />
