@@ -1,0 +1,160 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Asignación de Rol" : "Asignar Rol a Usuario")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudSelect T="long" Label="Usuario" @bind-Value="idUsuario" Variant="Variant.Outlined"
+                Required="true" RequiredError="Debe seleccionar un usuario" Class="mb-3">
+                @foreach (var u in usuarios)
+                {
+                    <MudSelectItem T="long" Value="@u.Id">@u.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="long" Label="Rol" @bind-Value="idRol" Variant="Variant.Outlined"
+                Required="true" RequiredError="Debe seleccionar un rol" Class="mb-3">
+                @foreach (var r in roles)
+                {
+                    <MudSelectItem T="long" Value="@r.Id">@r.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public UsuarioRolDto? Asignacion { get; set; }
+
+    [Parameter]
+    public List<LookupDto>? Usuarios { get; set; }
+
+    [Parameter]
+    public List<LookupDto>? Roles { get; set; }
+
+    private bool IsEditMode => Asignacion != null;
+
+    private long idUsuario;
+    private long idRol;
+
+    private List<LookupDto> usuarios = new();
+    private List<LookupDto> roles = new();
+
+    protected override void OnInitialized()
+    {
+        usuarios = Usuarios ?? new List<LookupDto>();
+        roles = Roles ?? new List<LookupDto>();
+
+        if (IsEditMode && Asignacion != null)
+        {
+            idUsuario = Asignacion.IdUsuario;
+            idRol = Asignacion.IdRol;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (idUsuario <= 0 || idRol <= 0)
+        {
+            Snackbar.Add("Debe seleccionar un usuario y un rol", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            if (IsEditMode && Asignacion != null)
+            {
+                var updateDto = new UpdateUsuarioRolDto { IdUsuario = idUsuario, IdRol = idRol };
+                var result = await HttpClientService.UpdateUsuarioRolAsync(Asignacion.Id, updateDto);
+
+                if (result != null && result.Success)
+                {
+                    Snackbar.Add("Asignación actualizada exitosamente", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add(result?.Message ?? "Error al actualizar la asignación", Severity.Error);
+                }
+            }
+            else
+            {
+                var createDto = new CreateUsuarioRolDto { IdUsuario = idUsuario, IdRol = idRol };
+                var result = await HttpClientService.CreateUsuarioRolAsync(createDto);
+
+                if (result != null && result.Success)
+                {
+                    Snackbar.Add("Rol asignado exitosamente", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add(result?.Message ?? "Error al asignar el rol", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>

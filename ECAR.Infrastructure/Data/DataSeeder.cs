@@ -54,5 +54,25 @@ public static class DataSeeder
             await context.UsuarioRoles.AddAsync(usuarioRol);
             await context.SaveChangesAsync();
         }
+
+        // Datos base para el módulo de Equipos
+        if (!await context.CategoriasEquipo.AnyAsync())
+        {
+            await context.CategoriasEquipo.AddRangeAsync(
+                new CategoriaEquipo { Nombre = "Instrumentación", Descripcion = "Equipos de medición y control" },
+                new CategoriaEquipo { Nombre = "Equipos de Laboratorio", Descripcion = "Equipos analíticos y de ensayo" },
+                new CategoriaEquipo { Nombre = "Equipos de Producción", Descripcion = "Maquinaria de línea de producción" },
+                new CategoriaEquipo { Nombre = "Servicios Industriales", Descripcion = "Compresores, calderas, HVAC" });
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.Ubicaciones.AnyAsync())
+        {
+            await context.Ubicaciones.AddRangeAsync(
+                new Ubicacion { Planta = "Planta Principal", Area = "Producción", Descripcion = "Área de manufactura" },
+                new Ubicacion { Planta = "Planta Principal", Area = "Control de Calidad", Descripcion = "Laboratorio de QC" },
+                new Ubicacion { Planta = "Planta Principal", Area = "Almacén", Descripcion = "Bodega de insumos y producto terminado" });
+            await context.SaveChangesAsync();
+        }
     }
 }
