@@ -1,0 +1,172 @@
+@page "/login"
+@inject NavigationManager NavigationManager
+@inject AuthService AuthService
+
+@using ECAR.Shared.DTOs
+@using ECAR.Client.Services
+@using MudBlazor
+
+<MudContainer Class="login-container">
+    <MudPaper Class="login-paper" Elevation="8">
+        <div class="logo-section">
+            <img src="images/logo-ecar.png" alt="ECAR Logo" class="logo-image" />
+            <MudText Typo="Typo.h4" Class="ecar-title">Laboratorios ECAR</MudText>
+            <MudText Typo="Typo.body1" Class="ecar-subtitle">Sistema de Auditoría de Equipos</MudText>
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <MudForm @ref="form" Class="login-form">
+            <MudTextField T="string" Label="Correo o Usuario AD" @bind-Value="loginDto.CorreoOrUsuarioAD" Variant="Variant.Outlined" Required="false" RequiredError="El correo o usuario AD es requerido" Class="mb-3" AdornmentIcon="@Icons.Material.Filled.Email" Adornment="Adornment.Start" />
+            <MudTextField T="string" Label="Password" @bind-Value="loginDto.Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="false" RequiredError="El password es requerido" Class="mb-4" AdornmentIcon="@Icons.Material.Filled.Lock" Adornment="Adornment.Start" />
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mb-4" Color="Color.Primary" />
+            }
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Class="login-button" OnClick="HandleLogin" Disabled="@isLoading" StartIcon="@Icons.Material.Filled.Login">
+                @if (isLoading)
+                {
+                    <MudText>Iniciando sesión...</MudText>
+                }
+                else
+                {
+                    <MudText>Iniciar Sesión</MudText>
+                }
+            </MudButton>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">
+                    <MudText>@errorMessage</MudText>
+                </MudAlert>
+            }
+        </MudForm>
+
+        <MudDivider Class="my-4" />
+
+        <div class="footer">
+            <MudText Typo="Typo.caption" Class="footer-text">Sistema de Gestión de Equipos e Inspecciones v1.0</MudText>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+<style>
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #F4F5F7 0%, #E9EBF0 100%);
+    padding: 2rem;
+}
+
+.login-paper {
+    max-width: 450px;
+    width: 100%;
+    padding: 2.5rem;
+    border-radius: 16px;
+    background: white;
+    border: 2px solid #E0E6ED;
+}
+
+.logo-section {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.logo-image {
+    max-height: 80px;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+}
+
+.ecar-title {
+    color: #16438C;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.ecar-subtitle {
+    color: #79B75D;
+    margin-top: 0.5rem;
+    font-weight: 500;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.login-button {
+    height: 48px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    background-color: #397FDE !important;
+    color: white !important;
+    border-radius: 12px !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(57, 127, 222, 0.3);
+    transition: all 0.3s ease;
+}
+
+.login-button:hover {
+    background-color: #2A5FB8 !important;
+    box-shadow: 0 6px 16px rgba(57, 127, 222, 0.4);
+    transform: translateY(-2px);
+}
+
+.footer {
+    text-align: center;
+}
+
+.footer-text {
+    color: #5A6A7C;
+    opacity: 0.8;
+}
+</style>
+
+@code {
+    private MudForm? form;
+    private LoginDto loginDto = new();
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+
+    private async Task HandleLogin()
+    {
+        if (string.IsNullOrWhiteSpace(loginDto.CorreoOrUsuarioAD) || string.IsNullOrWhiteSpace(loginDto.Password))
+        {
+            errorMessage = "Por favor complete todos los campos requeridos";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            var result = await AuthService.LoginAsync(loginDto);
+            
+            if (result != null)
+            {
+                // Login exitoso, redirigir a home (forceLoad para recargar el layout y reflejar roles/menú)
+                NavigationManager.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                errorMessage = "Credenciales inválidas. Por favor verifique su correo y contraseña.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al iniciar sesión: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

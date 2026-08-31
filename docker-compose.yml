@@ -1,0 +1,19 @@
+services:
+  ecar-sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ecar-sql-server
+    restart: unless-stopped
+
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+
+    ports:
+      - "1433:1433"
+
+    volumes:
+      - ecar-sql-data:/var/opt/mssql
+
+volumes:
+  ecar-sql-data:

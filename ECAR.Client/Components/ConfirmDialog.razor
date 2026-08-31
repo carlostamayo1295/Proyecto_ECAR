@@ -1,0 +1,53 @@
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <DialogContent>
+        <MudText Typo="Typo.body1">@Message</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="Confirm" Class="dialog-button">Confirmar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public string Message { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Confirm()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-outlined {
+    background-color: white !important;
+    color: #397FDE !important;
+    border-color: #397FDE !important;
+}
+
+.dialog-button.mud-button-outlined:hover {
+    background-color: rgba(57, 127, 222, 0.1) !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #DC3545 !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #C82333 !important;
+}
+</style>

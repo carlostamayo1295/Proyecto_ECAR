@@ -1,0 +1,6 @@
+@ECAR.API_HostAddress = http://localhost:5267
+
+GET {{ECAR.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
