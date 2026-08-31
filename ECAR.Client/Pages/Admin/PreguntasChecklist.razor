@@ -1,0 +1,201 @@
+﻿@page "/checklists/preguntas"
+@inject MockDataService MockDataService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Preguntas del Checklist</MudText>
+                <MudText Typo="Typo.body2">Preguntas asociadas a un checklist de inspección</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nueva Pregunta
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                Class="mb-4" />
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (preguntas != null && preguntas.Any())
+            {
+                <MudTable Items="preguntas" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Checklist</MudTh>
+                        <MudTh>Pregunta</MudTh>
+                        <MudTh>Tipo de respuesta</MudTh>
+                        <MudTh>Obligatoria</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IdPregunta.ToString()</MudTd>
+                        <MudTd>@context.IdChecklist.ToString()</MudTd>
+                        <MudTd>@context.Pregunta</MudTd>
+                        <MudTd>@context.TipoRespuesta</MudTd>
+                        <MudTd>
+                            @if (context.Obligatoria)
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small">Obligatoria</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small">Opcional</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeletePregunta(context)" Class="action-button">
+                                Eliminar
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay preguntas para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<PreguntaChecklistDto>? preguntas;
+    private string searchText = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreguntasAsync();
+    }
+
+    private async Task LoadPreguntasAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await MockDataService.GetPreguntasChecklistAsync(currentPage, pageSize, searchText);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                preguntas = result.Data.Data ?? new List<PreguntaChecklistDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar preguntas", Severity.Error);
+                preguntas = new List<PreguntaChecklistDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            preguntas = new List<PreguntaChecklistDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadPreguntasAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<PreguntaChecklistModal>("Crear Nueva Pregunta");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadPreguntasAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(PreguntaChecklistDto pregunta)
+    {
+        var parameters = new DialogParameters { ["Pregunta"] = pregunta };
+        var dialog = await DialogService.ShowAsync<PreguntaChecklistModal>("Editar Pregunta", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadPreguntasAsync();
+        }
+    }
+
+    private async Task DeletePregunta(PreguntaChecklistDto pregunta)
+    {
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la pregunta '{pregunta.Pregunta}'?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await MockDataService.DeletePreguntaChecklistAsync(pregunta.IdPregunta);
+
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Pregunta eliminada exitosamente", Severity.Success);
+                    await LoadPreguntasAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar pregunta", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>
