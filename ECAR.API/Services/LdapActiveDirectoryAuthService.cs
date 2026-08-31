@@ -46,7 +46,7 @@ public sealed class LdapActiveDirectoryAuthService : IActiveDirectoryAuthService
         }
         catch (LdapException exception)
         {
-            // No se registra la contraseña ni se distingue credencial inválida de servidor no disponible.
+            // Never log the password or reveal whether the credentials or the server failed.
             _logger.LogWarning(exception, "Falló la autenticación de directorio para {UsuarioAD}", usuarioAd);
             return false;
         }

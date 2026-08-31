@@ -128,7 +128,7 @@ app.UseCors("AllowBlazorClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Asegurar que la base de datos existe y aplicar migraciones
+// Apply pending migrations and add any missing seed data at startup.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ECARDbContext>();

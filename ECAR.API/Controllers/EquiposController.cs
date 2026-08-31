@@ -291,7 +291,7 @@ public class EquiposController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Equipo no encontrado"));
         }
 
-        // Baja lógica: los equipos con historial de inspecciones no se eliminan físicamente.
+        // Keep the record for inspection history and mark it as inactive.
         equipo.Activo = false;
         await _context.SaveChangesAsync();
 

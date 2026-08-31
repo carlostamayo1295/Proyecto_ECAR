@@ -110,7 +110,7 @@ public class UsuariosController : ControllerBase
             return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(
                 "Debe indicar una contraseña local o un usuario de Active Directory"));
 
-        // Validar si el correo ya existe
+        // Email and AD usernames must be unique.
         var existingUsuario = await _context.Usuarios
             .FirstOrDefaultAsync(u => u.Correo == createDto.Correo);
 
@@ -139,7 +139,7 @@ public class UsuariosController : ControllerBase
             }
         }
 
-        // Hashear el password
+        // AD-only users do not need a local password hash.
         var passwordHash = string.IsNullOrWhiteSpace(createDto.Password)
             ? string.Empty
             : BCrypt.Net.BCrypt.HashPassword(createDto.Password);
@@ -161,7 +161,7 @@ public class UsuariosController : ControllerBase
         _context.Usuarios.Add(usuario);
         await _context.SaveChangesAsync();
 
-        // Recargar usuario con roles
+        // Reload the user to return the role names in the response.
         var usuarioCreado = await _context.Usuarios
             .AsNoTracking()
             .Include(u => u.UsuarioRoles)
@@ -257,13 +257,13 @@ public class UsuariosController : ControllerBase
             usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updateDto.Password);
         }
 
-        // Actualizar roles si se proporcionaron
+        // Replace role assignments only when the request includes RoleIds.
         if (roleIds != null)
         {
-            // Eliminar roles existentes
+            // Remove the previous assignments.
             _context.UsuarioRoles.RemoveRange(usuario.UsuarioRoles);
 
-            // Agregar nuevos roles
+            // Add the requested assignments.
             foreach (var roleId in roleIds)
             {
                 _context.UsuarioRoles.Add(new UsuarioRol
@@ -274,10 +274,10 @@ public class UsuariosController : ControllerBase
             }
         }
 
-        // Un único guardado evita que una solicitud inválida deje cambios parciales.
+        // Save once so an invalid request cannot leave partial changes.
         await _context.SaveChangesAsync();
 
-        // Recargar usuario con roles
+        // Use a fresh query so the response contains the saved assignments.
         var usuarioActualizado = await _context.Usuarios
             .AsNoTracking()
             .Include(u => u.UsuarioRoles)
