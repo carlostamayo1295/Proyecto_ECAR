@@ -19,7 +19,7 @@ Solución .NET 10 de 4 proyectos:
 | `ECAR.Client` | Blazor WebAssembly + MudBlazor 9 (tema corporativo) |
 | `ECAR.Infrastructure` | EF Core: entidades, `ECARDbContext`, migraciones, `DataSeeder` |
 | `ECAR.Shared` | DTOs, `ApiResponse<T>`, `PagedResultDto<T>` |
-| `ECAR.API.Tests` | xUnit — 7 pruebas de reglas críticas |
+| `ECAR.API.Tests` | xUnit — 17 pruebas (7 de reglas de negocio + 10 del núcleo JWT) |
 
 Base de datos: **SQL Server**. Migraciones aplicadas automáticamente al arranque con
 `Database.MigrateAsync()`. Semillas idempotentes (roles, administrador, categorías,
@@ -181,11 +181,26 @@ Auditoria ── tabla transversal, sin FK (Tabla + RegistroId + FechaHora)
   sin estar registrado → fallo en runtime).
 - `ECAR.Client/Layout/MainLayout.razor`: enlace a `/ubicaciones` en el menú de administración.
 
+### Evaluación de la rama `feature/jwt-auth-roles-authorization`
+
+Rama de Simón, basada en Fase 0. Contiene dos cosas:
+
+1. **`[Authorize]` en `UsuariosController` / `RolesController`** con lectura para
+   `Administrador,Técnico,Auditor`. **No se integra:** `main` ya protege ambos controladores
+   con `[Authorize(Roles = "Administrador")]`, que es *más* restrictivo y coherente con el
+   SRS (Técnico y Auditor no administran usuarios ni roles).
+2. **Proyecto de pruebas `ECAR.Tests` con `AuthServiceTests.cs`** (11 pruebas del login JWT y
+   la validación de token). **Se integra el valor, no el proyecto duplicado:** las pruebas se
+   portaron a `ECAR.API.Tests/AuthServiceTests.cs` adaptadas al constructor actual de
+   `AuthService` (4 parámetros, modo `Local` con adaptador AD nulo). Cubren: login correcto,
+   login por `UsuarioAD`, contraseña incorrecta, usuario inexistente, usuario inactivo, roles
+   en el token, y token válido / mal formado / firmado con otra clave / vencido.
+
 ### Verificación
 
 ```powershell
 dotnet build ECAR.AuditoriaEquipos.slnx --no-restore          # 0 errores
-dotnet test ECAR.API.Tests/ECAR.API.Tests.csproj -c Release    # 7/7 correctas
+dotnet test ECAR.API.Tests/ECAR.API.Tests.csproj -c Release    # 17/17 correctas
 dotnet ef migrations has-pending-model-changes --project ECAR.Infrastructure --startup-project ECAR.API  # sin cambios
 ```
 
