@@ -4,6 +4,9 @@ namespace ECAR.Shared.DTOs;
 
 public class CreatePreguntaChecklistDto
 {
+    [Range(1, long.MaxValue, ErrorMessage = "Debe seleccionar un checklist válido")]
+    public long IdChecklist { get; set; }
+
     [Required(ErrorMessage = "La pregunta es requerida")]
     public string Pregunta { get; set; } = string.Empty;
 

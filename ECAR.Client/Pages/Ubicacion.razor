@@ -1,5 +1,5 @@
 ﻿@page "/ubicaciones"
-@inject MockDataService MockDataService
+@inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -88,7 +88,7 @@
 
         try
         {
-            var result = await MockDataService.GetUbicacionesAsync(currentPage, pageSize, searchText);
+            var result = await HttpClientService.GetUbicacionesAsync(currentPage, pageSize, searchText);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -153,7 +153,7 @@
             isLoading = true;
             try
             {
-                var deleteResult = await MockDataService.DeleteUbicacionAsync(ubicacion.IdUbicacion);
+                var deleteResult = await HttpClientService.DeleteUbicacionAsync(ubicacion.IdUbicacion);
 
                 if (deleteResult != null && deleteResult.Success)
                 {

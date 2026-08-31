@@ -110,3 +110,4 @@ appsettings.Staging.json
 
 # User Secrets
 usersecrets
+.env

@@ -1,4 +1,4 @@
-﻿@inject MockDataService MockDataService
+﻿@inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -69,7 +69,7 @@
                 Descripcion = descripcion
             };
 
-            var result = await MockDataService.UpdateUbicacionAsync(Ubicacion.IdUbicacion, updateDto);
+            var result = await HttpClientService.UpdateUbicacionAsync(Ubicacion.IdUbicacion, updateDto);
 
             if (result != null && result.Success)
             {
@@ -90,7 +90,7 @@
                 Descripcion = descripcion
             };
 
-            var result = await MockDataService.CreateUbicacionAsync(createDto);
+            var result = await HttpClientService.CreateUbicacionAsync(createDto);
 
             if (result != null && result.Success)
             {

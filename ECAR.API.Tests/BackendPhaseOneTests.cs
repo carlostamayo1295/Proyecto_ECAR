@@ -108,7 +108,7 @@ public class BackendPhaseOneTests
         await context.SaveChangesAsync();
 
         var controller = new CategoriasEquipoController(context);
-        var result = await controller.DeleteCategoria(category.IdCategoria);
+        var result = await controller.DeleteCategoriaEquipo(category.IdCategoria);
 
         Assert.IsType<ConflictObjectResult>(result.Result);
         Assert.True(await context.CategoriasEquipo.AnyAsync());

@@ -16,6 +16,8 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https:/
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<HttpClientService>();
 builder.Services.AddScoped<AuthorizationService>();
+// Mock temporal para pantallas de Fase 2/3 aún sin backend (PreguntasChecklist, RespuestasInspeccion).
+builder.Services.AddScoped<MockDataService>();
 
 // Configure MudBlazor with ECAR corporate theme
 builder.Services.AddMudServices();

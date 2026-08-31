@@ -132,10 +132,10 @@
     {
         try
         {
-            var catResult = await HttpClientService.GetCategoriasEquipoAsync();
+            var catResult = await HttpClientService.GetEquipoCategoriasLookupAsync();
             categorias = catResult?.Success == true ? catResult.Data ?? new() : new();
 
-            var ubResult = await HttpClientService.GetUbicacionesEquipoAsync();
+            var ubResult = await HttpClientService.GetEquipoUbicacionesLookupAsync();
             ubicaciones = ubResult?.Success == true ? ubResult.Data ?? new() : new();
         }
         catch

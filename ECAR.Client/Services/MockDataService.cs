@@ -6,14 +6,8 @@ namespace ECAR.Client.Services;
 public class MockDataService
 {
     // ===================== ESTADO EN MEMORIA =====================
-    private static List<UbicacionDto> _ubicaciones = new()
-    {
-        new UbicacionDto { IdUbicacion = 1, Planta = "Planta Norte", Area = "Producción", Descripcion = "Área de ensamblaje principal" },
-        new UbicacionDto { IdUbicacion = 2, Planta = "Planta Norte", Area = "Almacén", Descripcion = "Bodega de insumos" },
-        new UbicacionDto { IdUbicacion = 3, Planta = "Planta Sur", Area = "Calidad", Descripcion = "Laboratorio de control de calidad" },
-    };
-    private static long _nextUbicacionId = 4;
-
+    // Mock temporal para pantallas de Fase 2/3 sin backend (PreguntasChecklist, RespuestasInspeccion).
+    // Ubicaciones ya usa el API real vía HttpClientService.
     private static List<PreguntaChecklistDto> _preguntas = new()
     {
         new PreguntaChecklistDto { IdPregunta = 1, IdChecklist = 1, Pregunta = "¿El equipo enciende correctamente?", TipoRespuesta = "SiNo", Obligatoria = true },
@@ -46,47 +40,6 @@ public class MockDataService
             Page = page,
             PageSize = pageSize
         };
-    }
-
-    // ===================== UBICACIONES =====================
-    public async Task<ApiResponse<PagedResultDto<UbicacionDto>>?> GetUbicacionesAsync(int page = 1, int pageSize = 10, string? search = null)
-    {
-        var query = _ubicaciones.AsEnumerable();
-        if (!string.IsNullOrEmpty(search))
-            query = query.Where(u => u.Planta.Contains(search, StringComparison.OrdinalIgnoreCase)
-                                   || u.Area.Contains(search, StringComparison.OrdinalIgnoreCase));
-
-        var result = ApiResponse<PagedResultDto<UbicacionDto>>.SuccessResponse(Paginate(query.ToList(), page, pageSize));
-        return await SimulateDelay(result);
-    }
-
-    public async Task<ApiResponse<UbicacionDto>?> CreateUbicacionAsync(CreateUbicacionDto dto)
-    {
-        var nueva = new UbicacionDto { IdUbicacion = _nextUbicacionId++, Planta = dto.Planta, Area = dto.Area, Descripcion = dto.Descripcion };
-        _ubicaciones.Add(nueva);
-        return await SimulateDelay(ApiResponse<UbicacionDto>.SuccessResponse(nueva, "Ubicación creada exitosamente"));
-    }
-
-    public async Task<ApiResponse<UbicacionDto>?> UpdateUbicacionAsync(long id, UpdateUbicacionDto dto)
-    {
-        var existente = _ubicaciones.FirstOrDefault(u => u.IdUbicacion == id);
-        if (existente == null)
-            return await SimulateDelay(ApiResponse<UbicacionDto>.ErrorResponse("Ubicación no encontrada"));
-
-        existente.Planta = dto.Planta;
-        existente.Area = dto.Area;
-        existente.Descripcion = dto.Descripcion;
-        return await SimulateDelay(ApiResponse<UbicacionDto>.SuccessResponse(existente, "Ubicación actualizada exitosamente"));
-    }
-
-    public async Task<ApiResponse<bool>?> DeleteUbicacionAsync(long id)
-    {
-        var existente = _ubicaciones.FirstOrDefault(u => u.IdUbicacion == id);
-        if (existente == null)
-            return await SimulateDelay(ApiResponse<bool>.ErrorResponse("Ubicación no encontrada"));
-
-        _ubicaciones.Remove(existente);
-        return await SimulateDelay(ApiResponse<bool>.SuccessResponse(true, "Ubicación eliminada exitosamente"));
     }
 
     // ===================== PREGUNTAS CHECKLIST =====================

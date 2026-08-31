@@ -455,7 +455,7 @@ public class HttpClientService
     }
 
     // Equipos API Methods
-    public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100, string? search = null, string? criticidad = null)
     {
         try
         {
@@ -465,6 +465,10 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(search))
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
+            }
+            if (!string.IsNullOrEmpty(criticidad))
+            {
+                query += $"&criticidad={Uri.EscapeDataString(criticidad)}";
             }
 
             var response = await _httpClient.GetAsync(query);
@@ -476,6 +480,312 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting equipos: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EquipoDto>?> GetEquipoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/equipos/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EquipoDto>?> CreateEquipoAsync(CreateEquipoDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/equipos", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EquipoDto>?> UpdateEquipoAsync(long id, UpdateEquipoDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/equipos/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeleteEquipoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/equipos/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<LookupDto>>?> GetEquipoCategoriasLookupAsync()
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync("api/equipos/categorias");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<LookupDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting categorias lookup: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<LookupDto>>?> GetEquipoUbicacionesLookupAsync()
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync("api/equipos/ubicaciones");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<LookupDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting ubicaciones lookup: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Ubicaciones API Methods
+    public async Task<ApiResponse<PagedResultDto<UbicacionDto>>?> GetUbicacionesAsync(int page = 1, int pageSize = 10, string? search = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/ubicaciones?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<UbicacionDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting ubicaciones: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<UbicacionDto>?> CreateUbicacionAsync(CreateUbicacionDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/ubicaciones", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<UbicacionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating ubicacion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<UbicacionDto>?> UpdateUbicacionAsync(long id, UpdateUbicacionDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/ubicaciones/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<UbicacionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating ubicacion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeleteUbicacionAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/ubicaciones/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting ubicacion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Usuarios-Rol (asignaciones) API Methods
+    public async Task<ApiResponse<PagedResultDto<UsuarioRolDto>>?> GetUsuariosRolAsync(int page = 1, int pageSize = 10, string? search = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/usuariosrol?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<UsuarioRolDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting usuarios-rol: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<UsuarioRolDto>?> CreateUsuarioRolAsync(CreateUsuarioRolDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/usuariosrol", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<UsuarioRolDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating usuario-rol: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<UsuarioRolDto>?> UpdateUsuarioRolAsync(long id, UpdateUsuarioRolDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/usuariosrol/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<UsuarioRolDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating usuario-rol: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeleteUsuarioRolAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/usuariosrol/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting usuario-rol: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<LookupDto>>?> GetUsuariosLookupAsync()
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync("api/usuariosrol/usuarios");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<LookupDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting usuarios lookup: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<LookupDto>>?> GetRolesLookupAsync()
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync("api/usuariosrol/roles");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<LookupDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting roles lookup: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }

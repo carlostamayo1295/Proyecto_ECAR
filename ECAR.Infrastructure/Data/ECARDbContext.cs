@@ -55,7 +55,6 @@ public class ECARDbContext : DbContext
         {
             entity.HasIndex(e => e.Correo).IsUnique();
             entity.HasIndex(e => e.UsuarioAD).IsUnique();
-            entity.HasIndex(e => e.Correo); // Índice adicional para búsqueda rápida en login
         });
 
         // Configure Rol
