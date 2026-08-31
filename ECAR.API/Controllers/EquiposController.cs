@@ -10,7 +10,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class EquiposController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -25,28 +25,59 @@ public class EquiposController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
-        [FromQuery] string? criticidad = null)
+        [FromQuery] string? criticidad = null,
+        [FromQuery] long? idCategoria = null,
+        [FromQuery] long? idUbicacion = null,
+        [FromQuery] string? planta = null,
+        [FromQuery] string? area = null,
+        [FromQuery] bool? activo = null)
     {
+        if (page < 1 || pageSize is < 1 or > 100)
+        {
+            return BadRequest(ApiResponse<PagedResultDto<EquipoDto>>.ErrorResponse(
+                "La página debe ser mayor que cero y el tamaño debe estar entre 1 y 100"));
+        }
+
         var query = _context.Equipos
             .Include(e => e.Categoria)
             .Include(e => e.Ubicacion)
+            .AsNoTracking()
             .AsQueryable();
 
-        if (!string.IsNullOrEmpty(search))
+        if (!string.IsNullOrWhiteSpace(search))
         {
+            var term = search.Trim();
             query = query.Where(e =>
-                e.CodigoInterno.Contains(search) ||
-                e.ActivoFijo.Contains(search) ||
-                e.NombreEquipo.Contains(search) ||
-                (e.Marca != null && e.Marca.Contains(search)) ||
-                (e.Modelo != null && e.Modelo.Contains(search)) ||
-                (e.SerialFabricante != null && e.SerialFabricante.Contains(search)));
+                e.CodigoInterno.Contains(term) ||
+                e.ActivoFijo.Contains(term) ||
+                e.NombreEquipo.Contains(term) ||
+                (e.Marca != null && e.Marca.Contains(term)) ||
+                (e.Modelo != null && e.Modelo.Contains(term)) ||
+                (e.SerialFabricante != null && e.SerialFabricante.Contains(term)));
         }
 
-        if (!string.IsNullOrEmpty(criticidad))
+        if (!string.IsNullOrWhiteSpace(criticidad))
         {
-            query = query.Where(e => e.Criticidad == criticidad);
+            var value = criticidad.Trim();
+            query = query.Where(e => e.Criticidad == value);
         }
+
+        if (idCategoria.HasValue)
+            query = query.Where(e => e.IdCategoria == idCategoria.Value);
+        if (idUbicacion.HasValue)
+            query = query.Where(e => e.IdUbicacion == idUbicacion.Value);
+        if (!string.IsNullOrWhiteSpace(planta))
+        {
+            var value = planta.Trim();
+            query = query.Where(e => e.Ubicacion != null && e.Ubicacion.Planta == value);
+        }
+        if (!string.IsNullOrWhiteSpace(area))
+        {
+            var value = area.Trim();
+            query = query.Where(e => e.Ubicacion != null && e.Ubicacion.Area == value);
+        }
+        if (activo.HasValue)
+            query = query.Where(e => e.Activo == activo.Value);
 
         var totalCount = await query.CountAsync();
 
@@ -86,14 +117,22 @@ public class EquiposController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<EquipoDto>>> CreateEquipo(CreateEquipoDto createDto)
     {
-        if (await _context.Equipos.AnyAsync(e => e.CodigoInterno == createDto.CodigoInterno))
+        var codigoInterno = createDto.CodigoInterno.Trim();
+        var activoFijo = createDto.ActivoFijo.Trim();
+        var nombreEquipo = createDto.NombreEquipo.Trim();
+        if (codigoInterno.Length == 0 || activoFijo.Length == 0 || nombreEquipo.Length == 0)
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(
+                "El código interno, el activo fijo y el nombre del equipo son requeridos"));
+
+        if (await _context.Equipos.AnyAsync(e => e.CodigoInterno == codigoInterno))
         {
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El código interno ya está registrado"));
         }
 
-        if (await _context.Equipos.AnyAsync(e => e.ActivoFijo == createDto.ActivoFijo))
+        if (await _context.Equipos.AnyAsync(e => e.ActivoFijo == activoFijo))
         {
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El activo fijo ya está registrado"));
         }
@@ -112,17 +151,17 @@ public class EquiposController : ControllerBase
 
         var equipo = new Equipo
         {
-            CodigoInterno = createDto.CodigoInterno,
-            ActivoFijo = createDto.ActivoFijo,
-            SerialFabricante = createDto.SerialFabricante,
-            NombreEquipo = createDto.NombreEquipo,
-            Marca = createDto.Marca,
-            Modelo = createDto.Modelo,
-            Fabricante = createDto.Fabricante,
-            Criticidad = createDto.Criticidad,
+            CodigoInterno = codigoInterno,
+            ActivoFijo = activoFijo,
+            SerialFabricante = NormalizeOptional(createDto.SerialFabricante),
+            NombreEquipo = nombreEquipo,
+            Marca = NormalizeOptional(createDto.Marca),
+            Modelo = NormalizeOptional(createDto.Modelo),
+            Fabricante = NormalizeOptional(createDto.Fabricante),
+            Criticidad = NormalizeOptional(createDto.Criticidad),
             IdCategoria = createDto.IdCategoria,
             IdUbicacion = createDto.IdUbicacion,
-            QRCode = createDto.QRCode,
+            QRCode = NormalizeOptional(createDto.QRCode),
             Activo = true,
             FechaCreacion = DateTime.UtcNow
         };
@@ -138,6 +177,7 @@ public class EquiposController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<EquipoDto>>> UpdateEquipo(long id, UpdateEquipoDto updateDto)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -147,44 +187,55 @@ public class EquiposController : ControllerBase
             return NotFound(ApiResponse<EquipoDto>.ErrorResponse("Equipo no encontrado"));
         }
 
-        if (!string.IsNullOrEmpty(updateDto.CodigoInterno) && updateDto.CodigoInterno != equipo.CodigoInterno)
+        if (updateDto.CodigoInterno != null)
         {
-            if (await _context.Equipos.AnyAsync(e => e.CodigoInterno == updateDto.CodigoInterno && e.IdEquipo != id))
+            var codigoInterno = updateDto.CodigoInterno.Trim();
+            if (codigoInterno.Length == 0)
+                return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El código interno no puede estar vacío"));
+            if (await _context.Equipos.AnyAsync(e => e.CodigoInterno == codigoInterno && e.IdEquipo != id))
             {
                 return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El código interno ya está registrado"));
             }
-            equipo.CodigoInterno = updateDto.CodigoInterno;
+            equipo.CodigoInterno = codigoInterno;
         }
 
-        if (!string.IsNullOrEmpty(updateDto.ActivoFijo) && updateDto.ActivoFijo != equipo.ActivoFijo)
+        if (updateDto.ActivoFijo != null)
         {
-            if (await _context.Equipos.AnyAsync(e => e.ActivoFijo == updateDto.ActivoFijo && e.IdEquipo != id))
+            var activoFijo = updateDto.ActivoFijo.Trim();
+            if (activoFijo.Length == 0)
+                return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El activo fijo no puede estar vacío"));
+            if (await _context.Equipos.AnyAsync(e => e.ActivoFijo == activoFijo && e.IdEquipo != id))
             {
                 return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El activo fijo ya está registrado"));
             }
-            equipo.ActivoFijo = updateDto.ActivoFijo;
+            equipo.ActivoFijo = activoFijo;
         }
 
-        if (!string.IsNullOrEmpty(updateDto.NombreEquipo))
-            equipo.NombreEquipo = updateDto.NombreEquipo;
+        if (updateDto.NombreEquipo != null)
+        {
+            var nombreEquipo = updateDto.NombreEquipo.Trim();
+            if (nombreEquipo.Length == 0)
+                return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("El nombre del equipo no puede estar vacío"));
+            equipo.NombreEquipo = nombreEquipo;
+        }
 
         if (updateDto.SerialFabricante != null)
-            equipo.SerialFabricante = updateDto.SerialFabricante;
+            equipo.SerialFabricante = NormalizeOptional(updateDto.SerialFabricante);
 
         if (updateDto.Marca != null)
-            equipo.Marca = updateDto.Marca;
+            equipo.Marca = NormalizeOptional(updateDto.Marca);
 
         if (updateDto.Modelo != null)
-            equipo.Modelo = updateDto.Modelo;
+            equipo.Modelo = NormalizeOptional(updateDto.Modelo);
 
         if (updateDto.Fabricante != null)
-            equipo.Fabricante = updateDto.Fabricante;
+            equipo.Fabricante = NormalizeOptional(updateDto.Fabricante);
 
         if (updateDto.Criticidad != null)
-            equipo.Criticidad = updateDto.Criticidad;
+            equipo.Criticidad = NormalizeOptional(updateDto.Criticidad);
 
         if (updateDto.QRCode != null)
-            equipo.QRCode = updateDto.QRCode;
+            equipo.QRCode = NormalizeOptional(updateDto.QRCode);
 
         if (updateDto.IdCategoria.HasValue)
         {
@@ -230,6 +281,7 @@ public class EquiposController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteEquipo(long id)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -287,4 +339,7 @@ public class EquiposController : ControllerBase
         Activo = e.Activo,
         FechaCreacion = e.FechaCreacion
     };
+
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
