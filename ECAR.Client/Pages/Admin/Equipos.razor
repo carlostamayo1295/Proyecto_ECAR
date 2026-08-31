@@ -1,0 +1,289 @@
+@page "/admin/equipos"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<AdminRouteGuard>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Gestión de Equipos</MudText>
+                <MudText Typo="Typo.body2">Administrar el inventario de equipos del sistema</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nuevo Equipo
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudGrid Class="mb-2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Label="Criticidad" @bind-Value="criticidadFilter" Variant="Variant.Outlined"
+                        Clearable="true">
+                        <MudSelectItem T="string" Value="@("Alta")">Alta</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Media")">Media</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Baja")">Baja</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="2" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                        StartIcon="@Icons.Material.Filled.FilterAlt" OnClick="ApplyFilters">Filtrar</MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (equipos != null && equipos.Any())
+            {
+                <MudTable Items="equipos" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Código Interno</MudTh>
+                        <MudTh>Activo Fijo</MudTh>
+                        <MudTh>Nombre</MudTh>
+                        <MudTh>Categoría</MudTh>
+                        <MudTh>Ubicación</MudTh>
+                        <MudTh>Criticidad</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IdEquipo.ToString()</MudTd>
+                        <MudTd>@context.CodigoInterno</MudTd>
+                        <MudTd>@context.ActivoFijo</MudTd>
+                        <MudTd>@context.NombreEquipo</MudTd>
+                        <MudTd>@(context.CategoriaNombre ?? "-")</MudTd>
+                        <MudTd>@(context.UbicacionNombre ?? "-")</MudTd>
+                        <MudTd>
+                            @if (!string.IsNullOrEmpty(context.Criticidad))
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                    Color="@GetCriticidadColor(context.Criticidad)" Text="@context.Criticidad" />
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption">-</MudText>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)"
+                                Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
+                        </MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
+                                @(context.Activo ? "Desactivar" : "Activar")
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay equipos para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+    </MudContainer>
+</AdminRouteGuard>
+
+@code {
+    private List<EquipoDto>? equipos;
+    private List<LookupDto>? categorias;
+    private List<LookupDto>? ubicaciones;
+    private string searchText = string.Empty;
+    private string? criticidadFilter;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            var catResult = await HttpClientService.GetCategoriasEquipoAsync();
+            categorias = catResult?.Success == true ? catResult.Data ?? new() : new();
+
+            var ubResult = await HttpClientService.GetUbicacionesEquipoAsync();
+            ubicaciones = ubResult?.Success == true ? ubResult.Data ?? new() : new();
+        }
+        catch
+        {
+            categorias = new();
+            ubicaciones = new();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await HttpClientService.GetEquiposAsync(currentPage, pageSize, searchText, criticidadFilter);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                equipos = result.Data.Data ?? new List<EquipoDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar equipos", Severity.Error);
+                equipos = new List<EquipoDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            equipos = new List<EquipoDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadDataAsync();
+    }
+
+    private static Color GetCriticidadColor(string? criticidad) => criticidad switch
+    {
+        "Alta" => Color.Error,
+        "Media" => Color.Warning,
+        "Baja" => Color.Success,
+        _ => Color.Default
+    };
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Categorias"] = categorias,
+            ["Ubicaciones"] = ubicaciones
+        };
+        var dialog = await DialogService.ShowAsync<EquipoModal>("Crear Nuevo Equipo", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(EquipoDto equipo)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Equipo"] = equipo,
+            ["Categorias"] = categorias,
+            ["Ubicaciones"] = ubicaciones
+        };
+        var dialog = await DialogService.ShowAsync<EquipoModal>("Editar Equipo", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task DeleteEquipo(EquipoDto equipo)
+    {
+        var action = equipo.Activo ? "desactivar" : "activar";
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea {action} el equipo '{equipo.NombreEquipo}'?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                if (equipo.Activo)
+                {
+                    var deleteResult = await HttpClientService.DeleteEquipoAsync(equipo.IdEquipo);
+                    if (deleteResult != null && deleteResult.Success)
+                    {
+                        Snackbar.Add("Equipo desactivado exitosamente", Severity.Success);
+                        await LoadDataAsync();
+                    }
+                    else
+                    {
+                        Snackbar.Add(deleteResult?.Message ?? "Error al desactivar equipo", Severity.Error);
+                    }
+                }
+                else
+                {
+                    var updateResult = await HttpClientService.UpdateEquipoAsync(equipo.IdEquipo, new UpdateEquipoDto { Activo = true });
+                    if (updateResult != null && updateResult.Success)
+                    {
+                        Snackbar.Add("Equipo activado exitosamente", Severity.Success);
+                        await LoadDataAsync();
+                    }
+                    else
+                    {
+                        Snackbar.Add(updateResult?.Message ?? "Error al activar equipo", Severity.Error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>

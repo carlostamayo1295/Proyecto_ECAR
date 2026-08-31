@@ -1,0 +1,240 @@
+@page "/admin/usuarios-roles"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<AdminRouteGuard>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Asignación de Roles a Usuarios</MudText>
+                <MudText Typo="Typo.body2">Administrar los roles asignados a cada usuario del sistema</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nueva Asignación
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudGrid Class="mb-2">
+                <MudItem xs="12" sm="10">
+                    <MudTextField T="string" Label="Buscar (usuario o rol)" @bind-Value="searchText" Variant="Variant.Outlined"
+                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" sm="2" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                        StartIcon="@Icons.Material.Filled.FilterAlt" OnClick="ApplyFilters">Filtrar</MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (asignaciones != null && asignaciones.Any())
+            {
+                <MudTable Items="asignaciones" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Usuario</MudTh>
+                        <MudTh>Correo</MudTh>
+                        <MudTh>Rol</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Id.ToString()</MudTd>
+                        <MudTd>@context.UsuarioNombre</MudTd>
+                        <MudTd>@context.UsuarioCorreo</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Text="@context.RolNombre" />
+                        </MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteAsignacion(context)" Class="action-button">
+                                Eliminar
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay asignaciones para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+    </MudContainer>
+</AdminRouteGuard>
+
+@code {
+    private List<UsuarioRolDto>? asignaciones;
+    private List<LookupDto>? usuarios;
+    private List<LookupDto>? roles;
+    private string searchText = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            var usersResult = await HttpClientService.GetUsuariosLookupAsync();
+            usuarios = usersResult?.Success == true ? usersResult.Data ?? new() : new();
+
+            var rolesResult = await HttpClientService.GetRolesLookupAsync();
+            roles = rolesResult?.Success == true ? rolesResult.Data ?? new() : new();
+        }
+        catch
+        {
+            usuarios = new();
+            roles = new();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await HttpClientService.GetUsuariosRolAsync(currentPage, pageSize, searchText);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                asignaciones = result.Data.Data ?? new List<UsuarioRolDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar las asignaciones", Severity.Error);
+                asignaciones = new List<UsuarioRolDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            asignaciones = new List<UsuarioRolDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadDataAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Usuarios"] = usuarios,
+            ["Roles"] = roles
+        };
+        var dialog = await DialogService.ShowAsync<UsuarioRolModal>("Nueva Asignación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(UsuarioRolDto asignacion)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Asignacion"] = asignacion,
+            ["Usuarios"] = usuarios,
+            ["Roles"] = roles
+        };
+        var dialog = await DialogService.ShowAsync<UsuarioRolModal>("Editar Asignación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task DeleteAsignacion(UsuarioRolDto asignacion)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Message"] = $"¿Está seguro que desea eliminar la asignación del rol '{asignacion.RolNombre}' al usuario '{asignacion.UsuarioNombre}'?"
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await HttpClientService.DeleteUsuarioRolAsync(asignacion.Id);
+
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Asignación eliminada exitosamente", Severity.Success);
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar la asignación", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>
