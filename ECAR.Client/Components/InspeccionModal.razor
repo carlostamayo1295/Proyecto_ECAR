@@ -1,0 +1,243 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Inspección" : "Registrar Nueva Inspección")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            @if (IsEditMode)
+            {
+                @* El equipo y el inspector no se pueden cambiar: se muestran solo como referencia. *@
+                <MudTextField T="string" Label="Equipo" Value="@Inspeccion!.NombreEquipo"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
+
+                <MudTextField T="string" Label="Inspector" Value="@Inspeccion!.NombreUsuario"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
+            }
+            else
+            {
+                <MudAutocomplete T="EquipoDto" Label="Equipo" @bind-Value="equipoSeleccionado"
+                    SearchFunc="BuscarEquiposAsync" ToStringFunc="@(e => e == null ? string.Empty : $"{e.CodigoInterno} - {e.NombreEquipo}")"
+                    Variant="Variant.Outlined" Required="true" RequiredError="El equipo es requerido"
+                    MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
+                    Clearable="true" Class="mb-3"
+                    HelperText="Escriba código, nombre, marca o serial para filtrar" />
+
+                <MudAutocomplete T="UsuarioDto" Label="Inspector" @bind-Value="usuarioSeleccionado"
+                    SearchFunc="BuscarUsuariosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
+                    Variant="Variant.Outlined" Required="true" RequiredError="El inspector es requerido"
+                    MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
+                    Clearable="true" Class="mb-3"
+                    HelperText="Escriba nombre, correo o usuario AD para filtrar" />
+            }
+
+            <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
+                Editable="true" Disabled="IsEditMode" Class="mb-3" />
+
+            <MudSelect T="string" Label="Resultado" @bind-Value="resultado" Variant="Variant.Outlined"
+                Clearable="true" Class="mb-3">
+                <MudSelectItem T="string" Value="@("Satisfactoria")">Satisfactoria</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Con novedad")">Con novedad</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Pendiente")">Pendiente</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
+                Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3"
+                HelperText="Obligatorias si el resultado tiene novedad" />
+
+            <MudTextField T="string" Label="Firma digital (identificador o hash)" @bind-Value="firmaDigital"
+                Variant="Variant.Outlined" Immediate="true" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public InspeccionDto? Inspeccion { get; set; }
+
+    private bool IsEditMode => Inspeccion != null;
+
+    // El API rechaza pageSize mayor que 100; además el desplegable solo muestra los primeros resultados.
+    private const int MaxResultadosBusqueda = 20;
+
+    private EquipoDto? equipoSeleccionado;
+    private UsuarioDto? usuarioSeleccionado;
+
+    private DateTime? fechaInspeccion = DateTime.Today;
+    private string? resultado;
+    private string? observaciones;
+    private string? firmaDigital;
+
+    // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
+    private bool errorEquiposAvisado;
+    private bool errorUsuariosAvisado;
+
+    protected override void OnInitialized()
+    {
+        if (IsEditMode && Inspeccion != null)
+        {
+            fechaInspeccion = Inspeccion.FechaInspeccion;
+            resultado = Inspeccion.Resultado;
+            observaciones = Inspeccion.Observaciones;
+        }
+    }
+
+    // El filtro se resuelve en el API para que la lista funcione con muchos registros.
+    private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetEquiposAsync(1, MaxResultadosBusqueda, valor);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            if (!errorEquiposAvisado)
+            {
+                errorEquiposAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los equipos", Severity.Error);
+            }
+
+            return Array.Empty<EquipoDto>();
+        }
+
+        errorEquiposAvisado = false;
+        return respuesta.Data?.Data ?? new List<EquipoDto>();
+    }
+
+    private async Task<IEnumerable<UsuarioDto>> BuscarUsuariosAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetUsuariosAsync(1, MaxResultadosBusqueda, valor);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            if (!errorUsuariosAvisado)
+            {
+                errorUsuariosAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los inspectores", Severity.Error);
+            }
+
+            return Array.Empty<UsuarioDto>();
+        }
+
+        errorUsuariosAvisado = false;
+        return respuesta.Data?.Data ?? new List<UsuarioDto>();
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(resultado)
+            && resultado.Contains("novedad", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(observaciones))
+        {
+            Snackbar.Add("Si la inspección tiene novedad, las observaciones son obligatorias", Severity.Warning);
+            return;
+        }
+
+        if (IsEditMode && Inspeccion != null)
+        {
+            var updateDto = new UpdateInspeccionDto
+            {
+                Resultado = resultado,
+                Observaciones = observaciones,
+                FirmaDigital = string.IsNullOrWhiteSpace(firmaDigital) ? null : firmaDigital
+            };
+
+            var result = await HttpClientService.UpdateInspeccionAsync(Inspeccion.IdInspeccion, updateDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Inspección actualizada exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al actualizar inspección", Severity.Error);
+            }
+        }
+        else
+        {
+            if (equipoSeleccionado == null || usuarioSeleccionado == null)
+            {
+                Snackbar.Add("Debe seleccionar equipo e inspector", Severity.Warning);
+                return;
+            }
+
+            var createDto = new CreateInspeccionDto
+            {
+                IdEquipo = equipoSeleccionado.IdEquipo,
+                IdUsuario = usuarioSeleccionado.IdUsuario,
+                FechaInspeccion = fechaInspeccion ?? DateTime.Today,
+                Resultado = resultado,
+                Observaciones = observaciones,
+                FirmaDigital = string.IsNullOrWhiteSpace(firmaDigital) ? null : firmaDigital
+            };
+
+            var result = await HttpClientService.CreateInspeccionAsync(createDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Inspección registrada exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al registrar inspección", Severity.Error);
+            }
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>

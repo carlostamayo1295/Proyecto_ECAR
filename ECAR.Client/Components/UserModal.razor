@@ -24,8 +24,9 @@
             <MudTextField T="string" Label="Usuario AD" @bind-Value="usuarioAD" 
                 Variant="Variant.Outlined" MaxLength="100" Immediate="true" Class="mb-3" />
 
-            <MudSelect T="long" Label="Roles" @bind-Values="selectedRoleIds" MultiSelection="true" 
-                Variant="Variant.Outlined" Class="mb-3">
+            <MudSelect T="long" Label="Roles" @bind-SelectedValues="selectedRoleIds" MultiSelection="true" 
+                Variant="Variant.Outlined" Class="mb-3"
+                ToStringFunc="@(id => availableRoles?.FirstOrDefault(r => r.IdRol == id)?.Nombre ?? id.ToString())">
                 @if (availableRoles != null)
                 {
                     @foreach (var role in availableRoles)
@@ -63,7 +64,7 @@
     private string password = string.Empty;
     private string? usuarioAD;
     private bool activo = true;
-    private List<long> selectedRoleIds = new();
+    private IReadOnlyCollection<long> selectedRoleIds = new HashSet<long>();
     private List<RolDto>? availableRoles;
 
     protected override async Task OnInitializedAsync()
@@ -77,14 +78,14 @@
             usuarioAD = Usuario.UsuarioAD;
             activo = Usuario.Activo;
             
-            // Load existing roles
+            // Cargar los roles que ya tiene el usuario
             if (Usuario.Roles != null)
             {
                 var roleNames = Usuario.Roles.ToList();
                 selectedRoleIds = availableRoles
                     .Where(r => roleNames.Contains(r.Nombre))
                     .Select(r => r.IdRol)
-                    .ToList();
+                    .ToHashSet();
             }
         }
     }
@@ -111,7 +112,7 @@
                     UsuarioAD = usuarioAD,
                     Password = string.IsNullOrEmpty(password) ? null : password,
                     Activo = activo,
-                    RoleIds = selectedRoleIds.Any() ? selectedRoleIds : null
+                    RoleIds = selectedRoleIds.ToList()
                 };
 
                 var result = await HttpClientService.UpdateUsuarioAsync(Usuario.IdUsuario, updateDto);
@@ -134,7 +135,7 @@
                     Correo = correo,
                     Password = password,
                     UsuarioAD = usuarioAD,
-                    RoleIds = selectedRoleIds.Any() ? selectedRoleIds : null
+                    RoleIds = selectedRoleIds.ToList()
                 };
 
                 var result = await HttpClientService.CreateUsuarioAsync(createDto);

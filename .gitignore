@@ -11,6 +11,7 @@ x86/
 bld/
 [Ll]og/
 [Ll]ogs/
+.runlogs/
 
 # Visual Studio
 .vs/
@@ -109,3 +110,4 @@ appsettings.Staging.json
 
 # User Secrets
 usersecrets
+.env

@@ -9,18 +9,20 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configure HttpClient for API
+// Configurar el HttpClient del API
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://localhost:7296") });
 
-// Register services
+// Registrar los servicios
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<HttpClientService>();
 builder.Services.AddScoped<AuthorizationService>();
+// Mock temporal para pantallas de Fase 2/3 aún sin backend (PreguntasChecklist, RespuestasInspeccion).
+builder.Services.AddScoped<MockDataService>();
 
-// Configure MudBlazor with ECAR corporate theme
+// Configurar MudBlazor con el tema corporativo de ECAR
 builder.Services.AddMudServices();
 
-// Configure ECAR corporate theme
+// Configurar el tema corporativo de ECAR
 builder.Services.AddSingleton(new MudTheme()
 {
     PaletteLight = new PaletteLight()

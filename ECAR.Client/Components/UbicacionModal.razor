@@ -1,0 +1,144 @@
+﻿@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Ubicación" : "Crear Nueva Ubicación")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudTextField T="string" Label="Planta" @bind-Value="planta"
+                Variant="Variant.Outlined" Required="true" RequiredError="La planta es requerida"
+                MaxLength="100" Immediate="true" Class="mb-3" />
+
+            <MudTextField T="string" Label="Área" @bind-Value="area"
+                Variant="Variant.Outlined" Required="true" RequiredError="El área es requerida"
+                MaxLength="100" Immediate="true" Class="mb-3" />
+
+            <MudTextField T="string" Label="Descripción" @bind-Value="descripcion"
+                Variant="Variant.Outlined" Lines="2"
+                MaxLength="300" Immediate="true" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public UbicacionDto? Ubicacion { get; set; }
+
+    private bool IsEditMode => Ubicacion != null;
+    private string planta = string.Empty;
+    private string area = string.Empty;
+    private string descripcion = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        if (IsEditMode && Ubicacion != null)
+        {
+            planta = Ubicacion.Planta;
+            area = Ubicacion.Area;
+            descripcion = Ubicacion.Descripcion;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (IsEditMode && Ubicacion != null)
+        {
+            var updateDto = new UpdateUbicacionDto
+            {
+                Planta = planta,
+                Area = area,
+                Descripcion = descripcion
+            };
+
+            var result = await HttpClientService.UpdateUbicacionAsync(Ubicacion.IdUbicacion, updateDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Ubicación actualizada exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al actualizar ubicación", Severity.Error);
+            }
+        }
+        else
+        {
+            var createDto = new CreateUbicacionDto
+            {
+                Planta = planta,
+                Area = area,
+                Descripcion = descripcion
+            };
+
+            var result = await HttpClientService.CreateUbicacionAsync(createDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Ubicación creada exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al crear ubicación", Severity.Error);
+            }
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>

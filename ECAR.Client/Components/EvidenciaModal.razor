@@ -1,0 +1,136 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Cargar Evidencia</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudSelect T="long" Label="Inspección" @bind-Value="idInspeccion" Variant="Variant.Outlined"
+                Required="true" RequiredError="La inspección es requerida" Disabled="InspeccionFija" Class="mb-3">
+                @foreach (var inspeccion in inspecciones)
+                {
+                    <MudSelectItem T="long" Value="inspeccion.IdInspeccion">
+                        #@inspeccion.IdInspeccion - @inspeccion.NombreEquipo (@inspeccion.FechaInspeccion.ToString("dd/MM/yyyy"))
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField T="string" Label="URL o ruta del archivo" @bind-Value="archivo"
+                Variant="Variant.Outlined" Required="true" RequiredError="El archivo es requerido"
+                Immediate="true" Class="mb-3"
+                HelperText="Enlace a la fotografía o documento de respaldo" />
+
+            <MudTextField T="string" Label="Usuario que carga" @bind-Value="usuarioCarga"
+                Variant="Variant.Outlined" Required="true" RequiredError="El usuario es requerido"
+                MaxLength="100" Immediate="true" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public long? IdInspeccionPredefinida { get; set; }
+
+    private bool InspeccionFija => IdInspeccionPredefinida.HasValue;
+
+    private List<InspeccionDto> inspecciones = new();
+    private long idInspeccion;
+    private string archivo = string.Empty;
+    private string usuarioCarga = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await HttpClientService.GetInspeccionesAsync(1, 200);
+        inspecciones = result?.Data?.Data ?? new List<InspeccionDto>();
+
+        if (IdInspeccionPredefinida.HasValue)
+        {
+            idInspeccion = IdInspeccionPredefinida.Value;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (idInspeccion == 0)
+        {
+            Snackbar.Add("Debe seleccionar una inspección", Severity.Warning);
+            return;
+        }
+
+        var createDto = new CreateEvidenciaDto
+        {
+            IdInspeccion = idInspeccion,
+            Archivo = archivo,
+            UsuarioCarga = usuarioCarga
+        };
+
+        var result = await HttpClientService.CreateEvidenciaAsync(createDto);
+
+        if (result != null && result.Success)
+        {
+            Snackbar.Add("Evidencia cargada exitosamente", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(result?.Message ?? "Error al cargar evidencia", Severity.Error);
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>

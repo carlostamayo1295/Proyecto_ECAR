@@ -1,0 +1,95 @@
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Inspección #@Inspeccion?.IdInspeccion</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Inspeccion != null)
+        {
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Equipo</MudText>
+                    <MudText Typo="Typo.body1">@Inspeccion.NombreEquipo</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Inspector</MudText>
+                    <MudText Typo="Typo.body1">@Inspeccion.NombreUsuario</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Fecha de inspección</MudText>
+                    <MudText Typo="Typo.body1">@Inspeccion.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Resultado</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                        Color="@ResultadoColor(Inspeccion.Resultado)" Text="@(string.IsNullOrEmpty(Inspeccion.Resultado) ? "Sin registrar" : Inspeccion.Resultado)" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Firma digital</MudText>
+                    <MudIcon Icon="@(Inspeccion.TieneFirma ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
+                        Color="@(Inspeccion.TieneFirma ? Color.Success : Color.Default)" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Evidencias</MudText>
+                    <MudText Typo="Typo.body1">@Inspeccion.TotalEvidencias</MudText>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Hallazgos</MudText>
+                    <MudText Typo="Typo.body1">@Inspeccion.TotalHallazgos</MudText>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Observaciones</MudText>
+            <MudPaper Elevation="0" Class="value-box pa-3">
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@(string.IsNullOrEmpty(Inspeccion.Observaciones) ? "-" : Inspeccion.Observaciones)</MudText>
+            </MudPaper>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public InspeccionDto? Inspeccion { get; set; }
+
+    private void Close()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private static Color ResultadoColor(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
+    {
+        "satisfactoria" => Color.Success,
+        "con novedad" => Color.Warning,
+        _ => Color.Default
+    };
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.value-box {
+    border: 1px solid #E0E6ED !important;
+    border-radius: 8px !important;
+    background-color: #F4F5F7 !important;
+    min-height: 60px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+</style>

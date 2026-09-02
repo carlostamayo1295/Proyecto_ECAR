@@ -1,0 +1,201 @@
+﻿@inject MockDataService MockDataService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Respuesta" : "Crear Nueva Respuesta")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            @if (!IsEditMode)
+            {
+                <MudNumericField T="long" Label="ID Inspección" @bind-Value="idInspeccion"
+                    Variant="Variant.Outlined" Required="true" RequiredError="La inspección es requerida"
+                    Min="1" Immediate="true" Class="mb-3" />
+
+                <MudSelect T="long" Label="Pregunta" Value="idPregunta" ValueChanged="OnPreguntaChanged"
+                    Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
+                    Class="mb-3">
+                    @foreach (var p in preguntas)
+                    {
+                        <MudSelectItem T="long" Value="@p.IdPregunta">@p.Pregunta</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mb-3">@PreguntaTexto</MudText>
+            }
+
+            <div class="mb-3">
+                <RespuestaPreguntaInput TipoRespuesta="@tipoRespuesta" @bind-Valor="respuesta" Label="Respuesta" />
+            </div>
+
+            <MudTextField T="string" Label="Observación" @bind-Value="observacion"
+                Variant="Variant.Outlined" Lines="2"
+                HelperText="Obligatoria si la respuesta reporta una novedad"
+                Immediate="true" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public RespuestaInspeccionDto? Respuesta { get; set; }
+
+    private bool IsEditMode => Respuesta != null;
+    private long idInspeccion = 1;
+    private long idPregunta;
+    private string respuesta = string.Empty;
+    private string observacion = string.Empty;
+    private string tipoRespuesta = TiposRespuesta.Texto;
+    private List<PreguntaChecklistDto> preguntas = new();
+
+    private string PreguntaTexto => preguntas.FirstOrDefault(p => p.IdPregunta == idPregunta)?.Pregunta
+        ?? $"Pregunta #{idPregunta}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await MockDataService.GetPreguntasChecklistLookupAsync();
+        preguntas = result?.Data ?? new List<PreguntaChecklistDto>();
+
+        if (IsEditMode && Respuesta != null)
+        {
+            idInspeccion = Respuesta.IdInspeccion;
+            idPregunta = Respuesta.IdPregunta;
+            respuesta = Respuesta.Respuesta;
+            observacion = Respuesta.Observacion ?? string.Empty;
+        }
+        else
+        {
+            idPregunta = preguntas.FirstOrDefault()?.IdPregunta ?? 0;
+        }
+
+        // El control de respuesta depende del tipo definido en la pregunta.
+        tipoRespuesta = preguntas.FirstOrDefault(p => p.IdPregunta == idPregunta)?.TipoRespuesta
+            ?? TiposRespuesta.Texto;
+    }
+
+    private void OnPreguntaChanged(long nuevoId)
+    {
+        idPregunta = nuevoId;
+        var nuevoTipo = preguntas.FirstOrDefault(p => p.IdPregunta == nuevoId)?.TipoRespuesta
+            ?? TiposRespuesta.Texto;
+
+        if (nuevoTipo != tipoRespuesta)
+        {
+            // La respuesta anterior no aplica al nuevo tipo de control.
+            respuesta = string.Empty;
+            tipoRespuesta = nuevoTipo;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(respuesta))
+        {
+            Snackbar.Add(tipoRespuesta == TiposRespuesta.SiNo
+                ? "Debe seleccionar Sí o No"
+                : "La respuesta es requerida", Severity.Warning);
+            return;
+        }
+
+        if (IsEditMode && Respuesta != null)
+        {
+            var updateDto = new UpdateRespuestaInspeccionDto
+            {
+                Respuesta = respuesta,
+                Observacion = observacion
+            };
+
+            var result = await MockDataService.UpdateRespuestaInspeccionAsync(Respuesta.IdRespuesta, updateDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Respuesta actualizada exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al actualizar respuesta", Severity.Error);
+            }
+        }
+        else
+        {
+            var createDto = new CreateRespuestaInspeccionDto
+            {
+                IdInspeccion = idInspeccion,
+                IdPregunta = idPregunta,
+                Respuesta = respuesta,
+                Observacion = observacion
+            };
+
+            var result = await MockDataService.CreateRespuestaInspeccionAsync(createDto);
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add("Respuesta creada exitosamente", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al crear respuesta", Severity.Error);
+            }
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>

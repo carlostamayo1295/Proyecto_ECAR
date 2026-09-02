@@ -27,7 +27,7 @@ public class Evidencia
     [Column("UsuarioCarga")]
     public string UsuarioCarga { get; set; } = string.Empty;
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;
 }

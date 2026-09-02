@@ -24,7 +24,7 @@ public class RespuestaInspeccion
     [Column("Observacion")]
     public string? Observacion { get; set; }
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;
 

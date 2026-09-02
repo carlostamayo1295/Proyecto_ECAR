@@ -1,6 +1,8 @@
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
+using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -8,17 +10,41 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddControllers();
+// Registrar los servicios en el contenedor.
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState.Values
+                .SelectMany(value => value.Errors)
+                .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage)
+                    ? "Solicitud inválida"
+                    : error.ErrorMessage)
+                .Distinct()
+                .ToList();
+
+            return new BadRequestObjectResult(
+                ApiResponse<object>.ErrorResponse("La solicitud contiene datos inválidos", errors));
+        };
+    });
 
 var conn = builder.Configuration.GetConnectionString("ECARConnection");
+if (string.IsNullOrWhiteSpace(conn))
+{
+    throw new InvalidOperationException("ConnectionStrings:ECARConnection is not configured");
+}
 
-// Configure Entity Framework
+// Configurar Entity Framework
 builder.Services.AddDbContext<ECARDbContext>(options =>
     options.UseSqlServer(conn));
 
-// Configure JWT Authentication
+// Configurar la autenticación JWT
 var jwtSecret = builder.Configuration["JWT:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
+if (jwtSecret.Length < 32)
+{
+    throw new InvalidOperationException("JWT:Secret must contain at least 32 characters");
+}
 var jwtIssuer = builder.Configuration["JWT:Issuer"] ?? "ECAR-Auditoria";
 var jwtAudience = builder.Configuration["JWT:Audience"] ?? "ECAR-Users";
 
@@ -44,10 +70,30 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// Register Services
+// Registrar los servicios propios
+builder.Services.AddOptions<EcarAuthenticationOptions>()
+    .Bind(builder.Configuration.GetSection(EcarAuthenticationOptions.SectionName))
+    .Validate(options => Enum.TryParse<EcarAuthenticationMode>(options.Mode, true, out _),
+        "ECARAuthentication:Mode debe ser Local, ActiveDirectory o Hybrid")
+    .ValidateOnStart();
+var configuredAuthenticationMode = builder.Configuration
+    .GetSection(EcarAuthenticationOptions.SectionName)
+    .GetValue<string>(nameof(EcarAuthenticationOptions.Mode));
+var activeDirectoryIsRequired = Enum.TryParse<EcarAuthenticationMode>(
+    configuredAuthenticationMode,
+    true,
+    out var authenticationMode) &&
+    authenticationMode is EcarAuthenticationMode.ActiveDirectory or EcarAuthenticationMode.Hybrid;
+builder.Services.AddOptions<ActiveDirectoryOptions>()
+    .Bind(builder.Configuration.GetSection(ActiveDirectoryOptions.SectionName))
+    .Validate(options => !activeDirectoryIsRequired ||
+        (options.Enabled && !string.IsNullOrWhiteSpace(options.Server) && options.Port is > 0 and <= 65535),
+        "ActiveDirectory debe estar habilitado y tener servidor/puerto válidos cuando el modo sea ActiveDirectory o Hybrid")
+    .ValidateOnStart();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthService>();
 
-// Configure CORS
+// Configurar CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorClient",
@@ -63,12 +109,12 @@ builder.Services.AddCors(options =>
         });
 });
 
-// Configure Scalar/OpenAPI
+// Configurar Scalar/OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configurar la canalización de solicitudes HTTP.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -82,15 +128,18 @@ app.UseCors("AllowBlazorClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Asegurar que la base de datos existe y aplicar migraciones
+// Aplicar las migraciones pendientes y sembrar los datos faltantes al iniciar.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ECARDbContext>();
     var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    dbContext.Database.EnsureCreated();
+    await dbContext.Database.MigrateAsync();
     await DataSeeder.SeedDataAsync(dbContext, configuration);
 }
 
 app.MapControllers();
 
 app.Run();
+
+// Requerido por las pruebas de integración que hospedan el API en memoria.
+public partial class Program;

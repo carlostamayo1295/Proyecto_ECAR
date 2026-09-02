@@ -1,0 +1,192 @@
+﻿@page "/ubicaciones"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<AdminRouteGuard>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Gestión de Ubicaciones</MudText>
+                <MudText Typo="Typo.body2">Catálogo de plantas y áreas para clasificar los equipos</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                    Nueva Ubicación
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                Class="mb-4" />
+
+            @if (isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (ubicaciones != null && ubicaciones.Any())
+            {
+                <MudTable Items="ubicaciones" Hover="true" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Planta</MudTh>
+                        <MudTh>Área</MudTh>
+                        <MudTh>Descripción</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IdUbicacion.ToString()</MudTd>
+                        <MudTd>@context.Planta</MudTd>
+                        <MudTd>@context.Area</MudTd>
+                        <MudTd>@context.Descripcion</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                Editar
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteUbicacion(context)" Class="action-button">
+                                Eliminar
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                    SelectedPageChanged="HandlePageChange" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="my-4">
+                    No hay ubicaciones para mostrar
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+    </MudContainer>
+</AdminRouteGuard>
+
+@code {
+    private List<UbicacionDto>? ubicaciones;
+    private string searchText = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUbicacionesAsync();
+    }
+
+    private async Task LoadUbicacionesAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await HttpClientService.GetUbicacionesAsync(currentPage, pageSize, searchText);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                ubicaciones = result.Data.Data ?? new List<UbicacionDto>();
+                totalPages = result.Data.TotalPages;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Error al cargar ubicaciones", Severity.Error);
+                ubicaciones = new List<UbicacionDto>();
+                totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            ubicaciones = new List<UbicacionDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadUbicacionesAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<UbicacionModal>("Crear Nueva Ubicación");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadUbicacionesAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(UbicacionDto ubicacion)
+    {
+        var parameters = new DialogParameters { ["Ubicacion"] = ubicacion };
+        var dialog = await DialogService.ShowAsync<UbicacionModal>("Editar Ubicación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadUbicacionesAsync();
+        }
+    }
+
+    private async Task DeleteUbicacion(UbicacionDto ubicacion)
+    {
+        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la ubicación '{ubicacion.Area}'?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            isLoading = true;
+            try
+            {
+                var deleteResult = await HttpClientService.DeleteUbicacionAsync(ubicacion.IdUbicacion);
+
+                if (deleteResult != null && deleteResult.Success)
+                {
+                    Snackbar.Add("Ubicación eliminada exitosamente", Severity.Success);
+                    await LoadUbicacionesAsync();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar ubicación", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+    }
+}
+
+<style>
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>

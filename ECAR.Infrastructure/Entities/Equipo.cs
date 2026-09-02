@@ -60,7 +60,7 @@ public class Equipo
     [Column("FechaCreacion")]
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdCategoria")]
     public virtual CategoriaEquipo? Categoria { get; set; }
 

@@ -1,0 +1,257 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Equipo" : "Crear Nuevo Equipo")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Código Interno" @bind-Value="codigoInterno"
+                        Variant="Variant.Outlined" Required="true" RequiredError="El código interno es requerido"
+                        MaxLength="50" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Activo Fijo" @bind-Value="activoFijo"
+                        Variant="Variant.Outlined" Required="true" RequiredError="El activo fijo es requerido"
+                        MaxLength="50" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string" Label="Nombre del Equipo" @bind-Value="nombreEquipo"
+                        Variant="Variant.Outlined" Required="true" RequiredError="El nombre del equipo es requerido"
+                        MaxLength="200" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Serial del Fabricante" @bind-Value="serialFabricante"
+                        Variant="Variant.Outlined" MaxLength="100" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Marca" @bind-Value="marca"
+                        Variant="Variant.Outlined" MaxLength="100" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Modelo" @bind-Value="modelo"
+                        Variant="Variant.Outlined" MaxLength="100" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Fabricante" @bind-Value="fabricante"
+                        Variant="Variant.Outlined" MaxLength="200" Immediate="true" Class="mb-3" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Label="Criticidad" @bind-Value="criticidad"
+                        Variant="Variant.Outlined" Clearable="true" Class="mb-3">
+                        <MudSelectItem T="string" Value="@("Alta")">Alta</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Media")">Media</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Baja")">Baja</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="long?" Label="Categoría" @bind-Value="idCategoria"
+                        Variant="Variant.Outlined" Clearable="true" Class="mb-3">
+                        @foreach (var cat in categorias)
+                        {
+                            <MudSelectItem T="long?" Value="@((long?)cat.Id)">@cat.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="long?" Label="Ubicación" @bind-Value="idUbicacion"
+                        Variant="Variant.Outlined" Clearable="true" Class="mb-3">
+                        @foreach (var ub in ubicaciones)
+                        {
+                            <MudSelectItem T="long?" Value="@((long?)ub.Id)">@ub.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string" Label="Código QR" @bind-Value="qrCode"
+                        Variant="Variant.Outlined" Immediate="true" Class="mb-3" />
+                </MudItem>
+                @if (IsEditMode)
+                {
+                    <MudItem xs="12">
+                        <MudSwitch T="bool" Label="Activo" @bind-Value="activo" Color="Color.Primary" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    private MudForm? form;
+
+    [Parameter]
+    public EquipoDto? Equipo { get; set; }
+
+    [Parameter]
+    public List<LookupDto>? Categorias { get; set; }
+
+    [Parameter]
+    public List<LookupDto>? Ubicaciones { get; set; }
+
+    private bool IsEditMode => Equipo != null;
+
+    private string codigoInterno = string.Empty;
+    private string activoFijo = string.Empty;
+    private string nombreEquipo = string.Empty;
+    private string? serialFabricante;
+    private string? marca;
+    private string? modelo;
+    private string? fabricante;
+    private string? criticidad;
+    private long? idCategoria;
+    private long? idUbicacion;
+    private string? qrCode;
+    private bool activo = true;
+
+    private List<LookupDto> categorias = new();
+    private List<LookupDto> ubicaciones = new();
+
+    protected override void OnInitialized()
+    {
+        categorias = Categorias ?? new List<LookupDto>();
+        ubicaciones = Ubicaciones ?? new List<LookupDto>();
+
+        if (IsEditMode && Equipo != null)
+        {
+            codigoInterno = Equipo.CodigoInterno;
+            activoFijo = Equipo.ActivoFijo;
+            nombreEquipo = Equipo.NombreEquipo;
+            serialFabricante = Equipo.SerialFabricante;
+            marca = Equipo.Marca;
+            modelo = Equipo.Modelo;
+            fabricante = Equipo.Fabricante;
+            criticidad = Equipo.Criticidad;
+            idCategoria = Equipo.IdCategoria;
+            idUbicacion = Equipo.IdUbicacion;
+            qrCode = Equipo.QRCode;
+            activo = Equipo.Activo;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (form != null)
+        {
+            await form.ValidateAsync();
+            if (!form.IsValid)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            if (IsEditMode && Equipo != null)
+            {
+                var updateDto = new UpdateEquipoDto
+                {
+                    CodigoInterno = codigoInterno,
+                    ActivoFijo = activoFijo,
+                    NombreEquipo = nombreEquipo,
+                    SerialFabricante = serialFabricante ?? string.Empty,
+                    Marca = marca ?? string.Empty,
+                    Modelo = modelo ?? string.Empty,
+                    Fabricante = fabricante ?? string.Empty,
+                    Criticidad = criticidad ?? string.Empty,
+                    IdCategoria = idCategoria ?? 0,
+                    IdUbicacion = idUbicacion ?? 0,
+                    QRCode = qrCode ?? string.Empty,
+                    Activo = activo
+                };
+
+                var result = await HttpClientService.UpdateEquipoAsync(Equipo.IdEquipo, updateDto);
+
+                if (result != null && result.Success)
+                {
+                    Snackbar.Add("Equipo actualizado exitosamente", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add(result?.Message ?? "Error al actualizar equipo", Severity.Error);
+                }
+            }
+            else
+            {
+                var createDto = new CreateEquipoDto
+                {
+                    CodigoInterno = codigoInterno,
+                    ActivoFijo = activoFijo,
+                    NombreEquipo = nombreEquipo,
+                    SerialFabricante = serialFabricante,
+                    Marca = marca,
+                    Modelo = modelo,
+                    Fabricante = fabricante,
+                    Criticidad = criticidad,
+                    IdCategoria = idCategoria,
+                    IdUbicacion = idUbicacion,
+                    QRCode = qrCode
+                };
+
+                var result = await HttpClientService.CreateEquipoAsync(createDto);
+
+                if (result != null && result.Success)
+                {
+                    Snackbar.Add("Equipo creado exitosamente", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add(result?.Message ?? "Error al crear equipo", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Cancel()
+    {
+        var parameters = new DialogParameters { ["Message"] = "¿Realmente desea cancelar?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Cancelación", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            MudDialog.Cancel();
+        }
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.cancel-btn {
+    background-color: #79B75D !important;
+    color: white !important;
+}
+
+.cancel-btn:hover {
+    background-color: #68A552 !important;
+}
+</style>

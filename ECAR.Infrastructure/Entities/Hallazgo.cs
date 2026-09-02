@@ -30,7 +30,7 @@ public class Hallazgo
     [Column("FechaRegistro")]
     public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;
 }

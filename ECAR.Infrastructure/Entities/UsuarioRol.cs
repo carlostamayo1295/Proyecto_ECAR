@@ -18,7 +18,7 @@ public class UsuarioRol
     [Column("IdRol")]
     public long IdRol { get; set; }
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdUsuario")]
     public virtual Usuario Usuario { get; set; } = null!;
 
