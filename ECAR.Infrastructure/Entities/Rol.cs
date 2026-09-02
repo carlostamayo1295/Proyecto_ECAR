@@ -15,6 +15,6 @@ public class Rol
     [Column("Nombre")]
     public string Nombre { get; set; } = string.Empty;
 
-    // Navigation properties
+    // Propiedades de navegación
     public virtual ICollection<UsuarioRol> UsuarioRoles { get; set; } = new List<UsuarioRol>();
 }

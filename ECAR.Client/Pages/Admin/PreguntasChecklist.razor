@@ -41,7 +41,7 @@
                         <MudTd>@context.IdPregunta.ToString()</MudTd>
                         <MudTd>@context.IdChecklist.ToString()</MudTd>
                         <MudTd>@context.Pregunta</MudTd>
-                        <MudTd>@context.TipoRespuesta</MudTd>
+                        <MudTd>@TiposRespuesta.Etiqueta(context.TipoRespuesta)</MudTd>
                         <MudTd>
                             @if (context.Obligatoria)
                             {

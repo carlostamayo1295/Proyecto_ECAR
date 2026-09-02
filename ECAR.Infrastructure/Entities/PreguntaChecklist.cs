@@ -26,7 +26,7 @@ public class PreguntaChecklist
     [Column("Obligatoria")]
     public bool Obligatoria { get; set; } = false;
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdChecklist")]
     public virtual Checklist Checklist { get; set; } = null!;
 

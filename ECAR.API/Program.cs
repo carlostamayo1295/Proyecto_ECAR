@@ -10,7 +10,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Registrar los servicios en el contenedor.
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -35,11 +35,11 @@ if (string.IsNullOrWhiteSpace(conn))
     throw new InvalidOperationException("ConnectionStrings:ECARConnection is not configured");
 }
 
-// Configure Entity Framework
+// Configurar Entity Framework
 builder.Services.AddDbContext<ECARDbContext>(options =>
     options.UseSqlServer(conn));
 
-// Configure JWT Authentication
+// Configurar la autenticación JWT
 var jwtSecret = builder.Configuration["JWT:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 if (jwtSecret.Length < 32)
 {
@@ -70,7 +70,7 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// Register Services
+// Registrar los servicios propios
 builder.Services.AddOptions<EcarAuthenticationOptions>()
     .Bind(builder.Configuration.GetSection(EcarAuthenticationOptions.SectionName))
     .Validate(options => Enum.TryParse<EcarAuthenticationMode>(options.Mode, true, out _),
@@ -93,7 +93,7 @@ builder.Services.AddOptions<ActiveDirectoryOptions>()
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthService>();
 
-// Configure CORS
+// Configurar CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorClient",
@@ -109,12 +109,12 @@ builder.Services.AddCors(options =>
         });
 });
 
-// Configure Scalar/OpenAPI
+// Configurar Scalar/OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configurar la canalización de solicitudes HTTP.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -128,7 +128,7 @@ app.UseCors("AllowBlazorClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Apply pending migrations and add any missing seed data at startup.
+// Aplicar las migraciones pendientes y sembrar los datos faltantes al iniciar.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ECARDbContext>();
@@ -141,5 +141,5 @@ app.MapControllers();
 
 app.Run();
 
-// Required by integration tests that host the API in memory.
+// Requerido por las pruebas de integración que hospedan el API en memoria.
 public partial class Program;

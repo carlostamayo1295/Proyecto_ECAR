@@ -32,7 +32,7 @@ public class Inspeccion
     [Column("FirmaDigital")]
     public string? FirmaDigital { get; set; }
 
-    // Navigation properties
+    // Propiedades de navegación
     [ForeignKey("IdEquipo")]
     public virtual Equipo Equipo { get; set; } = null!;
 

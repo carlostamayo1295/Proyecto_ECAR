@@ -36,9 +36,13 @@
                                     Immediate="true" />
                             </MudItem>
                             <MudItem xs="6" sm="3">
-                                <MudTextField T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
-                                    Variant="Variant.Outlined" Required="true" RequiredError="Requerido"
-                                    Immediate="true" />
+                                <MudSelect T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
+                                    Variant="Variant.Outlined" Required="true" RequiredError="Requerido">
+                                    @foreach (var tipo in TiposRespuesta.Todos)
+                                    {
+                                        <MudSelectItem T="string" Value="@tipo.Valor">@tipo.Etiqueta</MudSelectItem>
+                                    }
+                                </MudSelect>
                             </MudItem>
                             <MudItem xs="4" sm="3" Class="d-flex align-center">
                                 <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria" Color="Color.Primary" />
@@ -94,7 +98,7 @@
 
     private void AddPregunta()
     {
-        preguntas.Add(new PreguntaFormItem());
+        preguntas.Add(new PreguntaFormItem { TipoRespuesta = TiposRespuesta.SiNo });
     }
 
     private void RemovePregunta(int index)

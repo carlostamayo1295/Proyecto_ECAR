@@ -4,7 +4,8 @@ namespace ECAR.Shared.DTOs;
 
 public class CreatePreguntaChecklistDto
 {
-    [Range(1, long.MaxValue, ErrorMessage = "Debe seleccionar un checklist válido")]
+    // Queda sin asignar cuando la pregunta viaja dentro de CreateChecklistDto/UpdateChecklistDto:
+    // en ese caso solo el servidor conoce el id del checklist.
     public long IdChecklist { get; set; }
 
     [Required(ErrorMessage = "La pregunta es requerida")]

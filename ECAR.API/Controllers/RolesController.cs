@@ -36,7 +36,7 @@ public class RolesController : ControllerBase
 
         var query = _context.Roles.AsQueryable();
 
-        // Apply search filter
+        // Aplicar el filtro de búsqueda
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(r => r.Nombre.Contains(search));

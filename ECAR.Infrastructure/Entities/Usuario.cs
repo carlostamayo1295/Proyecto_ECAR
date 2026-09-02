@@ -32,7 +32,7 @@ public class Usuario
     [Column("Activo")]
     public bool Activo { get; set; } = true;
 
-    // Navigation properties
+    // Propiedades de navegación
     public virtual ICollection<UsuarioRol> UsuarioRoles { get; set; } = new List<UsuarioRol>();
     public virtual ICollection<Inspeccion> Inspecciones { get; set; } = new List<Inspeccion>();
 }

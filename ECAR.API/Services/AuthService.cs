@@ -34,7 +34,7 @@ public class AuthService : IAuthService
     {
         var identity = loginDto.CorreoOrUsuarioAD.Trim();
 
-        // A user can sign in with an email address or an AD username.
+        // Un usuario puede iniciar sesión con su correo o con su usuario de Active Directory.
         var usuario = await _context.Usuarios
             .Include(u => u.UsuarioRoles)
             .ThenInclude(ur => ur.Rol)
@@ -60,7 +60,7 @@ public class AuthService : IAuthService
             }
             catch (SaltParseException)
             {
-                // A damaged legacy hash must fail authentication instead of returning HTTP 500.
+                // Un hash antiguo dañado debe fallar la autenticación en lugar de devolver HTTP 500.
                 localAuthenticationSucceeded = false;
             }
         }
@@ -79,10 +79,10 @@ public class AuthService : IAuthService
             return null;
         }
 
-        // Add the saved roles to the token.
+        // Agregar al token los roles guardados.
         var roles = usuario.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList();
 
-        // Create the JWT returned to the client.
+        // Crear el JWT que se devuelve al cliente.
         var token = GenerateJwtToken(usuario, roles);
 
         return new LoginResponseDto
@@ -134,7 +134,7 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Name, usuario.Nombre)
         };
 
-        // ASP.NET reads these claims when an endpoint requires a role.
+        // ASP.NET lee estos claims cuando un endpoint exige un rol.
         foreach (var role in roles)
         {
             claims.Add(new Claim(ClaimTypes.Role, role));

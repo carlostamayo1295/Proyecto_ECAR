@@ -19,11 +19,10 @@
             <MudSelect T="string" Label="Tipo de respuesta" @bind-Value="tipoRespuesta"
                 Variant="Variant.Outlined" Required="true" RequiredError="El tipo de respuesta es requerido"
                 Class="mb-3">
-                <MudSelectItem T="string" Value="@("Texto")">Texto</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Numérico")">Numérico</MudSelectItem>
-                <MudSelectItem T="string" Value="@("SiNo")">Sí/No</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Seleccion")">Selección múltiple</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Fotografia")">Fotografía</MudSelectItem>
+                @foreach (var tipo in TiposRespuesta.Todos)
+                {
+                    <MudSelectItem T="string" Value="@tipo.Valor">@tipo.Etiqueta</MudSelectItem>
+                }
             </MudSelect>
 
             <MudSwitch T="bool" Label="Obligatoria" @bind-Value="obligatoria" Color="Color.Primary" />
@@ -45,7 +44,7 @@
     private bool IsEditMode => Pregunta != null;
     private long idChecklist = 1;
     private string pregunta = string.Empty;
-    private string tipoRespuesta = "Texto";
+    private string tipoRespuesta = TiposRespuesta.SiNo;
     private bool obligatoria = false;
 
     protected override void OnInitialized()

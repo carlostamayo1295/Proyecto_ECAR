@@ -26,7 +26,7 @@ public class Checklist
     [Column("FechaCreacion")]
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
-    // Navigation properties
+    // Propiedades de navegación
     public virtual ICollection<PreguntaChecklist> Preguntas { get; set; } = new List<PreguntaChecklist>();
     public virtual ICollection<Inspeccion> Inspecciones { get; set; } = new List<Inspeccion>();
 }

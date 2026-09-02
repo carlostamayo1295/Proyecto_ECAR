@@ -14,14 +14,23 @@
                     Variant="Variant.Outlined" Required="true" RequiredError="La inspección es requerida"
                     Min="1" Immediate="true" Class="mb-3" />
 
-                <MudNumericField T="long" Label="ID Pregunta" @bind-Value="idPregunta"
+                <MudSelect T="long" Label="Pregunta" Value="idPregunta" ValueChanged="OnPreguntaChanged"
                     Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
-                    Min="1" Immediate="true" Class="mb-3" />
+                    Class="mb-3">
+                    @foreach (var p in preguntas)
+                    {
+                        <MudSelectItem T="long" Value="@p.IdPregunta">@p.Pregunta</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mb-3">@PreguntaTexto</MudText>
             }
 
-            <MudTextField T="string" Label="Respuesta" @bind-Value="respuesta"
-                Variant="Variant.Outlined" Required="true" RequiredError="La respuesta es requerida"
-                Immediate="true" Class="mb-3" />
+            <div class="mb-3">
+                <RespuestaPreguntaInput TipoRespuesta="@tipoRespuesta" @bind-Valor="respuesta" Label="Respuesta" />
+            </div>
 
             <MudTextField T="string" Label="Observación" @bind-Value="observacion"
                 Variant="Variant.Outlined" Lines="2"
@@ -44,18 +53,48 @@
 
     private bool IsEditMode => Respuesta != null;
     private long idInspeccion = 1;
-    private long idPregunta = 1;
+    private long idPregunta;
     private string respuesta = string.Empty;
     private string observacion = string.Empty;
+    private string tipoRespuesta = TiposRespuesta.Texto;
+    private List<PreguntaChecklistDto> preguntas = new();
 
-    protected override void OnInitialized()
+    private string PreguntaTexto => preguntas.FirstOrDefault(p => p.IdPregunta == idPregunta)?.Pregunta
+        ?? $"Pregunta #{idPregunta}";
+
+    protected override async Task OnInitializedAsync()
     {
+        var result = await MockDataService.GetPreguntasChecklistLookupAsync();
+        preguntas = result?.Data ?? new List<PreguntaChecklistDto>();
+
         if (IsEditMode && Respuesta != null)
         {
             idInspeccion = Respuesta.IdInspeccion;
             idPregunta = Respuesta.IdPregunta;
             respuesta = Respuesta.Respuesta;
             observacion = Respuesta.Observacion ?? string.Empty;
+        }
+        else
+        {
+            idPregunta = preguntas.FirstOrDefault()?.IdPregunta ?? 0;
+        }
+
+        // El control de respuesta depende del tipo definido en la pregunta.
+        tipoRespuesta = preguntas.FirstOrDefault(p => p.IdPregunta == idPregunta)?.TipoRespuesta
+            ?? TiposRespuesta.Texto;
+    }
+
+    private void OnPreguntaChanged(long nuevoId)
+    {
+        idPregunta = nuevoId;
+        var nuevoTipo = preguntas.FirstOrDefault(p => p.IdPregunta == nuevoId)?.TipoRespuesta
+            ?? TiposRespuesta.Texto;
+
+        if (nuevoTipo != tipoRespuesta)
+        {
+            // La respuesta anterior no aplica al nuevo tipo de control.
+            respuesta = string.Empty;
+            tipoRespuesta = nuevoTipo;
         }
     }
 
@@ -68,6 +107,14 @@
             {
                 return;
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(respuesta))
+        {
+            Snackbar.Add(tipoRespuesta == TiposRespuesta.SiNo
+                ? "Debe seleccionar Sí o No"
+                : "La respuesta es requerida", Severity.Warning);
+            return;
         }
 
         if (IsEditMode && Respuesta != null)

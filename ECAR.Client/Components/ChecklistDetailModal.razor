@@ -35,7 +35,7 @@
                     <RowTemplate Context="pregunta">
                         <MudTd>@(Checklist.Preguntas.IndexOf(pregunta) + 1)</MudTd>
                         <MudTd>@pregunta.Pregunta</MudTd>
-                        <MudTd>@pregunta.TipoRespuesta</MudTd>
+                        <MudTd>@TiposRespuesta.Etiqueta(pregunta.TipoRespuesta)</MudTd>
                         <MudTd>
                             <MudIcon Icon="@(pregunta.Obligatoria ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
                                 Color="@(pregunta.Obligatoria ? Color.Success : Color.Default)" Size="Size.Small" />

@@ -1,7 +1,7 @@
 namespace ECAR.API.Services;
 
 /// <summary>
-/// Contract for validating credentials against the ECAR corporate directory.
+/// Contrato para validar credenciales contra el directorio corporativo de ECAR.
 /// </summary>
 public interface IActiveDirectoryAuthService
 {

@@ -9,7 +9,7 @@ public static class DataSeeder
 {
     public static async Task SeedDataAsync(ECARDbContext context, IConfiguration configuration)
     {
-        // Seed each group separately so a partially populated database can be completed safely.
+        // Se siembra cada grupo por separado para poder completar sin riesgo una base parcialmente poblada.
         var requiredRoleNames = new[] { "Administrador", "Técnico", "Auditor" };
         var existingRoleNames = await context.Roles.Select(r => r.Nombre).ToListAsync();
         var missingRoles = requiredRoleNames

@@ -8,21 +8,31 @@
     </TitleContent>
     <DialogContent>
         <MudForm @ref="form">
-            <MudSelect T="long" Label="Equipo" @bind-Value="idEquipo" Variant="Variant.Outlined"
-                Required="true" RequiredError="El equipo es requerido" Disabled="IsEditMode" Class="mb-3">
-                @foreach (var equipo in equipos)
-                {
-                    <MudSelectItem T="long" Value="equipo.IdEquipo">@equipo.CodigoInterno - @equipo.NombreEquipo</MudSelectItem>
-                }
-            </MudSelect>
+            @if (IsEditMode)
+            {
+                @* El equipo y el inspector no se pueden cambiar: se muestran solo como referencia. *@
+                <MudTextField T="string" Label="Equipo" Value="@Inspeccion!.NombreEquipo"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
 
-            <MudSelect T="long" Label="Inspector" @bind-Value="idUsuario" Variant="Variant.Outlined"
-                Required="true" RequiredError="El inspector es requerido" Disabled="IsEditMode" Class="mb-3">
-                @foreach (var usuario in usuarios)
-                {
-                    <MudSelectItem T="long" Value="usuario.IdUsuario">@usuario.Nombre</MudSelectItem>
-                }
-            </MudSelect>
+                <MudTextField T="string" Label="Inspector" Value="@Inspeccion!.NombreUsuario"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
+            }
+            else
+            {
+                <MudAutocomplete T="EquipoDto" Label="Equipo" @bind-Value="equipoSeleccionado"
+                    SearchFunc="BuscarEquiposAsync" ToStringFunc="@(e => e == null ? string.Empty : $"{e.CodigoInterno} - {e.NombreEquipo}")"
+                    Variant="Variant.Outlined" Required="true" RequiredError="El equipo es requerido"
+                    MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
+                    Clearable="true" Class="mb-3"
+                    HelperText="Escriba código, nombre, marca o serial para filtrar" />
+
+                <MudAutocomplete T="UsuarioDto" Label="Inspector" @bind-Value="usuarioSeleccionado"
+                    SearchFunc="BuscarUsuariosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
+                    Variant="Variant.Outlined" Required="true" RequiredError="El inspector es requerido"
+                    MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
+                    Clearable="true" Class="mb-3"
+                    HelperText="Escriba nombre, correo o usuario AD para filtrar" />
+            }
 
             <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
                 Editable="true" Disabled="IsEditMode" Class="mb-3" />
@@ -57,32 +67,68 @@
 
     private bool IsEditMode => Inspeccion != null;
 
-    private List<EquipoDto> equipos = new();
-    private List<UsuarioDto> usuarios = new();
+    // El API rechaza pageSize mayor que 100; además el desplegable solo muestra los primeros resultados.
+    private const int MaxResultadosBusqueda = 20;
 
-    private long idEquipo;
-    private long idUsuario;
+    private EquipoDto? equipoSeleccionado;
+    private UsuarioDto? usuarioSeleccionado;
+
     private DateTime? fechaInspeccion = DateTime.Today;
     private string? resultado;
     private string? observaciones;
     private string? firmaDigital;
 
-    protected override async Task OnInitializedAsync()
+    // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
+    private bool errorEquiposAvisado;
+    private bool errorUsuariosAvisado;
+
+    protected override void OnInitialized()
     {
-        var equiposResult = await HttpClientService.GetEquiposAsync(1, 200);
-        equipos = equiposResult?.Data?.Data ?? new List<EquipoDto>();
-
-        var usuariosResult = await HttpClientService.GetUsuariosAsync(1, 200);
-        usuarios = usuariosResult?.Data?.Data ?? new List<UsuarioDto>();
-
         if (IsEditMode && Inspeccion != null)
         {
-            idEquipo = Inspeccion.IdEquipo;
-            idUsuario = Inspeccion.IdUsuario;
             fechaInspeccion = Inspeccion.FechaInspeccion;
             resultado = Inspeccion.Resultado;
             observaciones = Inspeccion.Observaciones;
         }
+    }
+
+    // El filtro se resuelve en el API para que la lista funcione con muchos registros.
+    private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetEquiposAsync(1, MaxResultadosBusqueda, valor);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            if (!errorEquiposAvisado)
+            {
+                errorEquiposAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los equipos", Severity.Error);
+            }
+
+            return Array.Empty<EquipoDto>();
+        }
+
+        errorEquiposAvisado = false;
+        return respuesta.Data?.Data ?? new List<EquipoDto>();
+    }
+
+    private async Task<IEnumerable<UsuarioDto>> BuscarUsuariosAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetUsuariosAsync(1, MaxResultadosBusqueda, valor);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            if (!errorUsuariosAvisado)
+            {
+                errorUsuariosAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los inspectores", Severity.Error);
+            }
+
+            return Array.Empty<UsuarioDto>();
+        }
+
+        errorUsuariosAvisado = false;
+        return respuesta.Data?.Data ?? new List<UsuarioDto>();
     }
 
     private async Task HandleSubmit()
@@ -127,7 +173,7 @@
         }
         else
         {
-            if (idEquipo == 0 || idUsuario == 0)
+            if (equipoSeleccionado == null || usuarioSeleccionado == null)
             {
                 Snackbar.Add("Debe seleccionar equipo e inspector", Severity.Warning);
                 return;
@@ -135,8 +181,8 @@
 
             var createDto = new CreateInspeccionDto
             {
-                IdEquipo = idEquipo,
-                IdUsuario = idUsuario,
+                IdEquipo = equipoSeleccionado.IdEquipo,
+                IdUsuario = usuarioSeleccionado.IdUsuario,
                 FechaInspeccion = fechaInspeccion ?? DateTime.Today,
                 Resultado = resultado,
                 Observaciones = observaciones,

@@ -25,7 +25,7 @@ public class CategoriasEquipoController : ControllerBase
     {
         var query = _context.CategoriasEquipo.AsQueryable();
 
-        // Apply search filter
+        // Aplicar el filtro de búsqueda
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(c => c.Nombre.Contains(search) || (c.Descripcion != null && c.Descripcion.Contains(search)));

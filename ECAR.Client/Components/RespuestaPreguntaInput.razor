@@ -1,0 +1,77 @@
+@* Dibuja el control de respuesta que corresponde al tipo de respuesta de la pregunta. *@
+
+@if (TipoRespuesta == TiposRespuesta.SiNo)
+{
+    <MudText Typo="Typo.caption" Class="mb-1">@Label</MudText>
+    <div class="sino-casillas">
+        @foreach (var opcion in Opciones)
+        {
+            var seleccionada = string.Equals(Valor, opcion, StringComparison.OrdinalIgnoreCase);
+            <div class="sino-casilla @(seleccionada ? "sino-seleccionada" : "")" @onclick="() => SeleccionarAsync(opcion)">
+                <MudIcon Icon="@(seleccionada ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                    Color="@(seleccionada ? Color.Primary : Color.Default)" />
+                <MudText Typo="Typo.body1">@opcion</MudText>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <MudTextField T="string" Label="@Label" Value="@Valor" ValueChanged="SeleccionarAsync"
+        Variant="Variant.Outlined" Lines="3" Immediate="true"
+        HelperText="Rellene la información solicitada" />
+}
+
+@code {
+    private static readonly string[] Opciones = { "Sí", "No" };
+
+    /// <summary>Tipo de respuesta de la pregunta (ver <see cref="TiposRespuesta" />).</summary>
+    [Parameter] public string TipoRespuesta { get; set; } = TiposRespuesta.Texto;
+
+    [Parameter] public string? Valor { get; set; }
+
+    [Parameter] public EventCallback<string> ValorChanged { get; set; }
+
+    [Parameter] public string Label { get; set; } = "Respuesta";
+
+    private async Task SeleccionarAsync(string valor)
+    {
+        // En Sí/No, volver a pulsar la casilla marcada la desmarca.
+        var nuevo = TipoRespuesta == TiposRespuesta.SiNo && string.Equals(Valor, valor, StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : valor;
+
+        Valor = nuevo;
+        await ValorChanged.InvokeAsync(nuevo);
+    }
+}
+
+<style>
+.sino-casillas {
+    display: flex;
+    gap: 12px;
+}
+
+.sino-casilla {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #E0E6ED;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.sino-casilla:hover {
+    border-color: #397FDE;
+}
+
+.sino-seleccionada {
+    border-color: #397FDE;
+    background-color: #EEF4FC;
+}
+</style>

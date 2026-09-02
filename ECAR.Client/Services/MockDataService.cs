@@ -53,6 +53,13 @@ public class MockDataService
         return await SimulateDelay(result);
     }
 
+    // Se usa al responder una inspeccion para saber el tipo de respuesta de cada pregunta.
+    public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistLookupAsync()
+    {
+        var result = ApiResponse<List<PreguntaChecklistDto>>.SuccessResponse(_preguntas.ToList());
+        return await SimulateDelay(result);
+    }
+
     public async Task<ApiResponse<PreguntaChecklistDto>?> CreatePreguntaChecklistAsync(CreatePreguntaChecklistDto dto)
     {
         var nueva = new PreguntaChecklistDto { IdPregunta = _nextPreguntaId++, IdChecklist = dto.IdChecklist, Pregunta = dto.Pregunta, TipoRespuesta = dto.TipoRespuesta, Obligatoria = dto.Obligatoria };

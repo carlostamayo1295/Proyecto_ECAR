@@ -9,7 +9,7 @@ public class ECARDbContext : DbContext
     {
     }
 
-    // DbSets
+    // Conjuntos de entidades (DbSets)
     public DbSet<Equipo> Equipos { get; set; }
     public DbSet<CategoriaEquipo> CategoriasEquipo { get; set; }
     public DbSet<Ubicacion> Ubicaciones { get; set; }
@@ -28,7 +28,7 @@ public class ECARDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Configure Equipo
+        // Configuración de Equipo
         modelBuilder.Entity<Equipo>(entity =>
         {
             entity.HasIndex(e => e.CodigoInterno).IsUnique();
@@ -38,52 +38,52 @@ public class ECARDbContext : DbContext
             entity.HasIndex(e => e.Criticidad);
         });
 
-        // Configure CategoriaEquipo
+        // Configuración de CategoriaEquipo
         modelBuilder.Entity<CategoriaEquipo>(entity =>
         {
             entity.HasIndex(e => e.Nombre).IsUnique();
         });
 
-        // Configure Ubicacion
+        // Configuración de Ubicacion
         modelBuilder.Entity<Ubicacion>(entity =>
         {
             entity.HasIndex(e => new { e.Planta, e.Area }).IsUnique();
         });
 
-        // Configure Usuario
+        // Configuración de Usuario
         modelBuilder.Entity<Usuario>(entity =>
         {
             entity.HasIndex(e => e.Correo).IsUnique();
             entity.HasIndex(e => e.UsuarioAD).IsUnique();
         });
 
-        // Configure Rol
+        // Configuración de Rol
         modelBuilder.Entity<Rol>(entity =>
         {
             entity.HasIndex(e => e.Nombre).IsUnique();
         });
 
-        // Configure UsuarioRol
+        // Configuración de UsuarioRol
         modelBuilder.Entity<UsuarioRol>(entity =>
         {
             entity.HasIndex(e => new { e.IdUsuario, e.IdRol }).IsUnique();
         });
 
-        // Configure Checklist
+        // Configuración de Checklist
         modelBuilder.Entity<Checklist>(entity =>
         {
             entity.HasIndex(e => new { e.Nombre, e.Version }).IsUnique();
             entity.HasIndex(e => e.Activo);
         });
 
-        // Configure PreguntaChecklist
+        // Configuración de PreguntaChecklist
         modelBuilder.Entity<PreguntaChecklist>(entity =>
         {
             entity.HasIndex(e => e.IdChecklist);
             entity.HasIndex(e => e.TipoRespuesta);
         });
 
-        // Configure Inspeccion
+        // Configuración de Inspeccion
         modelBuilder.Entity<Inspeccion>(entity =>
         {
             entity.HasIndex(e => e.IdEquipo);
@@ -92,7 +92,7 @@ public class ECARDbContext : DbContext
             entity.HasIndex(e => e.Resultado);
         });
 
-        // Configure RespuestaInspeccion
+        // Configuración de RespuestaInspeccion
         modelBuilder.Entity<RespuestaInspeccion>(entity =>
         {
             entity.HasIndex(e => e.IdInspeccion);
@@ -100,7 +100,7 @@ public class ECARDbContext : DbContext
             entity.HasIndex(e => new { e.IdInspeccion, e.IdPregunta }).IsUnique();
         });
 
-        // Configure Evidencia
+        // Configuración de Evidencia
         modelBuilder.Entity<Evidencia>(entity =>
         {
             entity.HasIndex(e => e.IdInspeccion);
@@ -113,7 +113,7 @@ public class ECARDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Configure Hallazgo
+        // Configuración de Hallazgo
         modelBuilder.Entity<Hallazgo>(entity =>
         {
             entity.HasIndex(e => e.IdInspeccion);
@@ -122,7 +122,7 @@ public class ECARDbContext : DbContext
             entity.HasIndex(e => e.FechaRegistro);
         });
 
-        // Configure Auditoria
+        // Configuración de Auditoria
         modelBuilder.Entity<Auditoria>(entity =>
         {
             entity.HasIndex(e => e.Tabla);

@@ -46,7 +46,7 @@ public sealed class LdapActiveDirectoryAuthService : IActiveDirectoryAuthService
         }
         catch (LdapException exception)
         {
-            // Never log the password or reveal whether the credentials or the server failed.
+            // Nunca registrar la contraseña ni revelar si fallaron las credenciales o el servidor.
             _logger.LogWarning(exception, "Falló la autenticación de directorio para {UsuarioAD}", usuarioAd);
             return false;
         }

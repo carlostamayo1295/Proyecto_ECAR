@@ -5,8 +5,8 @@ public sealed class EcarAuthenticationOptions
     public const string SectionName = "ECARAuthentication";
 
     /// <summary>
-    /// Supported values: Local, ActiveDirectory and Hybrid.
-    /// ActiveDirectory and Hybrid require a configured IActiveDirectoryAuthService.
+    /// Valores admitidos: Local, ActiveDirectory e Hybrid.
+    /// ActiveDirectory e Hybrid requieren un IActiveDirectoryAuthService configurado.
     /// </summary>
     public string Mode { get; set; } = nameof(EcarAuthenticationMode.Local);
 

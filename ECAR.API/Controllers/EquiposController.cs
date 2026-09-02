@@ -291,7 +291,7 @@ public class EquiposController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Equipo no encontrado"));
         }
 
-        // Keep the record for inspection history and mark it as inactive.
+        // Se conserva el registro para el historial de inspecciones y se marca como inactivo.
         equipo.Activo = false;
         await _context.SaveChangesAsync();
 

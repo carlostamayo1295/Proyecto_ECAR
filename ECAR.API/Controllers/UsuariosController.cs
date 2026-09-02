@@ -35,7 +35,7 @@ public class UsuariosController : ControllerBase
             .ThenInclude(ur => ur.Rol)
             .AsQueryable();
 
-        // Apply search filter
+        // Aplicar el filtro de búsqueda
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -110,7 +110,7 @@ public class UsuariosController : ControllerBase
             return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(
                 "Debe indicar una contraseña local o un usuario de Active Directory"));
 
-        // Email and AD usernames must be unique.
+        // El correo y el usuario de Active Directory deben ser únicos.
         var existingUsuario = await _context.Usuarios
             .FirstOrDefaultAsync(u => u.Correo == createDto.Correo);
 
@@ -139,7 +139,7 @@ public class UsuariosController : ControllerBase
             }
         }
 
-        // AD-only users do not need a local password hash.
+        // Los usuarios que solo entran por Active Directory no necesitan hash de contraseña local.
         var passwordHash = string.IsNullOrWhiteSpace(createDto.Password)
             ? string.Empty
             : BCrypt.Net.BCrypt.HashPassword(createDto.Password);
@@ -161,7 +161,7 @@ public class UsuariosController : ControllerBase
         _context.Usuarios.Add(usuario);
         await _context.SaveChangesAsync();
 
-        // Reload the user to return the role names in the response.
+        // Se recarga el usuario para devolver los nombres de los roles en la respuesta.
         var usuarioCreado = await _context.Usuarios
             .AsNoTracking()
             .Include(u => u.UsuarioRoles)
@@ -251,19 +251,19 @@ public class UsuariosController : ControllerBase
         if (updateDto.Activo.HasValue)
             usuario.Activo = updateDto.Activo.Value;
 
-        // Update password if provided
+        // Actualizar la contraseña solo si viene en la solicitud
         if (!string.IsNullOrEmpty(updateDto.Password))
         {
             usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updateDto.Password);
         }
 
-        // Replace role assignments only when the request includes RoleIds.
+        // Reemplazar las asignaciones de roles solo cuando la solicitud incluye RoleIds.
         if (roleIds != null)
         {
-            // Remove the previous assignments.
+            // Eliminar las asignaciones anteriores.
             _context.UsuarioRoles.RemoveRange(usuario.UsuarioRoles);
 
-            // Add the requested assignments.
+            // Agregar las asignaciones solicitadas.
             foreach (var roleId in roleIds)
             {
                 _context.UsuarioRoles.Add(new UsuarioRol
@@ -274,10 +274,10 @@ public class UsuariosController : ControllerBase
             }
         }
 
-        // Save once so an invalid request cannot leave partial changes.
+        // Se guarda una sola vez para que una solicitud inválida no deje cambios parciales.
         await _context.SaveChangesAsync();
 
-        // Use a fresh query so the response contains the saved assignments.
+        // Se consulta de nuevo para que la respuesta contenga las asignaciones guardadas.
         var usuarioActualizado = await _context.Usuarios
             .AsNoTracking()
             .Include(u => u.UsuarioRoles)
@@ -317,7 +317,7 @@ public class UsuariosController : ControllerBase
                 "No se puede desactivar al último administrador activo"));
         }
 
-        // Soft delete - mark as inactive instead of removing
+        // Borrado lógico: se marca como inactivo en lugar de eliminarlo
         usuario.Activo = false;
         await _context.SaveChangesAsync();
 

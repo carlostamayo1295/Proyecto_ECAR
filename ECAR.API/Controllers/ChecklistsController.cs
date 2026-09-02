@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +26,7 @@ public class ChecklistsController : ControllerBase
             .Include(c => c.Preguntas)
             .AsQueryable();
 
-        // Apply search filter
+        // Aplicar el filtro de búsqueda
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(c => c.Nombre.Contains(search) || c.Version.Contains(search));
@@ -86,6 +87,12 @@ public class ChecklistsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ApiResponse<ChecklistDto>>> CreateChecklist(CreateChecklistDto createDto)
     {
+        var tipoInvalido = GetInvalidTipoRespuesta(createDto.Preguntas);
+        if (tipoInvalido != null)
+        {
+            return BadRequest(ApiResponse<ChecklistDto>.ErrorResponse(tipoInvalido));
+        }
+
         var existente = await _context.Checklists
             .FirstOrDefaultAsync(c => c.Nombre == createDto.Nombre && c.Version == createDto.Version);
 
@@ -139,6 +146,12 @@ public class ChecklistsController : ControllerBase
             return NotFound(ApiResponse<ChecklistDto>.ErrorResponse("Checklist no encontrado"));
         }
 
+        var tipoInvalido = GetInvalidTipoRespuesta(updateDto.Preguntas);
+        if (tipoInvalido != null)
+        {
+            return BadRequest(ApiResponse<ChecklistDto>.ErrorResponse(tipoInvalido));
+        }
+
         if (!string.IsNullOrEmpty(updateDto.Nombre))
             checklist.Nombre = updateDto.Nombre;
 
@@ -186,11 +199,21 @@ public class ChecklistsController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Checklist no encontrado"));
         }
 
-        // Soft delete - mark as inactive instead of removing
+        // Borrado lógico: se marca como inactivo en lugar de eliminarlo
         checklist.Activo = false;
         await _context.SaveChangesAsync();
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Checklist desactivado exitosamente"));
+    }
+
+    /// <summary>Devuelve un mensaje de error cuando una pregunta usa un tipo de respuesta fuera del catálogo.</summary>
+    private static string? GetInvalidTipoRespuesta(IEnumerable<CreatePreguntaChecklistDto>? preguntas)
+    {
+        var invalida = preguntas?.FirstOrDefault(p => !TiposRespuesta.EsValido(p.TipoRespuesta));
+
+        return invalida == null
+            ? null
+            : $"El tipo de respuesta '{invalida.TipoRespuesta}' no es válido. Valores permitidos: {TiposRespuesta.ValoresPermitidos}";
     }
 
     private static ChecklistDto MapToDto(Checklist checklist)

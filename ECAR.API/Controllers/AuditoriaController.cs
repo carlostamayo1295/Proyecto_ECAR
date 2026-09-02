@@ -22,7 +22,7 @@ public class AuditoriaController : ControllerBase
     {
         var query = _context.Auditoria.AsQueryable();
 
-        // Apply search filter
+        // Aplicar el filtro de búsqueda
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(a =>

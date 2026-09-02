@@ -105,7 +105,7 @@
         
         try
         {
-            // Load users
+            // Cargar los usuarios
             var usersResult = await HttpClientService.GetUsuariosAsync(currentPage, pageSize, searchText);
             
             if (usersResult != null && usersResult.Success && usersResult.Data != null)
@@ -120,8 +120,8 @@
                 totalPages = 1;
             }
 
-            // Load available roles
-            var rolesResult = await HttpClientService.GetRolesAsync(1, 100); // Get all roles
+            // Cargar los roles disponibles
+            var rolesResult = await HttpClientService.GetRolesAsync(1, 100); // Traer todos los roles
             if (rolesResult != null && rolesResult.Success && rolesResult.Data != null)
             {
                 availableRoles = rolesResult.Data.Data ?? new List<RolDto>();

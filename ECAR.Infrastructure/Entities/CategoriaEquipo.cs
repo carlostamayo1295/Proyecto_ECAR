@@ -19,6 +19,6 @@ public class CategoriaEquipo
     [Column("Descripcion")]
     public string? Descripcion { get; set; }
 
-    // Navigation properties
+    // Propiedades de navegación
     public virtual ICollection<Equipo> Equipos { get; set; } = new List<Equipo>();
 }

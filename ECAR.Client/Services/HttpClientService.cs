@@ -31,7 +31,7 @@ public class HttpClientService
         _httpClient.DefaultRequestHeaders.Authorization = null;
     }
 
-    // Usuarios API Methods
+    // Métodos del API de Usuarios
     public async Task<ApiResponse<PagedResultDto<UsuarioDto>>?> GetUsuariosAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -130,7 +130,7 @@ public class HttpClientService
         }
     }
 
-    // Roles API Methods
+    // Métodos del API de Roles
     public async Task<ApiResponse<PagedResultDto<RolDto>>?> GetRolesAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -229,7 +229,7 @@ public class HttpClientService
         }
     }
 
-    // Categorías de Equipo API Methods
+    // Métodos del API de Categorías de Equipo
     public async Task<ApiResponse<PagedResultDto<CategoriaEquipoDto>>?> GetCategoriasEquipoAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -328,7 +328,7 @@ public class HttpClientService
         }
     }
 
-    // Checklists API Methods
+    // Métodos del API de Checklists
     public async Task<ApiResponse<PagedResultDto<ChecklistDto>>?> GetChecklistsAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -427,7 +427,7 @@ public class HttpClientService
         }
     }
 
-    // Auditoría API Methods
+    // Métodos del API de Auditoría
     public async Task<ApiResponse<PagedResultDto<AuditoriaDto>>?> GetAuditoriaAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -454,7 +454,7 @@ public class HttpClientService
         }
     }
 
-    // Equipos API Methods
+    // Métodos del API de Equipos
     public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100, string? search = null, string? criticidad = null)
     {
         try
@@ -593,7 +593,7 @@ public class HttpClientService
         }
     }
 
-    // Ubicaciones API Methods
+    // Métodos del API de Ubicaciones
     public async Task<ApiResponse<PagedResultDto<UbicacionDto>>?> GetUbicacionesAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -674,7 +674,7 @@ public class HttpClientService
         }
     }
 
-    // Usuarios-Rol (asignaciones) API Methods
+    // Métodos del API de Usuarios-Rol (asignaciones)
     public async Task<ApiResponse<PagedResultDto<UsuarioRolDto>>?> GetUsuariosRolAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -791,7 +791,7 @@ public class HttpClientService
         }
     }
 
-    // Inspecciones API Methods
+    // Métodos del API de Inspecciones
     public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10, string? search = null)
     {
         try
@@ -890,7 +890,7 @@ public class HttpClientService
         }
     }
 
-    // Evidencias API Methods
+    // Métodos del API de Evidencias
     public async Task<ApiResponse<PagedResultDto<EvidenciaDto>>?> GetEvidenciasAsync(int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null)
     {
         try
@@ -975,7 +975,7 @@ public class HttpClientService
         }
     }
 
-    // Hallazgos API Methods
+    // Métodos del API de Hallazgos
     public async Task<ApiResponse<PagedResultDto<HallazgoDto>>?> GetHallazgosAsync(int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null, string? estado = null)
     {
         try
