@@ -3,6 +3,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
+<AdminRouteGuard>
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
@@ -19,8 +20,8 @@
 
         <MudCardContent>
             <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                Class="mb-4" />
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                          Class="mb-4" />
 
             @if (isLoading)
             {
@@ -54,11 +55,11 @@
                         </MudTd>
                         <MudTd>
                             <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                       StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar
                             </MudButton>
                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeletePregunta(context)" Class="action-button">
+                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeletePregunta(context)" Class="action-button">
                                 Eliminar
                             </MudButton>
                         </MudTd>
@@ -66,7 +67,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedPageChanged="HandlePageChange" />
+                               SelectedPageChanged="HandlePageChange" />
             }
             else
             {
@@ -77,6 +78,7 @@
         </MudCardContent>
     </MudCard>
 </MudContainer>
+</AdminRouteGuard>
 
 @code {
     private List<PreguntaChecklistDto>? preguntas;
