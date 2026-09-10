@@ -2,6 +2,7 @@
 @inject MockDataService MockDataService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HttpClientService HttpClientService
 
 <AdminRouteGuard>
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -19,9 +20,27 @@
         </MudCardHeader>
 
         <MudCardContent>
-            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                          Class="mb-4" />
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="long?" Label="Filtrar por Checklist" @bind-Value="idChecklistFiltro"
+                               @bind-Value:after="LoadPreguntasAsync" Variant="Variant.Outlined" Clearable="true">
+                        <MudSelectItem T="long?" Value="@((long?)null)">Todos</MudSelectItem>
+                        @if (checklistsFiltro != null)
+                        {
+                            @foreach (var checklist in checklistsFiltro)
+                            {
+                                <MudSelectItem T="long?" Value="@((long?)checklist.IdChecklist)">
+                                    @($"{checklist.Nombre} ({checklist.Version})")
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
 
             @if (isLoading)
             {
@@ -87,9 +106,21 @@
     private int pageSize = 10;
     private int totalPages = 1;
     private bool isLoading = false;
+    private List<ChecklistDto>? checklistsFiltro;
+    private long? idChecklistFiltro;
 
     protected override async Task OnInitializedAsync()
     {
+        var checklistsResult = await HttpClientService.GetChecklistsAsync(page: 1, pageSize: 100);
+
+        if (checklistsResult != null && checklistsResult.Success && checklistsResult.Data != null)
+        {
+            checklistsFiltro = checklistsResult.Data.Data;
+        }
+        else
+        {
+            checklistsFiltro = new List<ChecklistDto>();
+        }
         await LoadPreguntasAsync();
     }
 
@@ -99,8 +130,7 @@
 
         try
         {
-            var result = await MockDataService.GetPreguntasChecklistAsync(currentPage, pageSize, searchText);
-
+            var result = await MockDataService.GetPreguntasChecklistAsync(currentPage, pageSize, searchText, idChecklistFiltro);
             if (result != null && result.Success && result.Data != null)
             {
                 preguntas = result.Data.Data ?? new List<PreguntaChecklistDto>();
