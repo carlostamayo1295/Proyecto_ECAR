@@ -39,6 +39,17 @@ public static class DataSeeder
             await context.Usuarios.AddAsync(adminUsuario);
             await context.SaveChangesAsync();
         }
+        else
+        
+        {
+            // PARCHE TEMPORAL - NO SUBIR A GIT: fuerza al admin existente a tomar
+            // la contraseña actual de AdminPassword. Borrar este bloque después de usar.
+            var adminPasswordReset = configuration["AdminPassword"] ??
+                                     throw new InvalidOperationException("AdminPassword no está configurado en User Secrets");
+            adminUsuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPasswordReset);
+            await context.SaveChangesAsync();
+        }
+        
 
         var adminRol = await context.Roles.SingleAsync(r => r.Nombre == "Administrador");
         if (!await context.UsuarioRoles.AnyAsync(ur =>
