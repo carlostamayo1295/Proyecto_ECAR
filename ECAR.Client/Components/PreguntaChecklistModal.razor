@@ -103,7 +103,7 @@
                 Obligatoria = obligatoria
             };
 
-            var result = await MockDataService.UpdatePreguntaChecklistAsync(Pregunta.IdPregunta, updateDto);
+            var result = await HttpClientService.UpdatePreguntaChecklistAsync(Pregunta.IdPregunta, updateDto);
 
             if (result != null && result.Success)
             {
@@ -125,7 +125,7 @@
                 Obligatoria = obligatoria
             };
 
-            var result = await MockDataService.CreatePreguntaChecklistAsync(createDto);
+            var result = await HttpClientService.CreatePreguntaChecklistAsync(createDto);
 
             if (result != null && result.Success)
             {

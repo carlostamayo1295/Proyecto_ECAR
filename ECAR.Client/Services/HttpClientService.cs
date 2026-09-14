@@ -1118,7 +1118,7 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<PreguntaChecklistDto>?> CrearPreguntaChecklistAsync(
+    public async Task<ApiResponse<PreguntaChecklistDto>?> CreatePreguntaChecklistAsync(
         CreatePreguntaChecklistDto createDto)
     {
         try
@@ -1137,7 +1137,7 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<PreguntaChecklistDto>?> ActualizarPreguntaChecklistAsync(long id,
+    public async Task<ApiResponse<PreguntaChecklistDto>?> UpdatePreguntaChecklistAsync(long id,
         UpdatePreguntaChecklistDto updateDto)
     {
         try
@@ -1156,7 +1156,7 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> EliminarPreguntaChecklistAsync(long id)
+    public async Task<ApiResponse<bool>?> DeletePreguntaChecklistAsync(long id)
     {
         try
         {

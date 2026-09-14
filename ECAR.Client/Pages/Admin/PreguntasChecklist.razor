@@ -130,11 +130,36 @@
 
         try
         {
-            var result = await MockDataService.GetPreguntasChecklistAsync(currentPage, pageSize, searchText, idChecklistFiltro);
+            // El backend exige un checklist específico: sin uno seleccionado, no hay nada que pedir
+            if (idChecklistFiltro == null)
+            {
+                preguntas = new List<PreguntaChecklistDto>();
+                totalPages = 1;
+                return;
+            }
+
+            var result = await HttpClientService.GetPreguntasChecklistAsync(idChecklistFiltro.Value);
+
             if (result != null && result.Success && result.Data != null)
             {
-                preguntas = result.Data.Data ?? new List<PreguntaChecklistDto>();
-                totalPages = result.Data.TotalPages;
+                var todasLasPreguntas = result.Data;
+
+                // Búsqueda por texto, hecha en el cliente porque el endpoint no la soporta
+                if (!string.IsNullOrWhiteSpace(searchText))
+                {
+                    todasLasPreguntas = todasLasPreguntas
+                        .Where(p => p.Pregunta.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
+
+                totalPages = (int)Math.Ceiling(todasLasPreguntas.Count / (double)pageSize);
+                if (totalPages < 1) totalPages = 1;
+
+                // Paginación también hecha en el cliente, sobre la lista ya filtrada
+                preguntas = todasLasPreguntas
+                    .Skip((currentPage - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
             }
             else
             {
@@ -194,7 +219,7 @@
             isLoading = true;
             try
             {
-                var deleteResult = await MockDataService.DeletePreguntaChecklistAsync(pregunta.IdPregunta);
+                var deleteResult = await HttpClientService.DeletePreguntaChecklistAsync(pregunta.IdPregunta);
 
                 if (deleteResult != null && deleteResult.Success)
                 {
@@ -213,6 +238,7 @@
             finally
             {
                 isLoading = false;
+
             }
         }
     }
