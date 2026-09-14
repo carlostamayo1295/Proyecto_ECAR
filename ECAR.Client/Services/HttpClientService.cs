@@ -427,6 +427,145 @@ public class HttpClientService
         }
     }
 
+    public async Task<ApiResponse<ChecklistDto>?> CreateChecklistVersionAsync(long id, CreateChecklistVersionDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync($"api/checklists/{id}/nueva-version", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating checklist version: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<ChecklistVersionDto>>?> GetChecklistVersionesAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/checklists/{id}/versiones");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<ChecklistVersionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting checklist versiones: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Métodos del API de Preguntas de Checklist
+    public async Task<ApiResponse<PagedResultDto<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(int page = 1, int pageSize = 10, string? search = null, long? idChecklist = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/preguntaschecklist?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+            if (idChecklist.HasValue)
+            {
+                query += $"&idChecklist={idChecklist.Value}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<PreguntaChecklistDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting preguntas checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> GetPreguntaChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/preguntaschecklist/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> CreatePreguntaChecklistAsync(CreatePreguntaChecklistDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/preguntaschecklist", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> UpdatePreguntaChecklistAsync(long id, UpdatePreguntaChecklistDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/preguntaschecklist/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeletePreguntaChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/preguntaschecklist/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     // Métodos del API de Auditoría
     public async Task<ApiResponse<PagedResultDto<AuditoriaDto>>?> GetAuditoriaAsync(int page = 1, int pageSize = 10, string? search = null)
     {
@@ -589,6 +728,89 @@ public class HttpClientService
         {
             Console.WriteLine($"Error getting ubicaciones lookup: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EquipoQrDto>?> GenerateEquipoQrAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsync($"api/equipos/{id}/qr", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoQrDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error generating equipo QR: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EquipoQrDto>?> RegenerateEquipoQrAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/equipos/{id}/qr/regenerar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoQrDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error regenerating equipo QR: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // El endpoint exige token, así que un <img src> directo no sirve: se descargan los bytes
+    // y la pantalla los muestra como data URI (ver GetEquipoQrImageDataUrlAsync).
+    public async Task<byte[]?> GetEquipoQrImageAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/equipos/{id}/qr.png");
+            await RemoveAuthorizationHeaderAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting equipo QR image: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<string?> GetEquipoQrImageDataUrlAsync(long id)
+    {
+        var bytes = await GetEquipoQrImageAsync(id);
+        return bytes == null ? null : $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    // Consulta pública: es la que se abre al escanear el QR, sin sesión iniciada.
+    public async Task<ApiResponse<ConsultaQrDto>?> GetEquipoByQrAsync(string token)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/equipos/qr/{Uri.EscapeDataString(token)}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ConsultaQrDto>>();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting equipo by QR: {ex.Message}");
             return null;
         }
     }
