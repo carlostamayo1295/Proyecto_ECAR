@@ -23,6 +23,13 @@
 
             <MudText Typo="Typo.subtitle2" Class="mb-2">Preguntas del Checklist</MudText>
 
+            @if (tieneRespuestasRegistradas)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-3">
+                    Este checklist ya se usó en inspecciones. Cree una versión nueva para modificar sus preguntas.
+                </MudAlert>
+            }
+
             @if (preguntas.Any())
             {
                 @for (var i = 0; i < preguntas.Count; i++)
@@ -33,11 +40,11 @@
                             <MudItem xs="12" sm="5">
                                 <MudTextField T="string" Label="Pregunta" @bind-Value="preguntas[index].Pregunta"
                                     Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
-                                    Immediate="true" />
+                                    Immediate="true" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
                             <MudItem xs="6" sm="3">
                                 <MudSelect T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
-                                    Variant="Variant.Outlined" Required="true" RequiredError="Requerido">
+                                    Variant="Variant.Outlined" Required="true" RequiredError="Requerido" Disabled="@tieneRespuestasRegistradas">
                                     @foreach (var tipo in TiposRespuesta.Todos)
                                     {
                                         <MudSelectItem T="string" Value="@tipo.Valor">@tipo.Etiqueta</MudSelectItem>
@@ -45,10 +52,10 @@
                                 </MudSelect>
                             </MudItem>
                             <MudItem xs="4" sm="3" Class="d-flex align-center">
-                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria" Color="Color.Primary" />
+                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria" Color="Color.Primary" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
                             <MudItem xs="2" sm="1" Class="d-flex align-center justify-end">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemovePregunta(index)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemovePregunta(index)" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
                         </MudGrid>
                     </MudPaper>
@@ -59,7 +66,7 @@
                 <MudAlert Severity="Severity.Info" Class="mb-3">Este checklist no tiene preguntas todavía</MudAlert>
             }
 
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPregunta">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPregunta" Disabled="@tieneRespuestasRegistradas">
                 Agregar Pregunta
             </MudButton>
         </MudForm>
@@ -82,6 +89,12 @@
     private string version = string.Empty;
     private bool activo = true;
     private List<PreguntaFormItem> preguntas = new();
+
+    // TODO: FE-0/BE-1 — reemplazar por el campo real que exponga ChecklistDto (p.ej.
+    // TieneRespuestasRegistradas) cuando el backend lo calcule vía RespuestasInspeccion +
+    // PreguntasChecklist. Simulado en false por ahora; Nombre, Versión y Estado siguen editables
+    // sin importar este valor.
+    private bool tieneRespuestasRegistradas = false;
 
     protected override void OnInitialized()
     {
