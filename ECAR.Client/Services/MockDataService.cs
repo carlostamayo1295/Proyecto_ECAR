@@ -43,11 +43,13 @@ public class MockDataService
     }
 
     // ===================== PREGUNTAS CHECKLIST =====================
-    public async Task<ApiResponse<PagedResultDto<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(int page = 1, int pageSize = 10, string? search = null, long? idChecklist = null)
     {
         var query = _preguntas.AsEnumerable();
         if (!string.IsNullOrEmpty(search))
             query = query.Where(p => p.Pregunta.Contains(search, StringComparison.OrdinalIgnoreCase));
+        if (idChecklist.HasValue)
+            query = query.Where(p => p.IdChecklist == idChecklist.Value);
 
         var result = ApiResponse<PagedResultDto<PreguntaChecklistDto>>.SuccessResponse(Paginate(query.ToList(), page, pageSize));
         return await SimulateDelay(result);
