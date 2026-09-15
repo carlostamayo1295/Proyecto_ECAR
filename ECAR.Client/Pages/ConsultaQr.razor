@@ -1,0 +1,133 @@
+﻿@page "/equipos/qr/{Token}"
+@layout EmptyLayout
+
+<div class="qr-page">
+    @if (cargando)
+    {
+        <div class="qr-loading">
+            <MudProgressCircular Indeterminate="true" />
+        </div>
+    }
+    else if (equipo == null)
+    {
+        <MudCard Class="qr-card">
+            <MudCardContent Class="text-center pa-6">
+                <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Large" Color="Color.Default" />
+                <MudText Typo="Typo.h6" Class="mt-3">Código no encontrado</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                    Este código QR no corresponde a ningún equipo registrado.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    }
+    else
+    {
+        <MudCard Class="qr-card">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">@equipo.NombreEquipo</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @equipo.CodigoInterno
+                    </MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudChip T="string" Color="@CriticidadColor(equipo.Criticidad)" Size="Size.Small">
+                        @equipo.Criticidad
+                    </MudChip>
+                </CardHeaderActions>
+            </MudCardHeader>
+
+            <MudCardContent>
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <tbody>
+                        <tr><td>Marca</td><td>@equipo.Marca</td></tr>
+                        <tr><td>Modelo</td><td>@equipo.Modelo</td></tr>
+                        <tr><td>Categoría</td><td>@equipo.Categoria</td></tr>
+                        <tr><td>Ubicación</td><td>@equipo.Ubicacion</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+
+                <MudDivider Class="my-3" />
+
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Checklists disponibles</MudText>
+
+                @if (equipo.ChecklistsActivos.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Este equipo no tiene checklists activos asignados.
+                    </MudAlert>
+                }
+                else
+                {
+                    @foreach (var checklist in equipo.ChecklistsActivos)
+                    {
+                        <MudPaper Class="pa-3 mb-2" Outlined="true">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.body1">@checklist.Nombre</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        Versión @checklist.Version
+                                    </MudText>
+                                </div>
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">Activo</MudChip>
+                            </div>
+                        </MudPaper>
+                    }
+                }
+            </MudCardContent>
+        </MudCard>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    private bool cargando = true;
+    private ConsultaQrMock? equipo;
+
+    // TODO: reemplazar por HttpClientService.GetEquipoPorQrAsync(Token) cuando
+    // BE-3 entregue GET /api/equipos/qr/{token} (endpoint público, [AllowAnonymous]).
+    private const string TokenValidoDePrueba = "abc123";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Delay(400); // simula latencia de red
+
+        equipo = Token == TokenValidoDePrueba
+            ? new ConsultaQrMock(
+                CodigoInterno: "EQ-001",
+                NombreEquipo: "Balanza Analítica",
+                Marca: "Mettler Toledo",
+                Modelo: "MS204",
+                Criticidad: "Alta",
+                Categoria: "Instrumentos de medición",
+                Ubicacion: "Planta 1 - Calidad",
+                ChecklistsActivos: new List<ChecklistMock>
+                {
+                    new("Inspección Preventiva - Equipos Críticos", "2.0"),
+                    new("Verificación de Calibración", "1.0"),
+                })
+            : null;
+
+        cargando = false;
+    }
+
+    private Color CriticidadColor(string criticidad) => criticidad switch
+    {
+        "Alta" => Color.Error,
+        "Media" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private record ConsultaQrMock(
+        string CodigoInterno,
+        string NombreEquipo,
+        string Marca,
+        string Modelo,
+        string Criticidad,
+        string Categoria,
+        string Ubicacion,
+        List<ChecklistMock> ChecklistsActivos);
+
+    private record ChecklistMock(string Nombre, string Version);
+}

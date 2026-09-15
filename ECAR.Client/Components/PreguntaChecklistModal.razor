@@ -1,6 +1,7 @@
 ﻿@inject MockDataService MockDataService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HttpClientService HttpClientService
 
 <MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
     <TitleContent>
@@ -8,29 +9,42 @@
     </TitleContent>
     <DialogContent>
         <MudForm @ref="form">
-            <MudNumericField T="long" Label="ID Checklist" @bind-Value="idChecklist"
-                Variant="Variant.Outlined" Required="true" RequiredError="El checklist es requerido"
-                Min="1" Immediate="true" Class="mb-3" />
+            <MudSelect T="long" Label="Checklist" @bind-Value="idChecklist"
+                       Variant="Variant.Outlined" Required="true" RequiredError="El checklist es requerido"
+                       Class="mb-3">
+                @if (checklists != null)
+                {
+                    @foreach (var checklist in checklists)
+                    {
+                        <MudSelectItem T="long" Value="checklist.IdChecklist">
+                            @($"{checklist.Nombre} ({checklist.Version})")
+                        </MudSelectItem>
+                    }
+                }
+            </MudSelect>
 
             <MudTextField T="string" Label="Pregunta" @bind-Value="pregunta"
-                Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
-                Lines="2" Immediate="true" Class="mb-3" />
+                          Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
+                          Lines="2" Immediate="true" Class="mb-3"/>
 
             <MudSelect T="string" Label="Tipo de respuesta" @bind-Value="tipoRespuesta"
-                Variant="Variant.Outlined" Required="true" RequiredError="El tipo de respuesta es requerido"
-                Class="mb-3">
+                       Variant="Variant.Outlined" Required="true" RequiredError="El tipo de respuesta es requerido"
+                       Class="mb-3">
                 @foreach (var tipo in TiposRespuesta.Todos)
                 {
                     <MudSelectItem T="string" Value="@tipo.Valor">@tipo.Etiqueta</MudSelectItem>
                 }
             </MudSelect>
 
-            <MudSwitch T="bool" Label="Obligatoria" @bind-Value="obligatoria" Color="Color.Primary" />
+            <MudSwitch T="bool" Label="Obligatoria" @bind-Value="obligatoria" Color="Color.Primary"/>
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">
+            Cancelar
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -38,17 +52,27 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     private MudForm? form;
 
-    [Parameter]
-    public PreguntaChecklistDto? Pregunta { get; set; }
-
+    [Parameter] public PreguntaChecklistDto? Pregunta { get; set; }
+    private List<ChecklistDto>? checklists;
     private bool IsEditMode => Pregunta != null;
     private long idChecklist = 1;
     private string pregunta = string.Empty;
     private string tipoRespuesta = TiposRespuesta.SiNo;
     private bool obligatoria = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        var result = await HttpClientService.GetChecklistsAsync(page: 1, pageSize: 100);
+
+        if (result != null && result.Success && result.Data != null)
+        {
+            checklists = result.Data.Data;
+        }
+        else
+        {
+            checklists = new List<ChecklistDto>();
+        }
+
         if (IsEditMode && Pregunta != null)
         {
             idChecklist = Pregunta.IdChecklist;
@@ -79,7 +103,7 @@
                 Obligatoria = obligatoria
             };
 
-            var result = await MockDataService.UpdatePreguntaChecklistAsync(Pregunta.IdPregunta, updateDto);
+            var result = await HttpClientService.UpdatePreguntaChecklistAsync(Pregunta.IdPregunta, updateDto);
 
             if (result != null && result.Success)
             {
@@ -101,7 +125,7 @@
                 Obligatoria = obligatoria
             };
 
-            var result = await MockDataService.CreatePreguntaChecklistAsync(createDto);
+            var result = await HttpClientService.CreatePreguntaChecklistAsync(createDto);
 
             if (result != null && result.Success)
             {
@@ -126,30 +150,31 @@
             MudDialog.Cancel();
         }
     }
+
 }
 
 <style>
-.dialog-button {
-    border-radius: 12px !important;
-    min-width: 100px !important;
-    font-weight: 500 !important;
-}
+    .dialog-button {
+        border-radius: 12px !important;
+        min-width: 100px !important;
+        font-weight: 500 !important;
+    }
 
-.dialog-button.mud-button-filled {
-    background-color: #397FDE !important;
-    color: white !important;
-}
+    .dialog-button.mud-button-filled {
+        background-color: #397FDE !important;
+        color: white !important;
+    }
 
-.dialog-button.mud-button-filled:hover {
-    background-color: #2A5FB8 !important;
-}
+    .dialog-button.mud-button-filled:hover {
+        background-color: #2A5FB8 !important;
+    }
 
-.cancel-btn {
-    background-color: #79B75D !important;
-    color: white !important;
-}
+    .cancel-btn {
+        background-color: #79B75D !important;
+        color: white !important;
+    }
 
-.cancel-btn:hover {
-    background-color: #68A552 !important;
-}
+    .cancel-btn:hover {
+        background-color: #68A552 !important;
+    }
 </style>

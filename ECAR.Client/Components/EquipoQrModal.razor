@@ -1,0 +1,110 @@
+﻿@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Código QR</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="qr-print-area">
+            <MudImage Src="@QrImageUrl" Alt="Código QR del equipo" Width="250" Height="250"
+                ObjectFit="ObjectFit.Contain" Class="d-block mx-auto mb-3" />
+            <MudText Align="Align.Center" Typo="Typo.subtitle1" Class="font-weight-bold">
+                @CodigoInterno
+            </MudText>
+            <MudText Align="Align.Center" Typo="Typo.body2" Class="mud-text-secondary">
+                @NombreEquipo
+            </MudText>
+        </div>
+
+        @if (esTokenNuevo)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
+                Este equipo no tenía QR generado — se creó uno nuevo (dato de prueba).
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cerrar">Cerrar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+            StartIcon="@Icons.Material.Filled.Print" OnClick="Imprimir">
+            Imprimir etiqueta
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+            StartIcon="@Icons.Material.Filled.Download" OnClick="DescargarPng">
+            Descargar PNG
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error"
+            StartIcon="@Icons.Material.Filled.Refresh" OnClick="Regenerar">
+            Regenerar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public long IdEquipo { get; set; }
+    [Parameter] public string CodigoInterno { get; set; } = string.Empty;
+    [Parameter] public string NombreEquipo { get; set; } = string.Empty;
+
+    // TODO: reemplazar por el Token real que devuelva POST /api/equipos/{id}/qr (BE-2).
+    // Mientras tanto, se simula un token fijo por equipo para poder maquetar la pantalla.
+    private string token = string.Empty;
+    private bool esTokenNuevo = true;
+
+    // TODO: confirmar con BE-2 el valor real de ClienteBaseUrl (viene de appsettings/IConfiguration).
+    private const string ClienteBaseUrlMock = "https://ecar-app.local";
+
+    private string UrlConsulta => $"{ClienteBaseUrlMock}/equipos/qr/{token}";
+
+    // Mientras no exista GET /api/equipos/{id}/qr.png, se genera la imagen con un servicio
+    // externo solo para maquetar visualmente. Al integrar con BE-2, este método debe
+    // reemplazarse por la URL real del endpoint.
+    private string QrImageUrl =>
+        $"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={Uri.EscapeDataString(UrlConsulta)}";
+
+    protected override void OnInitialized()
+    {
+        // Simula el token que en producción vendría de EquipoQrDto.Token
+        token = Guid.NewGuid().ToString("N");
+    }
+
+    private void Cerrar()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private async Task DescargarPng()
+    {
+        // TODO: llamar a HttpClientService y descargar el PNG real de
+        // GET /api/equipos/{id}/qr.png cuando BE-2 lo entregue.
+        Snackbar.Add("Descarga pendiente de conectar con el backend (BE-2)", Severity.Info);
+    }
+
+    private async Task Imprimir()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private async Task Regenerar()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Message"] = "Regenerar el QR invalida las etiquetas ya impresas y pegadas en este equipo. ¿Desea continuar?"
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar regeneración", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            // TODO: llamar a HttpClientService.RegenerarQrEquipoAsync(IdEquipo) cuando
+            // PUT /api/equipos/{id}/qr/regenerar (BE-2) esté disponible.
+            token = Guid.NewGuid().ToString("N");
+            esTokenNuevo = true;
+            Snackbar.Add("Token regenerado (simulado). Falta conectar con el backend real.", Severity.Warning);
+            StateHasChanged();
+        }
+    }
+}

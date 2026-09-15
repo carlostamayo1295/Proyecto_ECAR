@@ -67,7 +67,7 @@
                             @if (!string.IsNullOrEmpty(context.Criticidad))
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                    Color="@GetCriticidadColor(context.Criticidad)" Text="@context.Criticidad" />
+                                         Color="@GetCriticidadColor(context.Criticidad)" Text="@context.Criticidad" />
                             }
                             else
                             {
@@ -83,8 +83,18 @@
                                 StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar
                             </MudButton>
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
+                            
+                            <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
+                                       StartIcon="@Icons.Material.Filled.QrCode" OnClick="() => OpenQrDialog(context)" Class="action-button">
+                                 QR
+                            </MudButton>  
+                            
+                            QR
+                        </MudButton>
                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
+                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">      
                                 @(context.Activo ? "Desactivar" : "Activar")
                             </MudButton>
                         </MudTd>
@@ -221,6 +231,18 @@
         {
             await LoadDataAsync();
         }
+    }
+
+    private async Task OpenQrDialog(EquipoDto equipo)
+    {
+        var parameters = new DialogParameters
+        {
+            ["IdEquipo"] = equipo.IdEquipo,
+            ["CodigoInterno"] = equipo.CodigoInterno,
+            ["NombreEquipo"] = equipo.NombreEquipo
+        };
+        var dialog = await DialogService.ShowAsync<EquipoQrModal>("Codigo QR del Equipo", parameters);
+        await dialog.Result;
     }
 
     private async Task DeleteEquipo(EquipoDto equipo)
