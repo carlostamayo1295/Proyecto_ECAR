@@ -21,7 +21,7 @@ public class HttpClientService
         var token = await _authService.GetTokenAsync();
         if (!string.IsNullOrEmpty(token))
         {
-            _httpClient.DefaultRequestHeaders.Authorization = 
+            _httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }
     }
@@ -32,12 +32,13 @@ public class HttpClientService
     }
 
     // Métodos del API de Usuarios
-    public async Task<ApiResponse<PagedResultDto<UsuarioDto>>?> GetUsuariosAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<UsuarioDto>>?> GetUsuariosAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
             await AddAuthorizationHeaderAsync();
-            
+
             var query = $"api/usuarios?page={page}&pageSize={pageSize}";
             if (!string.IsNullOrEmpty(search))
             {
@@ -46,7 +47,7 @@ public class HttpClientService
 
             var response = await _httpClient.GetAsync(query);
             var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<UsuarioDto>>>();
-            
+
             await RemoveAuthorizationHeaderAsync();
             return apiResponse;
         }
@@ -131,12 +132,13 @@ public class HttpClientService
     }
 
     // Métodos del API de Roles
-    public async Task<ApiResponse<PagedResultDto<RolDto>>?> GetRolesAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<RolDto>>?> GetRolesAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
             await AddAuthorizationHeaderAsync();
-            
+
             var query = $"api/roles?page={page}&pageSize={pageSize}";
             if (!string.IsNullOrEmpty(search))
             {
@@ -145,7 +147,7 @@ public class HttpClientService
 
             var response = await _httpClient.GetAsync(query);
             var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<RolDto>>>();
-            
+
             await RemoveAuthorizationHeaderAsync();
             return apiResponse;
         }
@@ -230,7 +232,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Categorías de Equipo
-    public async Task<ApiResponse<PagedResultDto<CategoriaEquipoDto>>?> GetCategoriasEquipoAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<CategoriaEquipoDto>>?> GetCategoriasEquipoAsync(int page = 1,
+        int pageSize = 10, string? search = null)
     {
         try
         {
@@ -243,7 +246,8 @@ public class HttpClientService
             }
 
             var response = await _httpClient.GetAsync(query);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<CategoriaEquipoDto>>>();
+            var apiResponse =
+                await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<CategoriaEquipoDto>>>();
 
             await RemoveAuthorizationHeaderAsync();
             return apiResponse;
@@ -292,7 +296,8 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<CategoriaEquipoDto>?> UpdateCategoriaEquipoAsync(long id, UpdateCategoriaEquipoDto updateDto)
+    public async Task<ApiResponse<CategoriaEquipoDto>?> UpdateCategoriaEquipoAsync(long id,
+        UpdateCategoriaEquipoDto updateDto)
     {
         try
         {
@@ -329,7 +334,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Checklists
-    public async Task<ApiResponse<PagedResultDto<ChecklistDto>>?> GetChecklistsAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<ChecklistDto>>?> GetChecklistsAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
@@ -427,8 +433,148 @@ public class HttpClientService
         }
     }
 
+    public async Task<ApiResponse<ChecklistDto>?> CreateChecklistVersionAsync(long id, CreateChecklistVersionDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync($"api/checklists/{id}/nueva-version", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating checklist version: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<ChecklistVersionDto>>?> GetChecklistVersionesAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/checklists/{id}/versiones");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<ChecklistVersionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting checklist versiones: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Métodos del API de Preguntas de Checklist
+    public async Task<ApiResponse<PagedResultDto<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(int page = 1, int pageSize = 10, string? search = null, long? idChecklist = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/preguntaschecklist?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+            if (idChecklist.HasValue)
+            {
+                query += $"&idChecklist={idChecklist.Value}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<PreguntaChecklistDto>>>();
+
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting preguntas checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> GetPreguntaChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/preguntaschecklist/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> CreatePreguntaChecklistAsync(CreatePreguntaChecklistDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/preguntaschecklist", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> UpdatePreguntaChecklistAsync(long id, UpdatePreguntaChecklistDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/preguntaschecklist/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeletePreguntaChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/preguntaschecklist/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting pregunta checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     // Métodos del API de Auditoría
-    public async Task<ApiResponse<PagedResultDto<AuditoriaDto>>?> GetAuditoriaAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<AuditoriaDto>>?> GetAuditoriaAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
@@ -455,7 +601,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Equipos
-    public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100, string? search = null, string? criticidad = null)
+    public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100,
+        string? search = null, string? criticidad = null)
     {
         try
         {
@@ -466,6 +613,7 @@ public class HttpClientService
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
             }
+
             if (!string.IsNullOrEmpty(criticidad))
             {
                 query += $"&criticidad={Uri.EscapeDataString(criticidad)}";
@@ -593,8 +741,92 @@ public class HttpClientService
         }
     }
 
+    public async Task<ApiResponse<EquipoQrDto>?> GenerateEquipoQrAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsync($"api/equipos/{id}/qr", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoQrDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error generating equipo QR: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<EquipoQrDto>?> RegenerateEquipoQrAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/equipos/{id}/qr/regenerar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EquipoQrDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error regenerating equipo QR: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // El endpoint exige token, así que un <img src> directo no sirve: se descargan los bytes
+    // y la pantalla los muestra como data URI (ver GetEquipoQrImageDataUrlAsync).
+    public async Task<byte[]?> GetEquipoQrImageAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/equipos/{id}/qr.png");
+            await RemoveAuthorizationHeaderAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting equipo QR image: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<string?> GetEquipoQrImageDataUrlAsync(long id)
+    {
+        var bytes = await GetEquipoQrImageAsync(id);
+        return bytes == null ? null : $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    // Consulta pública: es la que se abre al escanear el QR, sin sesión iniciada.
+    public async Task<ApiResponse<ConsultaQrDto>?> GetEquipoByQrAsync(string token)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/equipos/qr/{Uri.EscapeDataString(token)}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ConsultaQrDto>>();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting equipo by QR: {ex.Message}");
+            return null;
+        }
+    }
+
     // Métodos del API de Ubicaciones
-    public async Task<ApiResponse<PagedResultDto<UbicacionDto>>?> GetUbicacionesAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<UbicacionDto>>?> GetUbicacionesAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
@@ -675,7 +907,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Usuarios-Rol (asignaciones)
-    public async Task<ApiResponse<PagedResultDto<UsuarioRolDto>>?> GetUsuariosRolAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<UsuarioRolDto>>?> GetUsuariosRolAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
@@ -792,7 +1025,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Inspecciones
-    public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10, string? search = null)
+    public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10,
+        string? search = null)
     {
         try
         {
@@ -891,7 +1125,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Evidencias
-    public async Task<ApiResponse<PagedResultDto<EvidenciaDto>>?> GetEvidenciasAsync(int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null)
+    public async Task<ApiResponse<PagedResultDto<EvidenciaDto>>?> GetEvidenciasAsync(int page = 1, int pageSize = 10,
+        string? search = null, long? idInspeccion = null)
     {
         try
         {
@@ -902,6 +1137,7 @@ public class HttpClientService
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
             }
+
             if (idInspeccion.HasValue)
             {
                 query += $"&idInspeccion={idInspeccion.Value}";
@@ -976,7 +1212,8 @@ public class HttpClientService
     }
 
     // Métodos del API de Hallazgos
-    public async Task<ApiResponse<PagedResultDto<HallazgoDto>>?> GetHallazgosAsync(int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null, string? estado = null)
+    public async Task<ApiResponse<PagedResultDto<HallazgoDto>>?> GetHallazgosAsync(int page = 1, int pageSize = 10,
+        string? search = null, long? idInspeccion = null, string? estado = null)
     {
         try
         {
@@ -987,10 +1224,12 @@ public class HttpClientService
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
             }
+
             if (idInspeccion.HasValue)
             {
                 query += $"&idInspeccion={idInspeccion.Value}";
             }
+
             if (!string.IsNullOrEmpty(estado))
             {
                 query += $"&estado={Uri.EscapeDataString(estado)}";
@@ -1077,6 +1316,81 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error deleting hallazgo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // Métodos del API de Preguntas de Checklist
+    public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(long idChecklist)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/PreguntasChecklist/checklist/{idChecklist}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<PreguntaChecklistDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting preguntas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> CreatePreguntaChecklistAsync(
+        CreatePreguntaChecklistDto createDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/PreguntasChecklist", createDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating pregunta: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<PreguntaChecklistDto>?> UpdatePreguntaChecklistAsync(long id,
+        UpdatePreguntaChecklistDto updateDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/PreguntasChecklist/{id}", updateDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PreguntaChecklistDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating pregunta: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<bool>?> DeletePreguntaChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.DeleteAsync($"api/PreguntasChecklist/{id}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting pregunta: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }

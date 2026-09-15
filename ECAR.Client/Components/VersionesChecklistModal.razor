@@ -1,0 +1,114 @@
+@inject IDialogService DialogService
+
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Versiones de "@Checklist?.Nombre"</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Calculado localmente a partir de los checklists ya cargados con el mismo nombre — se reemplazará por GET /api/checklists/{id}/versiones cuando BE-1 lo entregue.
+        </MudAlert>
+
+        @if (versiones.Any())
+        {
+            <MudTable Items="versiones" Hover="true" Striped="true" Elevation="0" Dense="true">
+                <HeaderContent>
+                    <MudTh>Versión</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Preguntas</MudTh>
+                    <MudTh>Fecha Creación</MudTh>
+                    <MudTh>Acciones</MudTh>
+                </HeaderContent>
+                <RowTemplate Context="version">
+                    <MudTd>@version.Version</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Color="@(version.Activo ? Color.Success : Color.Default)"
+                            Size="Size.Small" Variant="Variant.Outlined" Text="@(version.Activo ? "Activa" : "Histórica")" />
+                    </MudTd>
+                    <MudTd>@version.Preguntas.Count</MudTd>
+                    <MudTd>@version.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                            StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => VerVersion(version)" Class="action-button">
+                            Ver
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info">No hay versiones para mostrar</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public ChecklistDto? Checklist { get; set; }
+
+    [Parameter]
+    public List<ChecklistDto> Checklists { get; set; } = new();
+
+    private List<ChecklistDto> versiones = new();
+
+    protected override void OnInitialized()
+    {
+        // TODO: FE-0/BE-1 — reemplazar por HttpClientService.GetVersionesChecklistAsync(Checklist.IdChecklist)
+        // cuando el endpoint GET /api/checklists/{id}/versiones exista. Mientras tanto se filtran
+        // localmente, por Nombre, los checklists que la página ya tiene cargados, ya que el índice
+        // único (Nombre, Version) agrupa las versiones de un mismo checklist.
+        versiones = Checklist == null
+            ? new List<ChecklistDto>()
+            : Checklists
+                .Where(c => c.Nombre == Checklist.Nombre)
+                .OrderByDescending(c => c.Activo)
+                .ThenByDescending(c => c.Version)
+                .ToList();
+    }
+
+    private async Task VerVersion(ChecklistDto version)
+    {
+        var parameters = new DialogParameters { ["Checklist"] = version };
+        await DialogService.ShowAsync<ChecklistDetailModal>("Detalle del Checklist", parameters);
+    }
+
+    private void Close()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
+
+<style>
+.dialog-button {
+    border-radius: 12px !important;
+    min-width: 100px !important;
+    font-weight: 500 !important;
+}
+
+.dialog-button.mud-button-filled {
+    background-color: #397FDE !important;
+    color: white !important;
+}
+
+.dialog-button.mud-button-filled:hover {
+    background-color: #2A5FB8 !important;
+}
+
+.action-button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.action-button:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+</style>
