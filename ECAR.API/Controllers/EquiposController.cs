@@ -5,6 +5,8 @@ using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QRCoder;
+using System.Security.Cryptography;
 
 namespace ECAR.API.Controllers;
 
@@ -14,10 +16,12 @@ namespace ECAR.API.Controllers;
 public class EquiposController : ControllerBase
 {
     private readonly ECARDbContext _context;
+    private readonly IConfiguration _configuration;
 
-    public EquiposController(ECARDbContext context)
+    public EquiposController(ECARDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -161,7 +165,6 @@ public class EquiposController : ControllerBase
             Criticidad = NormalizeOptional(createDto.Criticidad),
             IdCategoria = createDto.IdCategoria,
             IdUbicacion = createDto.IdUbicacion,
-            QRCode = NormalizeOptional(createDto.QRCode),
             Activo = true,
             FechaCreacion = DateTime.UtcNow
         };
@@ -233,9 +236,6 @@ public class EquiposController : ControllerBase
 
         if (updateDto.Criticidad != null)
             equipo.Criticidad = NormalizeOptional(updateDto.Criticidad);
-
-        if (updateDto.QRCode != null)
-            equipo.QRCode = NormalizeOptional(updateDto.QRCode);
 
         if (updateDto.IdCategoria.HasValue)
         {
@@ -319,6 +319,135 @@ public class EquiposController : ControllerBase
 
         return Ok(ApiResponse<List<LookupDto>>.SuccessResponse(ubicaciones));
     }
+
+    // ---- Código QR ----
+    // El QR codifica una URL pública del cliente ({Cliente:BaseUrl}/equipos/qr/{token}).
+    // El token es opaco y no expone el id del equipo; se guarda en Equipos.QRCode.
+
+    [HttpPost("{id:long}/qr")]
+    [Authorize(Roles = "Administrador")]
+    public async Task<ActionResult<ApiResponse<EquipoQrDto>>> GenerateQr(long id)
+    {
+        var equipo = await _context.Equipos.FindAsync(id);
+        if (equipo == null)
+        {
+            return NotFound(ApiResponse<EquipoQrDto>.ErrorResponse("Equipo no encontrado"));
+        }
+
+        // Idempotente: si ya tiene token se devuelve el existente para no invalidar etiquetas impresas
+        var esNuevo = string.IsNullOrEmpty(equipo.QRCode);
+        if (esNuevo)
+        {
+            equipo.QRCode = GenerarToken();
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok(ApiResponse<EquipoQrDto>.SuccessResponse(MapToQrDto(equipo, esNuevo),
+            esNuevo ? "Código QR generado exitosamente" : "El equipo ya tenía un código QR"));
+    }
+
+    [HttpPut("{id:long}/qr/regenerar")]
+    [Authorize(Roles = "Administrador")]
+    public async Task<ActionResult<ApiResponse<EquipoQrDto>>> RegenerateQr(long id)
+    {
+        var equipo = await _context.Equipos.FindAsync(id);
+        if (equipo == null)
+        {
+            return NotFound(ApiResponse<EquipoQrDto>.ErrorResponse("Equipo no encontrado"));
+        }
+
+        equipo.QRCode = GenerarToken();
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<EquipoQrDto>.SuccessResponse(MapToQrDto(equipo, esNuevo: true),
+            "Código QR regenerado. Las etiquetas anteriores ya no son válidas"));
+    }
+
+    // Imagen PNG generada en el servidor (sin servicios externos). Requiere sesión.
+    [HttpGet("{id:long}/qr.png")]
+    public async Task<IActionResult> GetQrImage(long id, [FromQuery] int pixeles = 10)
+    {
+        var equipo = await _context.Equipos.FindAsync(id);
+        if (equipo == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Equipo no encontrado"));
+        }
+
+        if (string.IsNullOrEmpty(equipo.QRCode))
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("El equipo no tiene código QR generado"));
+        }
+
+        pixeles = Math.Clamp(pixeles, 4, 40);
+        using var generator = new QRCodeGenerator();
+        using var data = generator.CreateQrCode(BuildUrlConsulta(equipo.QRCode), QRCodeGenerator.ECCLevel.M);
+        var png = new PngByteQRCode(data).GetGraphic(pixeles);
+
+        return File(png, "image/png", $"QR-{equipo.CodigoInterno}.png");
+    }
+
+    // Consulta pública: la abre quien escanea la etiqueta, sin sesión. Solo expone la ficha
+    // básica y los checklists activos; nunca datos de usuarios ni de inspecciones.
+    [HttpGet("qr/{token}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<ConsultaQrDto>>> GetByQr(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 64)
+        {
+            return NotFound(ApiResponse<ConsultaQrDto>.ErrorResponse("Código QR no válido"));
+        }
+
+        var equipo = await _context.Equipos
+            .Include(e => e.Categoria)
+            .Include(e => e.Ubicacion)
+            .FirstOrDefaultAsync(e => e.QRCode == token && e.Activo);
+
+        if (equipo == null)
+        {
+            return NotFound(ApiResponse<ConsultaQrDto>.ErrorResponse("Este código QR no corresponde a ningún equipo registrado"));
+        }
+
+        // El MVP no asocia checklists a equipos ni categorías: aplican todas las versiones activas
+        var checklists = await _context.Checklists
+            .Where(c => c.Activo)
+            .OrderBy(c => c.Nombre)
+            .Select(c => new ChecklistDto
+            {
+                IdChecklist = c.IdChecklist,
+                Nombre = c.Nombre,
+                Version = c.Version,
+                Activo = c.Activo,
+                FechaCreacion = c.FechaCreacion
+            })
+            .ToListAsync();
+
+        var dto = new ConsultaQrDto
+        {
+            Equipo = MapToDto(equipo),
+            ChecklistsActivos = checklists
+        };
+        // El token no se devuelve en la respuesta pública
+        dto.Equipo.QRCode = null;
+
+        return Ok(ApiResponse<ConsultaQrDto>.SuccessResponse(dto));
+    }
+
+    private static string GenerarToken() =>
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+
+    private string BuildUrlConsulta(string token)
+    {
+        var baseUrl = (_configuration["Cliente:BaseUrl"] ?? "https://localhost:7267").TrimEnd('/');
+        return $"{baseUrl}/equipos/qr/{token}";
+    }
+
+    private EquipoQrDto MapToQrDto(Equipo e, bool esNuevo) => new()
+    {
+        IdEquipo = e.IdEquipo,
+        Token = e.QRCode ?? string.Empty,
+        UrlConsulta = BuildUrlConsulta(e.QRCode ?? string.Empty),
+        EsNuevo = esNuevo
+    };
 
     private static EquipoDto MapToDto(Equipo e) => new()
     {

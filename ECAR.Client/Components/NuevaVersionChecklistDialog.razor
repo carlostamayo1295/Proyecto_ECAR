@@ -1,4 +1,5 @@
 @inject ISnackbar Snackbar
+@inject HttpClientService HttpClientService
 
 <MudDialog Options="new DialogOptions { CloseOnEscapeKey = false }">
     <TitleContent>
@@ -16,7 +17,7 @@
     </DialogContent>
     <DialogActions>
         <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Crear Versión</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Disabled="@guardando" Class="dialog-button">Crear Versión</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -24,6 +25,7 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     private MudForm? form;
     private string nuevaVersion = string.Empty;
+    private bool guardando;
 
     [Parameter]
     public ChecklistDto? Checklist { get; set; }
@@ -45,10 +47,25 @@
             return;
         }
 
-        // TODO: FE-0 — reemplazar este cierre simulado por una llamada real a
-        // HttpClientService.CrearVersionChecklistAsync(Checklist.IdChecklist, new CreateChecklistVersionDto { Version = nuevaVersion })
-        // cuando el método exista, y recargar el listado desde el API en vez de simular localmente.
-        MudDialog.Close(DialogResult.Ok(nuevaVersion));
+        if (Checklist == null)
+        {
+            return;
+        }
+
+        guardando = true;
+        var result = await HttpClientService.CreateChecklistVersionAsync(
+            Checklist.IdChecklist, new CreateChecklistVersionDto { Version = nuevaVersion.Trim() });
+        guardando = false;
+
+        if (result != null && result.Success)
+        {
+            Snackbar.Add(result.Message ?? $"Versión '{nuevaVersion}' creada exitosamente", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(result?.Message ?? "Error al crear la versión", Severity.Error);
+        }
     }
 
     private void Cancel()

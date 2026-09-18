@@ -1,5 +1,4 @@
 ﻿@page "/checklists/preguntas"
-@inject MockDataService MockDataService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject HttpClientService HttpClientService
@@ -22,12 +21,13 @@
         <MudCardContent>
             <MudGrid Class="mb-4">
                 <MudItem xs="12" sm="6">
-                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" />
+                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" @bind-Value:after="OnFiltroChanged"
+                                  Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Immediate="true" DebounceInterval="300" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudSelect T="long?" Label="Filtrar por Checklist" @bind-Value="idChecklistFiltro"
-                               @bind-Value:after="LoadPreguntasAsync" Variant="Variant.Outlined" Clearable="true">
+                               @bind-Value:after="OnFiltroChanged" Variant="Variant.Outlined" Clearable="true">
                         <MudSelectItem T="long?" Value="@((long?)null)">Todos</MudSelectItem>
                         @if (checklistsFiltro != null)
                         {
@@ -52,6 +52,7 @@
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Checklist</MudTh>
+                        <MudTh>Orden</MudTh>
                         <MudTh>Pregunta</MudTh>
                         <MudTh>Tipo de respuesta</MudTh>
                         <MudTh>Obligatoria</MudTh>
@@ -60,6 +61,7 @@
                     <RowTemplate>
                         <MudTd>@context.IdPregunta.ToString()</MudTd>
                         <MudTd>@context.IdChecklist.ToString()</MudTd>
+                        <MudTd>@context.Orden.ToString()</MudTd>
                         <MudTd>@context.Pregunta</MudTd>
                         <MudTd>@TiposRespuesta.Etiqueta(context.TipoRespuesta)</MudTd>
                         <MudTd>
@@ -124,42 +126,29 @@
         await LoadPreguntasAsync();
     }
 
+    private async Task OnFiltroChanged()
+    {
+        // Cualquier cambio de filtro o búsqueda vuelve a la primera página
+        currentPage = 1;
+        await LoadPreguntasAsync();
+    }
+
     private async Task LoadPreguntasAsync()
     {
         isLoading = true;
 
         try
         {
-            // El backend exige un checklist específico: sin uno seleccionado, no hay nada que pedir
-            if (idChecklistFiltro == null)
-            {
-                preguntas = new List<PreguntaChecklistDto>();
-                totalPages = 1;
-                return;
-            }
-
-            var result = await HttpClientService.GetPreguntasChecklistAsync(idChecklistFiltro.Value);
+            var result = await HttpClientService.GetPreguntasChecklistAsync(
+                page: currentPage,
+                pageSize: pageSize,
+                search: searchText,
+                idChecklist: idChecklistFiltro);
 
             if (result != null && result.Success && result.Data != null)
             {
-                var todasLasPreguntas = result.Data;
-
-                // Búsqueda por texto, hecha en el cliente porque el endpoint no la soporta
-                if (!string.IsNullOrWhiteSpace(searchText))
-                {
-                    todasLasPreguntas = todasLasPreguntas
-                        .Where(p => p.Pregunta.Contains(searchText, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                }
-
-                totalPages = (int)Math.Ceiling(todasLasPreguntas.Count / (double)pageSize);
-                if (totalPages < 1) totalPages = 1;
-
-                // Paginación también hecha en el cliente, sobre la lista ya filtrada
-                preguntas = todasLasPreguntas
-                    .Skip((currentPage - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToList();
+                preguntas = result.Data.Data;
+                totalPages = Math.Max(1, result.Data.TotalPages);
             }
             else
             {

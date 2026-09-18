@@ -34,6 +34,4 @@ public class CreateEquipoDto
     public long? IdCategoria { get; set; }
 
     public long? IdUbicacion { get; set; }
-
-    public string? QRCode { get; set; }
 }

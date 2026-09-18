@@ -83,18 +83,12 @@
                                 StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar
                             </MudButton>
-                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                   StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
-                            
                             <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
                                        StartIcon="@Icons.Material.Filled.QrCode" OnClick="() => OpenQrDialog(context)" Class="action-button">
-                                 QR
-                            </MudButton>  
-                            
-                            QR
-                        </MudButton>
+                                QR
+                            </MudButton>
                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">      
+                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
                                 @(context.Activo ? "Desactivar" : "Activar")
                             </MudButton>
                         </MudTd>
