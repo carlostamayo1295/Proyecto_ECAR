@@ -6,15 +6,14 @@ namespace ECAR.Client.Services;
 public class MockDataService
 {
     // ===================== ESTADO EN MEMORIA =====================
-    // Mock temporal para pantallas de Fase 2/3 sin backend (PreguntasChecklist, RespuestasInspeccion).
-    // Ubicaciones ya usa el API real vía HttpClientService.
+    // Mock temporal para la pantalla de Respuestas de inspección (Fase 3), aún sin backend.
+    // Ubicaciones y Preguntas de checklist ya usan el API real vía HttpClientService.
     private static List<PreguntaChecklistDto> _preguntas = new()
     {
         new PreguntaChecklistDto { IdPregunta = 1, IdChecklist = 1, Pregunta = "¿El equipo enciende correctamente?", TipoRespuesta = "SiNo", Obligatoria = true },
         new PreguntaChecklistDto { IdPregunta = 2, IdChecklist = 1, Pregunta = "¿Presenta fugas visibles?", TipoRespuesta = "SiNo", Obligatoria = true },
         new PreguntaChecklistDto { IdPregunta = 3, IdChecklist = 1, Pregunta = "Observaciones generales", TipoRespuesta = "Texto", Obligatoria = false },
     };
-    private static long _nextPreguntaId = 4;
 
     private static List<RespuestaInspeccionDto> _respuestas = new()
     {
@@ -43,51 +42,12 @@ public class MockDataService
     }
 
     // ===================== PREGUNTAS CHECKLIST =====================
-    public async Task<ApiResponse<PagedResultDto<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(int page = 1, int pageSize = 10, string? search = null)
-    {
-        var query = _preguntas.AsEnumerable();
-        if (!string.IsNullOrEmpty(search))
-            query = query.Where(p => p.Pregunta.Contains(search, StringComparison.OrdinalIgnoreCase));
-
-        var result = ApiResponse<PagedResultDto<PreguntaChecklistDto>>.SuccessResponse(Paginate(query.ToList(), page, pageSize));
-        return await SimulateDelay(result);
-    }
-
-    // Se usa al responder una inspeccion para saber el tipo de respuesta de cada pregunta.
+    // El CRUD de preguntas ya usa el API real (PreguntasChecklistController). Solo queda el lookup
+    // que consume RespuestaInspeccionModal mientras Respuestas de inspección sigue en mock (Fase 3).
     public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistLookupAsync()
     {
         var result = ApiResponse<List<PreguntaChecklistDto>>.SuccessResponse(_preguntas.ToList());
         return await SimulateDelay(result);
-    }
-
-    public async Task<ApiResponse<PreguntaChecklistDto>?> CreatePreguntaChecklistAsync(CreatePreguntaChecklistDto dto)
-    {
-        var nueva = new PreguntaChecklistDto { IdPregunta = _nextPreguntaId++, IdChecklist = dto.IdChecklist, Pregunta = dto.Pregunta, TipoRespuesta = dto.TipoRespuesta, Obligatoria = dto.Obligatoria };
-        _preguntas.Add(nueva);
-        return await SimulateDelay(ApiResponse<PreguntaChecklistDto>.SuccessResponse(nueva, "Pregunta creada exitosamente"));
-    }
-
-    public async Task<ApiResponse<PreguntaChecklistDto>?> UpdatePreguntaChecklistAsync(long id, UpdatePreguntaChecklistDto dto)
-    {
-        var existente = _preguntas.FirstOrDefault(p => p.IdPregunta == id);
-        if (existente == null)
-            return await SimulateDelay(ApiResponse<PreguntaChecklistDto>.ErrorResponse("Pregunta no encontrada"));
-
-        existente.IdChecklist = dto.IdChecklist;
-        existente.Pregunta = dto.Pregunta;
-        existente.TipoRespuesta = dto.TipoRespuesta;
-        existente.Obligatoria = dto.Obligatoria;
-        return await SimulateDelay(ApiResponse<PreguntaChecklistDto>.SuccessResponse(existente, "Pregunta actualizada exitosamente"));
-    }
-
-    public async Task<ApiResponse<bool>?> DeletePreguntaChecklistAsync(long id)
-    {
-        var existente = _preguntas.FirstOrDefault(p => p.IdPregunta == id);
-        if (existente == null)
-            return await SimulateDelay(ApiResponse<bool>.ErrorResponse("Pregunta no encontrada"));
-
-        _preguntas.Remove(existente);
-        return await SimulateDelay(ApiResponse<bool>.SuccessResponse(true, "Pregunta eliminada exitosamente"));
     }
 
     // ===================== RESPUESTAS INSPECCION =====================

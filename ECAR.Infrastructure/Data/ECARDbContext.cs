@@ -36,6 +36,8 @@ public class ECARDbContext : DbContext
             entity.HasIndex(e => e.IdCategoria);
             entity.HasIndex(e => e.IdUbicacion);
             entity.HasIndex(e => e.Criticidad);
+            // La consulta pública por QR busca por token: único y filtrado para ignorar los equipos sin QR
+            entity.HasIndex(e => e.QRCode).IsUnique().HasFilter("[QRCode] IS NOT NULL");
         });
 
         // Configuración de CategoriaEquipo

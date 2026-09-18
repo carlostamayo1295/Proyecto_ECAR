@@ -109,5 +109,5 @@ appsettings.Production.json
 appsettings.Staging.json
 
 # User Secrets
-usersecrets
+secret.json
 .env

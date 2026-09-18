@@ -4,6 +4,7 @@ using ECAR.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ECAR.Infrastructure.Migrations
 {
     [DbContext(typeof(ECARDbContext))]
-    partial class ECARDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914011254_AgregarOrdenAPreguntaChecklist")]
+    partial class AgregarOrdenAPreguntaChecklist
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -213,8 +216,7 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnName("NombreEquipo");
 
                     b.Property<string>("QRCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("QRCode");
 
                     b.Property<string>("SerialFabricante")
@@ -235,10 +237,6 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasIndex("IdCategoria");
 
                     b.HasIndex("IdUbicacion");
-
-                    b.HasIndex("QRCode")
-                        .IsUnique()
-                        .HasFilter("[QRCode] IS NOT NULL");
 
                     b.ToTable("Equipos");
                 });

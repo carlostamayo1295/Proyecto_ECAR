@@ -1,8 +1,9 @@
 ﻿@page "/checklists/preguntas"
-@inject MockDataService MockDataService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HttpClientService HttpClientService
 
+<AdminRouteGuard>
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
@@ -18,9 +19,28 @@
         </MudCardHeader>
 
         <MudCardContent>
-            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                Class="mb-4" />
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" @bind-Value:after="OnFiltroChanged"
+                                  Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Immediate="true" DebounceInterval="300" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="long?" Label="Filtrar por Checklist" @bind-Value="idChecklistFiltro"
+                               @bind-Value:after="OnFiltroChanged" Variant="Variant.Outlined" Clearable="true">
+                        <MudSelectItem T="long?" Value="@((long?)null)">Todos</MudSelectItem>
+                        @if (checklistsFiltro != null)
+                        {
+                            @foreach (var checklist in checklistsFiltro)
+                            {
+                                <MudSelectItem T="long?" Value="@((long?)checklist.IdChecklist)">
+                                    @($"{checklist.Nombre} ({checklist.Version})")
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
 
             @if (isLoading)
             {
@@ -32,6 +52,7 @@
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Checklist</MudTh>
+                        <MudTh>Orden</MudTh>
                         <MudTh>Pregunta</MudTh>
                         <MudTh>Tipo de respuesta</MudTh>
                         <MudTh>Obligatoria</MudTh>
@@ -40,6 +61,7 @@
                     <RowTemplate>
                         <MudTd>@context.IdPregunta.ToString()</MudTd>
                         <MudTd>@context.IdChecklist.ToString()</MudTd>
+                        <MudTd>@context.Orden.ToString()</MudTd>
                         <MudTd>@context.Pregunta</MudTd>
                         <MudTd>@TiposRespuesta.Etiqueta(context.TipoRespuesta)</MudTd>
                         <MudTd>
@@ -54,11 +76,11 @@
                         </MudTd>
                         <MudTd>
                             <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                       StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar
                             </MudButton>
                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeletePregunta(context)" Class="action-button">
+                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeletePregunta(context)" Class="action-button">
                                 Eliminar
                             </MudButton>
                         </MudTd>
@@ -66,7 +88,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedPageChanged="HandlePageChange" />
+                               SelectedPageChanged="HandlePageChange" />
             }
             else
             {
@@ -77,6 +99,7 @@
         </MudCardContent>
     </MudCard>
 </MudContainer>
+</AdminRouteGuard>
 
 @code {
     private List<PreguntaChecklistDto>? preguntas;
@@ -85,9 +108,28 @@
     private int pageSize = 10;
     private int totalPages = 1;
     private bool isLoading = false;
+    private List<ChecklistDto>? checklistsFiltro;
+    private long? idChecklistFiltro;
 
     protected override async Task OnInitializedAsync()
     {
+        var checklistsResult = await HttpClientService.GetChecklistsAsync(page: 1, pageSize: 100);
+
+        if (checklistsResult != null && checklistsResult.Success && checklistsResult.Data != null)
+        {
+            checklistsFiltro = checklistsResult.Data.Data;
+        }
+        else
+        {
+            checklistsFiltro = new List<ChecklistDto>();
+        }
+        await LoadPreguntasAsync();
+    }
+
+    private async Task OnFiltroChanged()
+    {
+        // Cualquier cambio de filtro o búsqueda vuelve a la primera página
+        currentPage = 1;
         await LoadPreguntasAsync();
     }
 
@@ -97,12 +139,16 @@
 
         try
         {
-            var result = await MockDataService.GetPreguntasChecklistAsync(currentPage, pageSize, searchText);
+            var result = await HttpClientService.GetPreguntasChecklistAsync(
+                page: currentPage,
+                pageSize: pageSize,
+                search: searchText,
+                idChecklist: idChecklistFiltro);
 
             if (result != null && result.Success && result.Data != null)
             {
-                preguntas = result.Data.Data ?? new List<PreguntaChecklistDto>();
-                totalPages = result.Data.TotalPages;
+                preguntas = result.Data.Data;
+                totalPages = Math.Max(1, result.Data.TotalPages);
             }
             else
             {
@@ -162,7 +208,7 @@
             isLoading = true;
             try
             {
-                var deleteResult = await MockDataService.DeletePreguntaChecklistAsync(pregunta.IdPregunta);
+                var deleteResult = await HttpClientService.DeletePreguntaChecklistAsync(pregunta.IdPregunta);
 
                 if (deleteResult != null && deleteResult.Success)
                 {
@@ -181,6 +227,7 @@
             finally
             {
                 isLoading = false;
+
             }
         }
     }

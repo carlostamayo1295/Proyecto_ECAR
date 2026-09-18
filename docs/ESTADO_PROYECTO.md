@@ -1,296 +1,247 @@
 # Estado del proyecto ECAR — Sistema de Gestión de Equipos e Inspecciones
 
-**Fecha de corte:** 31 de agosto de 2026
-**Rama:** `feature_equipos`
+**Fecha de corte:** 16 de septiembre de 2026 (semana 5 de 12)
+**Rama evaluada:** `main` (`0272fa1`) + cambios de cierre de Fase 2 en `feature_FE_0_ServiceHTTP_nave_y_revision` (pendientes de PR)
 **Documentos de referencia:** [`ECAR-SRS-MVP-Equipos-Inspecciones-v1.0.md`](../ECAR-SRS-MVP-Equipos-Inspecciones-v1.0.md),
 [`ECAR-Cronograma-MVP-v1.0.md`](../ECAR-Cronograma-MVP-v1.0.md),
-[`docs/REVISION_BACKEND_FASE1.md`](REVISION_BACKEND_FASE1.md),
-[`docs/OPERACION_BACKEND_FASE1.md`](OPERACION_BACKEND_FASE1.md)
+[`docs/GUIA_FRONTEND_FASE2.md`](GUIA_FRONTEND_FASE2.md),
+[`docs/PLAN_FASE3_TAREAS.md`](PLAN_FASE3_TAREAS.md),
+[`docs/CAMBIOS_BASE_DATOS.md`](CAMBIOS_BASE_DATOS.md)
+
+> Cortes anteriores: 31/08 y 01/09/2026 (cierre de Fase 1). Su detalle está en el historial
+> de git de este archivo; aquí se resume solo lo vigente.
 
 ---
 
 ## 1. Resumen
 
-Solución .NET 10 de 4 proyectos:
+Solución .NET 10 de 5 proyectos:
 
 | Proyecto | Rol |
 |---|---|
-| `ECAR.API` | API REST (controladores, autenticación JWT + LDAP/AD configurable, Scalar/OpenAPI) |
-| `ECAR.Client` | Blazor WebAssembly + MudBlazor 9 (tema corporativo) |
-| `ECAR.Infrastructure` | EF Core: entidades, `ECARDbContext`, migraciones, `DataSeeder` |
-| `ECAR.Shared` | DTOs, `ApiResponse<T>`, `PagedResultDto<T>` |
-| `ECAR.API.Tests` | xUnit — 17 pruebas (7 de reglas de negocio + 10 del núcleo JWT) |
+| `ECAR.API` | API REST — 13 controladores, **68 endpoints**, JWT + LDAP/AD configurable, Scalar/OpenAPI, QRCoder |
+| `ECAR.Client` | Blazor WebAssembly + MudBlazor 9.8 — 17 páginas, 22 componentes, `HttpClientService` con 65 métodos |
+| `ECAR.Infrastructure` | EF Core 10: 13 entidades, `ECARDbContext`, **4 migraciones**, `DataSeeder` |
+| `ECAR.Shared` | 39 DTOs, `ApiResponse<T>`, `PagedResultDto<T>`, `TiposRespuesta` |
+| `ECAR.API.Tests` | xUnit — **26 pruebas** (7 reglas Fase 1 + 10 núcleo JWT + 9 reglas Fase 2) |
 
-Base de datos: **SQL Server**. Migraciones aplicadas automáticamente al arranque con
-`Database.MigrateAsync()`. Semillas idempotentes (roles, administrador, categorías,
-ubicaciones) mediante `DataSeeder.SeedDataAsync`.
-
-**Fase actual del cronograma: Fase 1 — Seguridad y Gestión de Equipos (completa).**
+**Fase actual del cronograma: Fase 2 — Checklists y Gestión QR. Estado: cerrada en código
+(100 %), pendiente de PR, revisión y demostración a ECAR (Entrega 3, semana 6).**
 
 ---
 
 ## 2. Estado por fase
 
-| Fase | Alcance | Estado |
-|---|---|---|
-| Fase 0 | Arquitectura por capas, entidades, DbContext, autenticación inicial | ✅ Completa |
-| **Fase 1** | JWT, usuarios y roles, asignación usuario–rol, catálogos, ubicaciones, CRUD de equipos y ficha técnica | ✅ **Completa (backend + cliente)** |
-| Fase 2 | Checklists versionados, generación/lectura QR | ⏳ Backend parcial (CRUD de checklists), cliente con datos simulados |
-| Fase 3 | Inspecciones, respuestas, evidencias, firma digital | ⏳ Backend parcial (controladores adelantados), cliente con datos simulados |
-| Fase 4 | Hallazgos, auditoría automática, reportes PDF/Excel | ⏳ Backend parcial (CRUD hallazgos, lectura de auditoría), sin escritura automática de auditoría ni reportes |
-| Fase 5 | Dashboard e indicadores | ❌ No iniciada |
+| Fase | Alcance | Estado | Avance |
+|---|---|---|---|
+| Fase 0 | Arquitectura, entidades, DbContext, autenticación inicial | ✅ Completa | 100 % |
+| Fase 1 | JWT, usuarios/roles, catálogos, ubicaciones, equipos, ficha técnica | ✅ Completa y verificada | 100 % |
+| **Fase 2** | Checklists, preguntas, versionamiento, QR | ✅ **Completa en código** (falta PR + demo) | **100 %** |
+| Fase 3 | Ejecución de inspecciones, respuestas, evidencias, firma | 🟡 Cimientos (CRUD básico, sin flujo) | ≈ 25 % |
+| Fase 4 | Hallazgos, auditoría automática, reportes | 🟡 Cimientos (CRUD hallazgos, lectura auditoría) | ≈ 15 % |
+| Fase 5 | Dashboard | ⚪ No iniciada | 0 % |
+| Fase 6 | UAT y producción | ⚪ No iniciada | 0 % |
 
-### Pantallas del cliente
+**Avance global estimado del MVP: ≈ 50 %.**
+
+---
+
+## 3. Validación de la Fase 2
+
+El 16/09 se auditó el código contra el alcance del cronograma. **La fase no estaba
+completa** (≈ 60 %): checklists y preguntas sí, pero versionamiento y QR eran maquetas en el
+cliente sin backend, y los dos controladores de la fase eran anónimos. Se cerraron esos huecos
+en la misma iteración (sección 7). Estado final verificado:
+
+| Requisito | Backend | Frontend | Veredicto |
+|---|---|---|---|
+| Administración de checklists (CRUD) | `ChecklistsController`: unicidad `Nombre+Version`, preguntas anidadas con `Orden` secuencial, catálogo `TiposRespuesta`; **409 si se intenta reemplazar las preguntas de un checklist ya respondido** (SRS #6) | `Checklists.razor`, `ChecklistModal`, `ChecklistDetailModal` | ✅ |
+| Preguntas de checklist | `PreguntasChecklistController`: listado paginado (`page`, `pageSize`, `search`, `idChecklist`), `checklist/{id}`, CRUD; `Orden` asignado por el servidor (`max + 1`); 409 al editar/borrar preguntas ya respondidas | `PreguntasChecklist.razor` + modal contra API real | ✅ |
+| Versionamiento | `GET {id}/versiones` (todas las versiones del mismo nombre, activa primero, con `TotalPreguntas` y `TieneRespuestas`); `POST {id}/nueva-version` (copia preguntas con su orden, desactiva las versiones activas del mismo nombre; 400 si es la misma versión, 409 si ya existe) | `VersionesChecklistModal` y `NuevaVersionChecklistDialog` contra API; `Checklists.razor` recarga desde el servidor | ✅ |
+| Generación de QR | `POST {id}/qr` (idempotente), `PUT {id}/qr/regenerar`, `GET {id}/qr.png` (PNG generado con QRCoder **en el servidor**); token opaco de 32 hex en `Equipos.QRCode` (`nvarchar(64)`, índice único filtrado) | `EquipoQrModal`: imagen como data URI, descarga PNG, impresión, regeneración con confirmación | ✅ |
+| Consulta por QR | `GET qr/{token}` `[AllowAnonymous]`: ficha del equipo activo + checklists activos; nunca expone el token ni datos de usuarios | `ConsultaQr.razor` (`/equipos/qr/{token}`) probada a 375 px | ✅ |
+| Control de acceso por rol | `ChecklistsController` y `PreguntasChecklistController`: lectura `Administrador,Técnico,Auditor`; mutación `Administrador`. Verificado: sin token → 401 | `AdminRouteGuard` en pantallas de administración | ✅ |
+
+Verificación en vivo (API `https://localhost:7296`, cliente `https://localhost:7267`):
+login → `POST /equipos/1/qr` (nuevo) → segunda llamada devuelve el mismo token →
+`qr.png` 200 `image/png` (401 sin token) → consulta pública 200 con checklists activos →
+regenerar → el token anterior responde 404. `nueva-version` copia 5 preguntas con orden 1–5 y
+deja la 1.0 histórica; `versiones` marca la 1.0 con `TieneRespuestas`.
+
+Decisión de alcance documentada: el MVP **no asocia checklists a equipos ni a categorías**
+(no existe en el SRS), así que la consulta por QR devuelve todas las versiones activas. Si
+ECAR lo pide, es una tabla puente nueva (fase posterior).
+
+---
+
+## 4. Pantallas del cliente
 
 | Pantalla | Ruta | Origen de datos |
 |---|---|---|
-| Login | `/login` | API real (`/api/auth/login`) |
-| Equipos (admin) | `/admin/equipos` | API real |
-| Ubicaciones (admin) | `/ubicaciones` | API real *(migrada del mock en esta iteración)* |
+| Login | `/login` | API real |
+| Inicio | `/` | — |
+| Equipos (admin) + modal QR | `/admin/equipos` | API real ✅ |
+| Consulta pública por QR | `/equipos/qr/{token}` | API real ✅ (sin sesión) |
+| Ubicaciones | `/ubicaciones` | API real |
+| Categorías de equipo | `/categorias-equipo` | API real |
 | Usuarios (admin) | `/admin/users` | API real |
 | Roles (admin) | `/admin/roles` | API real |
-| Roles de Usuario (admin) | `/admin/usuarios-roles` | API real |
-| Categoría de Equipos | `/categorias-equipo` | API real |
-| Auditoría | `/auditoria` | API real (solo lectura) |
-| Checklists | `/checklists` | API real (CRUD) |
-| Inspecciones | `/inspecciones` | API real (CRUD) |
-| Evidencias | `/evidencias` | API real (CRUD) |
+| Roles de usuario (admin) | `/admin/usuarios-roles` | API real |
+| Checklists + versiones + nueva versión | `/checklists` | API real ✅ |
+| Preguntas de checklist (admin) | `/checklists/preguntas` | API real ✅ |
+| Inspecciones | `/inspecciones` | API real (CRUD básico, sin flujo de ejecución) |
+| Respuestas de inspección (admin) | `/inspecciones/respuestas` | **Mock** (`MockDataService`) — Fase 3 |
+| Evidencias | `/evidencias` | API real (solo texto; sin archivo) — Fase 3 |
 | Hallazgos | `/hallazgos` | API real (CRUD) |
-| Preguntas de Checklist (admin) | `/admin/preguntas-checklist` | **Mock** (`MockDataService`) — sin endpoint |
-| Respuestas de Inspección (admin) | `/admin/respuestas-inspeccion` | **Mock** (`MockDataService`) — sin endpoint |
+| Auditoría | `/auditoria` | API real (solo lectura) |
+
+`MockDataService` queda reducido a *Respuestas de inspección* y al lookup de preguntas que
+usa `RespuestaInspeccionModal`. Desaparece con la Fase 3.
 
 ---
 
-## 3. Backend — API
+## 5. Backend — API
 
-Todos los controladores devuelven `ApiResponse<T>`; los listados usan
-`PagedResultDto<T>` con parámetros `page` / `pageSize` / `search`. Inyectan `ECARDbContext`
-directamente (sin capa de servicios), salvo `AuthController`.
+Todos los controladores devuelven `ApiResponse<T>`; los listados usan `PagedResultDto<T>`.
+Inyectan `ECARDbContext` directamente, salvo `AuthController` (`AuthService`).
 
 | Controlador | Ruta base | Operaciones | Autorización |
 |---|---|---|---|
-| `AuthController` | `api/auth` | `login`, `validate-token` | Anónimo |
-| `UsuariosController` | `api/usuarios` | CRUD + asignación de roles, baja lógica, protección del último administrador | `[Authorize(Roles = "Administrador")]` |
-| `RolesController` | `api/roles` | CRUD | `[Authorize(Roles = "Administrador")]` |
-| `UsuariosRolController` | `api/usuariosrol` | CRUD de asignaciones + lookups `usuarios` / `roles` | `[Authorize(Roles = "Administrador")]` |
-| `CategoriasEquipoController` | `api/categoriasequipo` | CRUD; **409** si la categoría está en uso | Lectura: `Administrador,Técnico,Auditor`; mutación: `Administrador` *(añadido en esta iteración)* |
-| `UbicacionesController` | `api/ubicaciones` | CRUD; unicidad planta/área; **409** si está en uso | Lectura: `Administrador,Técnico,Auditor`; mutación: `Administrador` |
-| `EquiposController` | `api/equipos` | CRUD, baja lógica, ficha técnica (`GET {id}`), filtros (texto, criticidad, categoría, ubicación, planta, área, estado), lookups `categorias` / `ubicaciones` | Lectura: `Administrador,Técnico,Auditor`; mutación: `Administrador` |
-| `ChecklistsController` | `api/checklists` | CRUD (adelanto Fase 2) | ⚠️ Anónimo |
-| `InspeccionesController` | `api/inspecciones` | CRUD (adelanto Fase 3) | ⚠️ Anónimo |
-| `EvidenciasController` | `api/evidencias` | Alta/consulta/baja (adelanto Fase 3) | ⚠️ Anónimo |
-| `HallazgosController` | `api/hallazgos` | CRUD + filtro por inspección/estado (adelanto Fase 4) | ⚠️ Anónimo |
-| `AuditoriaController` | `api/auditoria` | Solo lectura (adelanto Fase 4; sin escritura automática) | ⚠️ Anónimo |
+| `AuthController` | `api/auth` | `login`, `validate` | Anónimo |
+| `UsuariosController` | `api/usuarios` | CRUD + roles, baja lógica, protección último admin | `Administrador` |
+| `RolesController` | `api/roles` | CRUD | `Administrador` |
+| `UsuariosRolController` | `api/usuariosrol` | CRUD + lookups | `Administrador` |
+| `CategoriasEquipoController` | `api/categoriasequipo` | CRUD; 409 si en uso | Lectura: 3 roles; mutación: `Administrador` |
+| `UbicacionesController` | `api/ubicaciones` | CRUD; unicidad planta/área; 409 si en uso | Lectura: 3 roles; mutación: `Administrador` |
+| `EquiposController` | `api/equipos` | CRUD, baja lógica, ficha, filtros, lookups, **QR** (`{id}/qr`, `{id}/qr/regenerar`, `{id}/qr.png`, `qr/{token}` público) | Lectura: 3 roles; mutación y QR: `Administrador`; `qr/{token}`: anónimo |
+| `ChecklistsController` | `api/checklists` | CRUD, **`{id}/versiones`, `{id}/nueva-version`** | Lectura: 3 roles; mutación: `Administrador` ✅ |
+| `PreguntasChecklistController` | `api/preguntaschecklist` | Listado paginado, `checklist/{id}`, CRUD | Lectura: 3 roles; mutación: `Administrador` ✅ |
+| `InspeccionesController` | `api/inspecciones` | CRUD básico; regla novedad→observación | ⚠️ Anónimo (Fase 3) |
+| `EvidenciasController` | `api/evidencias` | Alta/consulta/baja de un texto `Archivo` | ⚠️ Anónimo (Fase 3) |
+| `HallazgosController` | `api/hallazgos` | CRUD + filtros | ⚠️ Anónimo (Fase 4) |
+| `AuditoriaController` | `api/auditoria` | Solo lectura; sin escritura automática | ⚠️ Anónimo (Fase 4) |
 
 ### Autenticación
 
-- JWT (emisión y validación); secreto y cadena de conexión en User Secrets.
+- JWT con claims `NameIdentifier` (= `IdUsuario`), `Email`, `Name`, `Role` (uno por rol). Fase 3
+  debe tomar el usuario del token, no del body (regla SRS #2).
 - Modos `ECARAuthentication:Mode`: `Local` (BCrypt), `ActiveDirectory` (LDAP/TLS), `Hybrid`.
-- La conexión real con AD requiere que ECAR entregue servidor, puerto, dominio y cuenta de
-  prueba; el código ya lo activa por configuración sin recompilar.
+- Secretos en User Secrets (`JWT:Secret`, `ConnectionStrings:ECARConnection`, `AdminPassword`).
+- Nueva clave de configuración **`Cliente:BaseUrl`** (`appsettings.json`): URL pública del
+  cliente que se codifica en las etiquetas QR. **Debe cambiarse en cada ambiente** (en
+  producción, la URL del IIS de ECAR).
 
 ### Reglas de negocio implementadas
 
-- No se puede desactivar/eliminar al último administrador activo.
-- No se puede borrar una categoría o ubicación en uso (HTTP 409).
-- Unicidad: `CodigoInterno` y `ActivoFijo` de equipo, `Nombre` de rol/categoría,
-  `Planta+Area` de ubicación, `Correo` de usuario, `Nombre+Version` de checklist.
-- Equipos y ubicaciones se desactivan/bloquean en vez de borrarse para preservar trazabilidad.
+- Último administrador activo protegido; catálogos en uso no se borran (409).
+- Unicidad: `CodigoInterno`, `ActivoFijo`, `QRCode`, `Nombre` de rol/categoría, `Planta+Area`,
+  `Correo`, `Nombre+Version` de checklist, `IdInspeccion+IdPregunta` en respuestas.
+- Solo una versión activa por nombre de checklist; crear versión desactiva las anteriores.
+- Un checklist o pregunta ya respondida en una inspección no se modifica (409): SRS #6.
+- Orden de preguntas único por checklist y asignado por el servidor.
+- Inspecciones: si `Resultado` contiene "novedad", `Observaciones` es obligatoria (SRS #4).
 
 ---
 
-## 4. Modelo de datos y jerarquía
+## 6. Modelo de datos
 
-Las **13 tablas del SRS ya existen** en la migración `20260817142004_InitialCreate`
-(la segunda migración, `20260817155507_AddPasswordToUsuarios`, añade `PasswordHash`).
-`dotnet ef migrations has-pending-model-changes` → *sin cambios pendientes*.
+13 tablas del SRS en `20260817142004_InitialCreate`; `20260817155507` añade `PasswordHash`;
+`20260914011254` añade `PreguntasChecklist.Orden`; **`20260916172707_AgregarTokenQrEquipo`**
+acorta `Equipos.QRCode` a `nvarchar(64)`, crea el índice único filtrado `IX_Equipos_QRCode`,
+limpia los valores libres previos de `QRCode` y renumera las preguntas con `Orden = 0`.
+`has-pending-model-changes` → sin cambios.
 
-> **El esquema cubre el SRS completo, no solo la Fase 1. No falta ninguna tabla ni
-> columna para Fase 1 ni para fases posteriores.** Lo que falta en fases 2–4 es lógica de
-> aplicación (endpoints, escritura de auditoría, reportes), no estructura de base de datos.
+Hallazgos del modelo que **deben resolverse al inicio de Fase 3** (detalle y responsable en
+[`PLAN_FASE3_TAREAS.md`](PLAN_FASE3_TAREAS.md)):
 
-### Jerarquía de claves foráneas
-
-```
-Rol ──< UsuarioRol >── Usuario ──< Inspeccion >── Equipo >── CategoriaEquipo
-                            │            │            └────── Ubicacion
-                            │            ├──< RespuestaInspeccion >── PreguntaChecklist >── Checklist
-                            │            ├──< Evidencia
-                            │            └──< Hallazgo
-                            └──< (Inspeccion.IdUsuario)
-
-Auditoria ── tabla transversal, sin FK (Tabla + RegistroId + FechaHora)
-```
-
-| Tabla | PK | FKs | Notas |
-|---|---|---|---|
-| `Roles` | `IdRol` | — | catálogo de seguridad |
-| `Usuarios` | `IdUsuario` | — | `PasswordHash`, `UsuarioAD` (único, filtrado) |
-| `UsuarioRol` | `Id` | `IdUsuario` → Usuarios, `IdRol` → Roles | único (`IdUsuario`,`IdRol`); N:M |
-| `CategoriasEquipo` | `IdCategoria` | — | catálogo |
-| `Ubicaciones` | `IdUbicacion` | — | único (`Planta`,`Area`) |
-| `Equipos` | `IdEquipo` | `IdCategoria` → CategoriasEquipo, `IdUbicacion` → Ubicaciones | baja lógica (`Activo`), `QRCode` |
-| `Checklists` | `IdChecklist` | — | versionado (`Nombre`,`Version`) |
-| `PreguntasChecklist` | `IdPregunta` | `IdChecklist` → Checklists (cascade) | |
-| `Inspecciones` | `IdInspeccion` | `IdEquipo` → Equipos, `IdUsuario` → Usuarios, `ChecklistIdChecklist` → Checklists | `FirmaDigital`, `Resultado` |
-| `RespuestasInspeccion` | `IdRespuesta` | `IdInspeccion` → Inspecciones (cascade), `IdPregunta` → PreguntasChecklist (cascade) | único (`IdInspeccion`,`IdPregunta`) |
-| `Evidencias` | `IdEvidencia` | `IdInspeccion` → Inspecciones (cascade) | `Archivo`, `UsuarioCarga` |
-| `Hallazgos` | `IdHallazgo` | `IdInspeccion` → Inspecciones (cascade) | `Criticidad`, `Estado` |
-| `Auditoria` | `IdAuditoria` | — | índices por `Tabla`, `RegistroId`, `Accion`, `Usuario`, `FechaHora` |
+| Tema | Situación | Consecuencia |
+|---|---|---|
+| Inspección → checklist | `Inspeccion` no tiene `IdChecklist`; EF creó la FK sombra `ChecklistIdChecklist` desde `Checklist.Inspecciones` | No se sabe con qué versión se ejecutó una inspección. Hacerlo explícito |
+| Estado de la inspección | Sin columna de estado ni fecha de cierre | No se distingue "en curso" de "cerrada" para aplicar inmutabilidad (SRS #6) |
+| Evidencias | `Archivo` es texto libre; sin nombre original, tipo MIME, tamaño ni ruta física | Requiere decisión de almacenamiento y columnas nuevas |
 
 ---
 
-## 5. Cambios de esta iteración (31/08/2026)
+## 7. Cambios de esta iteración (13 – 16 de septiembre de 2026)
 
-### Build estabilizado (la solución no compilaba — 16 errores tras merges)
+### Integrados en `main` (PR #9 – #16)
 
-- `ECAR.Shared/DTOs/CreatePreguntaChecklistDto.cs`: se añade `IdChecklist` (ya existía en
-  `UpdatePreguntaChecklistDto` y lo consumían el modal y el mock).
-- `ECAR.Client/Services/HttpClientService.cs`: se añaden los métodos que las páginas ya
-  invocaban pero nunca se implementaron:
-  - Equipos: `GetEquipoAsync`, `CreateEquipoAsync`, `UpdateEquipoAsync`, `DeleteEquipoAsync`,
-    parámetro `criticidad` en `GetEquiposAsync`, lookups `GetEquipoCategoriasLookupAsync` /
-    `GetEquipoUbicacionesLookupAsync`.
-  - Asignaciones usuario–rol: `GetUsuariosRolAsync`, `CreateUsuarioRolAsync`,
-    `UpdateUsuarioRolAsync`, `DeleteUsuarioRolAsync`, `GetUsuariosLookupAsync`,
-    `GetRolesLookupAsync`.
-  - Ubicaciones: `GetUbicacionesAsync`, `CreateUbicacionAsync`, `UpdateUbicacionAsync`,
-    `DeleteUbicacionAsync`.
-- `ECAR.Client/Pages/Admin/Equipos.razor`: 2 llamadas de lookup apuntadas a los métodos nuevos.
-- `ECAR.API.Tests/BackendPhaseOneTests.cs`: `DeleteCategoria` → `DeleteCategoriaEquipo`.
+- QR (Gary): `EquipoQrModal`, `ConsultaQr.razor` — maquetas.
+- Versionado en la interfaz (Santiago): `VersionesChecklistModal`, `NuevaVersionChecklistDialog` — maquetas.
+- FE-0 (Juan Alberto): 13 métodos en `HttpClientService`, DTOs de versión/QR, menú, `GUIA_FRONTEND_FASE2.md`.
+- FE-1 (Erica): `PreguntasChecklist.razor` y modal migrados del mock al API.
+- Backend preguntas: `PreguntasChecklistController` y migración `Orden`.
 
-### Duplicados / código muerto eliminado
+### Cierre de Fase 2 — 16/09, pendiente de PR (`feature_FE_0_ServiceHTTP_nave_y_revision`)
 
-- `ECAR.Infrastructure/Data/ECARDbContext.cs`: se elimina el segundo índice sobre
-  `Usuario.Correo` (redundante con el índice único; EF los fusionaba).
-- `ECAR.Infrastructure/Data/DataSeeder.cs`: se elimina el método privado
-  `SeedCatalogoEquiposAsync` — nunca se invocaba y definía un catálogo de categorías
-  **contradictorio** con el seed real.
-- `ECAR.Client/Services/MockDataService.cs`: se elimina la sección de Ubicaciones (duplicaba
-  el CRUD real). El mock queda acotado a Preguntas/Respuestas (Fase 2/3).
+**Backend**
+- `ChecklistsController`: `[Authorize]` por rol; `GET {id}/versiones`; `POST {id}/nueva-version`;
+  409 al reemplazar preguntas de un checklist con respuestas; `Orden` secuencial al crear/editar;
+  `Orden` incluido en las proyecciones.
+- `PreguntasChecklistController`: `[Authorize]` activado; `GET` paginado con `search` e
+  `idChecklist`; `Orden` automático (`max + 1`), no editable; sin validación de duplicados.
+- `EquiposController`: `POST {id}/qr`, `PUT {id}/qr/regenerar`, `GET {id}/qr.png`,
+  `GET qr/{token}` público; `QRCode` deja de aceptarse en `Create/UpdateEquipoDto`.
+- Paquete `QRCoder 1.8.0`; clave `Cliente:BaseUrl`; `EquipoQrDto.EsNuevo`.
+- `Equipo.QRCode` `[MaxLength(64)]` + índice único filtrado; migración `AgregarTokenQrEquipo`.
+- `BackendPhaseTwoTests.cs`: 9 pruebas (versionamiento, bloqueo por respuestas, orden
+  automático, QR idempotente/regenerar, consulta pública, PNG en servidor).
 
-### Consistencia y funcionamiento
-
-- `CategoriasEquipoController`: se añade `[Authorize]` (antes era **anónimo**) — lectura para
-  `Administrador,Técnico,Auditor` y mutaciones solo `Administrador`, igual que `EquiposController`.
-- `CategoriasEquipoController.DeleteCategoriaEquipo`: devuelve **409 Conflict** (antes 400)
-  cuando la categoría está en uso, igual criterio que `UbicacionesController`.
-- `ECAR.Client/Pages/Ubicacion.razor` y `Components/UbicacionModal.razor`: migradas de
-  `MockDataService` al API real (`HttpClientService`).
-- `ECAR.Client/Program.cs`: se registra `MockDataService` en DI (antes lo inyectaban páginas
-  sin estar registrado → fallo en runtime).
-- `ECAR.Client/Layout/MainLayout.razor`: enlace a `/ubicaciones` en el menú de administración.
-
-### Evaluación de la rama `feature/jwt-auth-roles-authorization`
-
-Rama de Simón, basada en Fase 0. Contiene dos cosas:
-
-1. **`[Authorize]` en `UsuariosController` / `RolesController`** con lectura para
-   `Administrador,Técnico,Auditor`. **No se integra:** `main` ya protege ambos controladores
-   con `[Authorize(Roles = "Administrador")]`, que es *más* restrictivo y coherente con el
-   SRS (Técnico y Auditor no administran usuarios ni roles).
-2. **Proyecto de pruebas `ECAR.Tests` con `AuthServiceTests.cs`** (11 pruebas del login JWT y
-   la validación de token). **Se integra el valor, no el proyecto duplicado:** las pruebas se
-   portaron a `ECAR.API.Tests/AuthServiceTests.cs` adaptadas al constructor actual de
-   `AuthService` (4 parámetros, modo `Local` con adaptador AD nulo). Cubren: login correcto,
-   login por `UsuarioAD`, contraseña incorrecta, usuario inexistente, usuario inactivo, roles
-   en el token, y token válido / mal formado / firmado con otra clave / vencido.
-
-## 5.1. Correcciones del 01/09/2026
-
-### Roles no se guardaban al crear un usuario
-
-`Components/UserModal.razor` usaba `@bind-Values` en el `MudSelect` de roles, pero el
-parámetro de MudBlazor se llama `SelectedValues`. Al no existir `Values`, el atributo lo
-absorbía `MudComponentBase.UserAttributes` (captura de atributos no reconocidos) y el enlace
-nunca ocurría: el campo quedaba vacío, se enviaba `RoleIds = null` y el usuario se creaba sin
-ninguna fila en `UsuarioRol`. El analizador lo advertía como `MUD0002`, no como error.
-
-- Se cambia a `@bind-SelectedValues` con `IReadOnlyCollection<long>` y se añade `ToStringFunc`
-  para mostrar nombres de rol en lugar de identificadores.
-- `RoleIds` pasa a enviarse siempre como lista: con `null` la API interpretaba «no tocar los
-  roles», así que era imposible dejar un usuario sin ninguno.
-
-### Preguntas de checklist: «La solicitud contiene datos inválidos»
-
-`CreatePreguntaChecklistDto.IdChecklist` tenía `[Range(1, long.MaxValue)]`, pero cuando la
-pregunta viaja anidada en `CreateChecklistDto`/`UpdateChecklistDto` ese identificador aún no
-existe (lo asigna el servidor), así que llegaba en `0` y el filtro global de `Program.cs`
-rechazaba el checklist completo. Se retira el `[Range]`.
-
-### Tipos de respuesta acotados a un catálogo
-
-El tipo de respuesta era un campo de texto libre en el modal de checklist. Se crea
-`ECAR.Shared/TiposRespuesta.cs` con dos valores —`SiNo` («Sí / No», dos casillas donde se
-marca la correcta) y `Texto` («Rellenar información»)—, un desplegable en lugar del texto
-libre, validación en `ChecklistsController` y el componente `RespuestaPreguntaInput.razor`,
-que dibuja el control correspondiente al responder. Detalle en
-[`docs/CAMBIOS_BASE_DATOS.md`](CAMBIOS_BASE_DATOS.md), sección 7.
-
-### Equipo e inspector vacíos al registrar una inspección
-
-`InspeccionModal` pedía `GetEquiposAsync(1, 200)` y `GetUsuariosAsync(1, 200)`, pero
-`EquiposController` y `UsuariosController` validan `pageSize is < 1 or > 100` y respondían
-**400**. El cliente descartaba el error en silencio (`?.Data?.Data ?? new List<>()`), así que
-ambos desplegables aparecían vacíos sin ningún mensaje.
-
-- Los dos `MudSelect` se reemplazan por `MudAutocomplete` con búsqueda **resuelta en el API**
-  (`search`, 20 resultados por consulta): el equipo filtra por código, nombre, marca, modelo,
-  activo fijo o serial; el inspector por nombre, correo o usuario AD. Así el formulario ya no
-  depende de traer el catálogo completo y sirve con volúmenes grandes.
-- En modo edición, equipo e inspector se muestran como campos de solo lectura (no son
-  editables después del registro).
-- Los fallos de carga ahora se avisan por `Snackbar` en vez de quedar en un desplegable vacío.
-
-**Nota de contrato**: `Equipos`, `Roles`, `Ubicaciones`, `Usuarios` y `UsuariosRol` limitan
-`pageSize` a 100; `Checklists`, `Inspecciones`, `Evidencias`, `Hallazgos`, `CategoriasEquipo`
-y `Auditoria` no validan el rango. Conviene unificar el criterio.
-
-### Comentarios del código en español
-
-Se tradujeron al español los comentarios en inglés de los archivos escritos a mano (38
-archivos entre API, Infrastructure, Shared y Client). Quedan sin tocar las migraciones de EF
-y las cabeceras `<auto-generated>`.
-
-### Documentación nueva
-
-[`docs/CAMBIOS_BASE_DATOS.md`](CAMBIOS_BASE_DATOS.md): trazabilidad entre el modelo de datos
-de la sección 5 del SRS y el esquema implementado (columnas nuevas, cambios de tipo,
-nulabilidad, índices, reglas de borrado y datos semilla).
-
----
+**Frontend**
+- `EquipoQrModal`, `ConsultaQr`, `VersionesChecklistModal`, `NuevaVersionChecklistDialog`,
+  `Checklists.razor`: conectados al API; eliminados todos los `TODO`, mocks y el servicio
+  externo `api.qrserver.com`.
+- `EquipoModal`: se retira el campo de texto "Código QR" (el token lo genera el servidor).
+- `Equipos.razor`: corregido un residuo de merge que anidaba el botón QR dentro del botón
+  Eliminar (aparecían dos "QR" y una papelera suelta).
+- `PreguntasChecklist.razor` / `PreguntaChecklistModal`: endpoint paginado, búsqueda con
+  debounce, columna Orden, sin campo Orden en el modal, sin `MockDataService`.
+- `MockDataService`: retirado el CRUD de preguntas (tarea 5 de FE-0 en la guía de Fase 2).
+- `HttpClientService`: eliminados 3 métodos duplicados que impedían compilar.
 
 ### Verificación
 
 ```powershell
-dotnet build ECAR.AuditoriaEquipos.slnx --no-restore          # 0 errores
-dotnet test ECAR.API.Tests/ECAR.API.Tests.csproj -c Release    # 17/17 correctas
+dotnet build ECAR.AuditoriaEquipos.slnx                                                        # 0 errores
+dotnet test ECAR.API.Tests/ECAR.API.Tests.csproj                                               # 26/26 correctas
 dotnet ef migrations has-pending-model-changes --project ECAR.Infrastructure --startup-project ECAR.API  # sin cambios
 ```
 
+Avisos del cliente: 26 `MUD0002` + 72 `CS8602` + 2 `CS8601` (sin cambios; ninguno nuevo).
+
 ---
 
-## 6. Pendientes y deuda técnica
+## 8. Pendientes y deuda técnica
 
-- **Auditoría automática (Fase 4):** `AuditoriaController` es solo lectura; falta el
-  interceptor/`SaveChanges` que registre altas, bajas y cambios de forma inmutable.
-- **QR (Fase 2):** el campo `Equipos.QRCode` existe pero no hay generación ni lectura.
-- **Reportes (Fase 4):** exportación PDF/Excel no implementada.
-- **Autorización de servidor:** los controladores adelantados de fases posteriores
-  (`ChecklistsController`, `InspeccionesController`, `EvidenciasController`,
-  `HallazgosController`, `AuditoriaController`) siguen siendo **anónimos**; deben recibir
-  `[Authorize]` al implementarse su fase. Los de Fase 1 ya están protegidos.
-- **Solape funcional:** `Pages/Admin/Users.razor` (+`UserModal`, con selección múltiple de
-  roles) y `Pages/Admin/UsuariosRoles.razor` (+`UsuarioRolModal`, CRUD de la tabla puente)
-  cubren en parte la misma necesidad. Conviene decidir cuál es la vía oficial.
-- **Pantallas Fase 2/3 con mock:** `preguntas-checklist` y `respuestas-inspeccion` usan
-  `MockDataService`; requieren sus controladores (`PreguntasChecklistController`,
-  `RespuestasInspeccionController`) y métodos en `HttpClientService`.
-- **Warnings de compilación:** analizador MudBlazor `MUD0002` por `SelectedPageChanged` en
-  `MudPagination` (14 páginas) y `CS8602` en las páginas de Evidencias/Hallazgos. No bloquean
-  el build, pero conviene revisarlos: el mismo aviso sobre `MudSelect` escondía el fallo de
-  asignación de roles descrito en 5.1.
-- **Paginación inconsistente:** solo cinco controladores validan `pageSize <= 100`. Unificar
-  el límite (o quitarlo) evita repetir el 400 silencioso de los desplegables de inspecciones.
-- **Despliegue IIS:** validar en el servidor destino el Hosting Bundle .NET 10, certificado
-  HTTPS, identidad del Application Pool, cadena SQL y acceso LDAP.
+### Para cerrar formalmente la Entrega 3 (semana 6)
+
+1. Abrir PR de `feature_FE_0_ServiceHTTP_nave_y_revision` → `develop` → `main`, con revisión
+   cruzada BE-0 / FE-0.
+2. Cada integrante aplica la migración (`dotnet ef database update` o arrancar el API) — la
+   migración limpia `QRCode` y renumera `Orden`.
+3. Fijar `Cliente:BaseUrl` por ambiente antes de imprimir etiquetas reales.
+4. Sesión de demostración a ECAR: checklists, preguntas, versiones, QR e impresión, consulta
+   desde un teléfono.
+
+### Deuda técnica
+
+- **Controladores anónimos** de fases posteriores: Inspecciones, Evidencias, Hallazgos,
+  Auditoría. Se protegen al implementar su fase (Fase 3 los dos primeros).
+- **Regla SRS #2 sin cumplir:** `CreateInspeccionDto.IdUsuario` viene del body.
+- **Auditoría automática (Fase 4)**, **reportes (Fase 4)**, **dashboard (Fase 5)**: no iniciados.
+- **Avisos de compilación:** 26 `MUD0002` (`SelectedPageChanged` en `MudPagination`, 13
+  páginas) + 74 nullability. Ya ocultaron un error real (roles de usuario). PR de limpieza.
+- **`pageSize` inconsistente:** 5 controladores validan `<= 100`, 8 no.
+- **Solape Users/UsuariosRoles:** dos vías para asignar roles; decidir la oficial.
+- **Codificación:** `PreguntasChecklistController.cs` y `Entities/PreguntaChecklist.cs` están
+  en UTF-16 (git los trata como binarios, sin diff en los PR). Convertir a UTF-8 en un commit
+  aislado.
+- **Huecos en `Orden`** al borrar preguntas (1, 2, 4). No afecta al orden ni a `max + 1`;
+  renumerar al borrar es opcional.
+- **Despliegue IIS:** Hosting Bundle .NET 10, HTTPS, identidad del pool, SQL, LDAP.
+
+### Insumos pendientes de ECAR (sin cambios desde el 08/09)
+
+Active Directory (servidor/puerto/dominio/cuenta), **almacenamiento de evidencias** y
+**alcance de la firma digital** (ambos bloquean el diseño de Fase 3), periodicidad de
+inspecciones, ambiente de despliegue, validación de .NET 10 frente al .NET 8 del SRS.

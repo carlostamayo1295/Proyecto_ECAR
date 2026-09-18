@@ -57,6 +57,14 @@
                                 StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar
                             </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Tertiary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.History" OnClick="() => OpenVersionesDialog(context)" Class="action-button">
+                                Versiones
+                            </MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenNuevaVersionDialog(context)" Class="action-button">
+                                Nueva versión
+                            </MudButton>
                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteChecklist(context)" Class="action-button">
                                 @(context.Activo ? "Desactivar" : "Activar")
@@ -101,7 +109,10 @@
 
             if (result != null && result.Success && result.Data != null)
             {
-                checklists = result.Data.Data ?? new List<ChecklistDto>();
+                checklists = (result.Data.Data ?? new List<ChecklistDto>())
+                    .OrderBy(c => c.Nombre)
+                    .ThenByDescending(c => c.Version)
+                    .ToList();
                 totalPages = result.Data.TotalPages;
             }
             else
@@ -155,6 +166,25 @@
     {
         var parameters = new DialogParameters { ["Checklist"] = checklist };
         await DialogService.ShowAsync<ChecklistDetailModal>("Detalle del Checklist", parameters);
+    }
+
+    private async Task OpenVersionesDialog(ChecklistDto checklist)
+    {
+        var parameters = new DialogParameters { ["Checklist"] = checklist };
+        await DialogService.ShowAsync<VersionesChecklistModal>("Versiones del Checklist", parameters);
+    }
+
+    private async Task OpenNuevaVersionDialog(ChecklistDto checklist)
+    {
+        var parameters = new DialogParameters { ["Checklist"] = checklist };
+        var dialog = await DialogService.ShowAsync<NuevaVersionChecklistDialog>("Nueva Versión", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            // La versión nueva y la desactivación de la anterior las hizo el API: se recarga el listado
+            await LoadChecklistsAsync();
+        }
     }
 
     private async Task DeleteChecklist(ChecklistDto checklist)
