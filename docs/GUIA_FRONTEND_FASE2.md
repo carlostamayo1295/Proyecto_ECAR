@@ -86,5 +86,11 @@ horizontal.
 | 1 | Métodos en `HttpClientService` | ✅ Hecho (tabla de arriba) |
 | 2 | Entrada "Preguntas de Checklist" en el menú de administración | ✅ Hecho (`MainLayout.razor`) |
 | 3 | Criterio visual compartido | ✅ Este documento |
-| 4 | Revisión de PRs | Continua durante la fase |
-| 5 | Retirar la sección de preguntas de `MockDataService` | Pendiente de que FE-1 termine la migración |
+| 4 | Revisión de PRs | ✅ Hecho (PR #9 – #16) |
+| 5 | Retirar la sección de preguntas de `MockDataService` | ✅ Hecho (16/09; queda solo el lookup para Respuestas, Fase 3) |
+| 6 | Conectar versionamiento y QR al API una vez publicados los endpoints | ✅ Hecho (16/09): `VersionesChecklistModal`, `NuevaVersionChecklistDialog`, `EquipoQrModal`, `ConsultaQr` sin mocks |
+
+**Estado de la fase (16/09/2026):** los 13 endpoints de la tabla de §1 existen en el API y
+las cuatro pantallas están conectadas. La fase se considera cerrada en código; ver
+[`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md) §3 y el plan de la siguiente fase en
+[`PLAN_FASE3_TAREAS.md`](PLAN_FASE3_TAREAS.md).

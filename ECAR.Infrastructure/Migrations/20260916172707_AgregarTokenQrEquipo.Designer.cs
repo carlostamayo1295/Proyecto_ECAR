@@ -4,6 +4,7 @@ using ECAR.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ECAR.Infrastructure.Migrations
 {
     [DbContext(typeof(ECARDbContext))]
-    partial class ECARDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916172707_AgregarTokenQrEquipo")]
+    partial class AgregarTokenQrEquipo
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

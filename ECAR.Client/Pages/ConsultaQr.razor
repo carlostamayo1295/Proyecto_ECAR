@@ -1,5 +1,6 @@
 ﻿@page "/equipos/qr/{Token}"
 @layout EmptyLayout
+@inject HttpClientService HttpClientService
 
 <div class="qr-page">
     @if (cargando)
@@ -25,14 +26,14 @@
         <MudCard Class="qr-card">
             <MudCardHeader>
                 <CardHeaderContent>
-                    <MudText Typo="Typo.h6">@equipo.NombreEquipo</MudText>
+                    <MudText Typo="Typo.h6">@equipo.Equipo.NombreEquipo</MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                        @equipo.CodigoInterno
+                        @equipo.Equipo.CodigoInterno
                     </MudText>
                 </CardHeaderContent>
                 <CardHeaderActions>
-                    <MudChip T="string" Color="@CriticidadColor(equipo.Criticidad)" Size="Size.Small">
-                        @equipo.Criticidad
+                    <MudChip T="string" Color="@CriticidadColor(equipo.Equipo.Criticidad)" Size="Size.Small">
+                        @(equipo.Equipo.Criticidad ?? "Sin criticidad")
                     </MudChip>
                 </CardHeaderActions>
             </MudCardHeader>
@@ -40,10 +41,10 @@
             <MudCardContent>
                 <MudSimpleTable Dense="true" Elevation="0">
                     <tbody>
-                        <tr><td>Marca</td><td>@equipo.Marca</td></tr>
-                        <tr><td>Modelo</td><td>@equipo.Modelo</td></tr>
-                        <tr><td>Categoría</td><td>@equipo.Categoria</td></tr>
-                        <tr><td>Ubicación</td><td>@equipo.Ubicacion</td></tr>
+                        <tr><td>Marca</td><td>@equipo.Equipo.Marca</td></tr>
+                        <tr><td>Modelo</td><td>@equipo.Equipo.Modelo</td></tr>
+                        <tr><td>Categoría</td><td>@equipo.Equipo.CategoriaNombre</td></tr>
+                        <tr><td>Ubicación</td><td>@equipo.Equipo.UbicacionNombre</td></tr>
                     </tbody>
                 </MudSimpleTable>
 
@@ -83,51 +84,20 @@
     [Parameter] public string Token { get; set; } = string.Empty;
 
     private bool cargando = true;
-    private ConsultaQrMock? equipo;
+    private ConsultaQrDto? equipo;
 
-    // TODO: reemplazar por HttpClientService.GetEquipoPorQrAsync(Token) cuando
-    // BE-3 entregue GET /api/equipos/qr/{token} (endpoint público, [AllowAnonymous]).
-    private const string TokenValidoDePrueba = "abc123";
-
+    // Consulta pública: no requiere sesión. Un token desconocido o un equipo inactivo devuelven 404
     protected override async Task OnInitializedAsync()
     {
-        await Task.Delay(400); // simula latencia de red
-
-        equipo = Token == TokenValidoDePrueba
-            ? new ConsultaQrMock(
-                CodigoInterno: "EQ-001",
-                NombreEquipo: "Balanza Analítica",
-                Marca: "Mettler Toledo",
-                Modelo: "MS204",
-                Criticidad: "Alta",
-                Categoria: "Instrumentos de medición",
-                Ubicacion: "Planta 1 - Calidad",
-                ChecklistsActivos: new List<ChecklistMock>
-                {
-                    new("Inspección Preventiva - Equipos Críticos", "2.0"),
-                    new("Verificación de Calibración", "1.0"),
-                })
-            : null;
-
+        var result = await HttpClientService.GetEquipoByQrAsync(Token);
+        equipo = result != null && result.Success ? result.Data : null;
         cargando = false;
     }
 
-    private Color CriticidadColor(string criticidad) => criticidad switch
+    private Color CriticidadColor(string? criticidad) => criticidad switch
     {
         "Alta" => Color.Error,
         "Media" => Color.Warning,
         _ => Color.Default
     };
-
-    private record ConsultaQrMock(
-        string CodigoInterno,
-        string NombreEquipo,
-        string Marca,
-        string Modelo,
-        string Criticidad,
-        string Categoria,
-        string Ubicacion,
-        List<ChecklistMock> ChecklistsActivos);
-
-    private record ChecklistMock(string Nombre, string Version);
 }

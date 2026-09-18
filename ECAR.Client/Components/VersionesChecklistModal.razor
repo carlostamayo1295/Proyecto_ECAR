@@ -1,15 +1,17 @@
 @inject IDialogService DialogService
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
 
 <MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
     <TitleContent>
         <MudText Typo="Typo.h6">Versiones de "@Checklist?.Nombre"</MudText>
     </TitleContent>
     <DialogContent>
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-            Calculado localmente a partir de los checklists ya cargados con el mismo nombre — se reemplazará por GET /api/checklists/{id}/versiones cuando BE-1 lo entregue.
-        </MudAlert>
-
-        @if (versiones.Any())
+        @if (cargando)
+        {
+            <MudProgressLinear Indeterminate="true" Class="my-4" />
+        }
+        else if (versiones.Any())
         {
             <MudTable Items="versiones" Hover="true" Striped="true" Elevation="0" Dense="true">
                 <HeaderContent>
@@ -25,7 +27,15 @@
                         <MudChip T="string" Color="@(version.Activo ? Color.Success : Color.Default)"
                             Size="Size.Small" Variant="Variant.Outlined" Text="@(version.Activo ? "Activa" : "Histórica")" />
                     </MudTd>
-                    <MudTd>@version.Preguntas.Count</MudTd>
+                    <MudTd>
+                        @version.TotalPreguntas
+                        @if (version.TieneRespuestas)
+                        {
+                            <MudTooltip Text="Ya se usó en inspecciones: sus preguntas no se pueden modificar">
+                                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="ml-1" />
+                            </MudTooltip>
+                        }
+                    </MudTd>
                     <MudTd>@version.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
                     <MudTd>
                         <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
@@ -52,29 +62,40 @@
     [Parameter]
     public ChecklistDto? Checklist { get; set; }
 
-    [Parameter]
-    public List<ChecklistDto> Checklists { get; set; } = new();
+    private List<ChecklistVersionDto> versiones = new();
+    private bool cargando = true;
 
-    private List<ChecklistDto> versiones = new();
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // TODO: FE-0/BE-1 — reemplazar por HttpClientService.GetVersionesChecklistAsync(Checklist.IdChecklist)
-        // cuando el endpoint GET /api/checklists/{id}/versiones exista. Mientras tanto se filtran
-        // localmente, por Nombre, los checklists que la página ya tiene cargados, ya que el índice
-        // único (Nombre, Version) agrupa las versiones de un mismo checklist.
-        versiones = Checklist == null
-            ? new List<ChecklistDto>()
-            : Checklists
-                .Where(c => c.Nombre == Checklist.Nombre)
-                .OrderByDescending(c => c.Activo)
-                .ThenByDescending(c => c.Version)
-                .ToList();
+        if (Checklist == null)
+        {
+            cargando = false;
+            return;
+        }
+
+        var result = await HttpClientService.GetChecklistVersionesAsync(Checklist.IdChecklist);
+        if (result != null && result.Success && result.Data != null)
+        {
+            versiones = result.Data;
+        }
+        else
+        {
+            Snackbar.Add(result?.Message ?? "Error al cargar las versiones", Severity.Error);
+        }
+        cargando = false;
     }
 
-    private async Task VerVersion(ChecklistDto version)
+    // El detalle necesita las preguntas: se pide la versión completa al API
+    private async Task VerVersion(ChecklistVersionDto version)
     {
-        var parameters = new DialogParameters { ["Checklist"] = version };
+        var result = await HttpClientService.GetChecklistAsync(version.IdChecklist);
+        if (result == null || !result.Success || result.Data == null)
+        {
+            Snackbar.Add(result?.Message ?? "Error al cargar el checklist", Severity.Error);
+            return;
+        }
+
+        var parameters = new DialogParameters { ["Checklist"] = result.Data };
         await DialogService.ShowAsync<ChecklistDetailModal>("Detalle del Checklist", parameters);
     }
 

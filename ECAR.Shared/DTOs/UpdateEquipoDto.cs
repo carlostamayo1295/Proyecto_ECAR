@@ -32,7 +32,5 @@ public class UpdateEquipoDto
 
     public long? IdUbicacion { get; set; }
 
-    public string? QRCode { get; set; }
-
     public bool? Activo { get; set; }
 }

@@ -170,11 +170,7 @@
 
     private async Task OpenVersionesDialog(ChecklistDto checklist)
     {
-        var parameters = new DialogParameters
-        {
-            ["Checklist"] = checklist,
-            ["Checklists"] = checklists ?? new List<ChecklistDto>()
-        };
+        var parameters = new DialogParameters { ["Checklist"] = checklist };
         await DialogService.ShowAsync<VersionesChecklistModal>("Versiones del Checklist", parameters);
     }
 
@@ -184,53 +180,11 @@
         var dialog = await DialogService.ShowAsync<NuevaVersionChecklistDialog>("Nueva Versión", parameters);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled && result.Data is string nuevaVersion)
+        if (result != null && !result.Canceled)
         {
-            // TODO: FE-0/BE-1 — cuando CrearVersionChecklistAsync y el endpoint POST
-            // /api/checklists/{id}/nueva-version existan, reemplazar esta simulación local
-            // por la llamada real y un await LoadChecklistsAsync() para recargar del API.
-            SimularNuevaVersionLocal(checklist, nuevaVersion);
+            // La versión nueva y la desactivación de la anterior las hizo el API: se recarga el listado
+            await LoadChecklistsAsync();
         }
-    }
-
-    private void SimularNuevaVersionLocal(ChecklistDto origen, string nuevaVersion)
-    {
-        if (checklists == null)
-        {
-            return;
-        }
-
-        var index = checklists.FindIndex(c => c.IdChecklist == origen.IdChecklist);
-        if (index >= 0)
-        {
-            checklists[index] = new ChecklistDto
-            {
-                IdChecklist = origen.IdChecklist,
-                Nombre = origen.Nombre,
-                Version = origen.Version,
-                Activo = false,
-                FechaCreacion = origen.FechaCreacion,
-                Preguntas = origen.Preguntas
-            };
-        }
-
-        var nuevoId = (checklists.Count > 0 ? checklists.Max(c => c.IdChecklist) : 0) + 1;
-        checklists.Add(new ChecklistDto
-        {
-            IdChecklist = nuevoId,
-            Nombre = origen.Nombre,
-            Version = nuevaVersion,
-            Activo = true,
-            FechaCreacion = DateTime.UtcNow,
-            Preguntas = origen.Preguntas
-        });
-
-        checklists = checklists
-            .OrderBy(c => c.Nombre)
-            .ThenByDescending(c => c.Version)
-            .ToList();
-
-        Snackbar.Add($"Versión '{nuevaVersion}' creada (simulación local, pendiente del backend BE-1)", Severity.Success);
     }
 
     private async Task DeleteChecklist(ChecklistDto checklist)
