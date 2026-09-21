@@ -1,7 +1,9 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.API.Services;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,13 +11,16 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class InspeccionesController : ControllerBase
 {
     private readonly ECARDbContext _context;
+    private readonly ICurrentUser _currentUser;
 
-    public InspeccionesController(ECARDbContext context)
+    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     [HttpGet]
@@ -24,6 +29,7 @@ public class InspeccionesController : ControllerBase
         var query = _context.Inspecciones
             .Include(i => i.Equipo)
             .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(search))
@@ -47,7 +53,11 @@ public class InspeccionesController : ControllerBase
                 NombreEquipo = i.Equipo.NombreEquipo,
                 IdUsuario = i.IdUsuario,
                 NombreUsuario = i.Usuario.Nombre,
+                IdChecklist = i.IdChecklist,
+                NombreChecklist = i.Checklist.Nombre,
                 FechaInspeccion = i.FechaInspeccion,
+                Estado = i.Estado,
+                FechaCierre = i.FechaCierre,
                 Resultado = i.Resultado,
                 Observaciones = i.Observaciones,
                 TieneFirma = i.FirmaDigital != null && i.FirmaDigital != "",
@@ -73,6 +83,7 @@ public class InspeccionesController : ControllerBase
         var inspeccion = await _context.Inspecciones
             .Include(i => i.Equipo)
             .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
             .Include(i => i.Evidencias)
             .Include(i => i.Hallazgos)
             .FirstOrDefaultAsync(i => i.IdInspeccion == id);
@@ -94,10 +105,22 @@ public class InspeccionesController : ControllerBase
             return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El equipo indicado no existe"));
         }
 
-        var usuario = await _context.Usuarios.FindAsync(createDto.IdUsuario);
-        if (usuario == null)
+        var usuario = await _context.Usuarios.FindAsync(_currentUser.IdUsuario);
+        if (usuario == null || !usuario.Activo)
         {
-            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El usuario indicado no existe"));
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El usuario autenticado no existe o no está habilitado en ECAR"));
+        }
+
+        var checklist = createDto.IdChecklist.HasValue
+            ? await _context.Checklists.FirstOrDefaultAsync(c =>
+                c.IdChecklist == createDto.IdChecklist.Value && c.Activo)
+            : await _context.Checklists
+                .Where(c => c.Activo)
+                .OrderByDescending(c => c.FechaCreacion)
+                .FirstOrDefaultAsync();
+        if (checklist == null)
+        {
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("No existe un checklist activo para iniciar la inspección"));
         }
 
         // Regla de negocio: si existe novedad, la observación es obligatoria
@@ -111,7 +134,8 @@ public class InspeccionesController : ControllerBase
         var inspeccion = new Inspeccion
         {
             IdEquipo = createDto.IdEquipo,
-            IdUsuario = createDto.IdUsuario,
+            IdUsuario = usuario.IdUsuario,
+            IdChecklist = checklist.IdChecklist,
             FechaInspeccion = createDto.FechaInspeccion,
             Resultado = createDto.Resultado,
             Observaciones = createDto.Observaciones,
@@ -123,6 +147,7 @@ public class InspeccionesController : ControllerBase
 
         await _context.Entry(inspeccion).Reference(i => i.Equipo).LoadAsync();
         await _context.Entry(inspeccion).Reference(i => i.Usuario).LoadAsync();
+        await _context.Entry(inspeccion).Reference(i => i.Checklist).LoadAsync();
 
         return CreatedAtAction(nameof(GetInspeccion), new { id = inspeccion.IdInspeccion },
             ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección registrada exitosamente"));
@@ -134,6 +159,7 @@ public class InspeccionesController : ControllerBase
         var inspeccion = await _context.Inspecciones
             .Include(i => i.Equipo)
             .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
             .Include(i => i.Evidencias)
             .Include(i => i.Hallazgos)
             .FirstOrDefaultAsync(i => i.IdInspeccion == id);
@@ -190,7 +216,11 @@ public class InspeccionesController : ControllerBase
             NombreEquipo = i.Equipo?.NombreEquipo,
             IdUsuario = i.IdUsuario,
             NombreUsuario = i.Usuario?.Nombre,
+            IdChecklist = i.IdChecklist,
+            NombreChecklist = i.Checklist?.Nombre,
             FechaInspeccion = i.FechaInspeccion,
+            Estado = i.Estado,
+            FechaCierre = i.FechaCierre,
             Resultado = i.Resultado,
             Observaciones = i.Observaciones,
             TieneFirma = !string.IsNullOrEmpty(i.FirmaDigital),

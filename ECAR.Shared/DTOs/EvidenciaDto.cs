@@ -8,7 +8,11 @@ public class EvidenciaDto
     public long IdInspeccion { get; set; }
     public string? NombreEquipo { get; set; }
     public string Archivo { get; set; } = string.Empty;
+    public string NombreOriginal { get; set; } = string.Empty;
+    public string TipoContenido { get; set; } = string.Empty;
+    public long TamanoBytes { get; set; }
     public DateTime FechaCarga { get; set; }
+    public long IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
 }
 
@@ -20,7 +24,6 @@ public class CreateEvidenciaDto
     [Required(ErrorMessage = "El archivo es requerido")]
     public string Archivo { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "El usuario que carga la evidencia es requerido")]
-    [MaxLength(100, ErrorMessage = "El usuario no puede exceder 100 caracteres")]
-    public string UsuarioCarga { get; set; } = string.Empty;
+    // Se conserva temporalmente para no romper el cliente actual; el API toma el usuario del JWT.
+    public string? UsuarioCarga { get; set; }
 }
