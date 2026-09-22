@@ -135,6 +135,12 @@
     private bool isLoading = false;
     private string errorMessage = string.Empty;
 
+    // Página a la que volver tras iniciar sesión. La usan las pantallas protegidas
+    // (p. ej. ejecutar una inspección abierta desde el QR en el teléfono).
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    [Parameter]
+    public string? ReturnUrl { get; set; }
+
     private async Task HandleLogin()
     {
         if (string.IsNullOrWhiteSpace(loginDto.CorreoOrUsuarioAD) || string.IsNullOrWhiteSpace(loginDto.Password))
@@ -152,8 +158,10 @@
             
             if (result != null)
             {
-                // Login exitoso, redirigir a home (forceLoad para recargar el layout y reflejar roles/menú)
-                NavigationManager.NavigateTo("/", forceLoad: true);
+                // Login exitoso. forceLoad recarga el layout para reflejar roles y menú.
+                // Si se llegó aquí desde una página protegida, se vuelve a ella.
+                var destino = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+                NavigationManager.NavigateTo(destino, forceLoad: true);
             }
             else
             {

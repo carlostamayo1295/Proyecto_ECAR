@@ -1,0 +1,217 @@
+@page "/inspecciones/ejecutar/{IdInspeccion:long}"
+@inject HttpClientService HttpClientService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+@* Esqueleto de la ejecución de inspección (FE-0).
+   Carga el estado completo una sola vez y lo reparte a los tres componentes de paso.
+   FE-1, FE-2 y FE-3 solo tocan su propio componente: este archivo tiene un único dueño
+   para que los tres PR de la semana no choquen sobre el mismo fichero. *@
+
+<TecnicoRouteGuard>
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 pb-8">
+
+    @if (cargando)
+    {
+        <MudProgressLinear Indeterminate="true" Class="my-4" />
+    }
+    else if (inspeccion == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">
+            No fue posible cargar la inspección.
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-2"
+                       OnClick="@(() => NavigationManager.NavigateTo("/inspecciones"))">
+                Volver al listado
+            </MudButton>
+        </MudAlert>
+    }
+    else
+    {
+        <MudCard Class="mb-4">
+            <MudCardContent>
+                <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+                    <div>
+                        <MudText Typo="Typo.h6">@inspeccion.NombreEquipo</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @inspeccion.CodigoInterno · @inspeccion.UbicacionNombre
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="mt-1">
+                            @inspeccion.NombreChecklist
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ml-1">
+                                @($"v{inspeccion.VersionChecklist}")
+                            </MudChip>
+                        </MudText>
+                    </div>
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">En curso</MudChip>
+                </div>
+            </MudCardContent>
+        </MudCard>
+
+        <MudStepper @bind-ActiveIndex="pasoActivo" OnPreviewInteraction="PreviewInteraccionAsync">
+            <ChildContent>
+                <MudStep Title="Preguntas" SecondaryText="@ResumenPreguntas">
+                    <PasoPreguntas Inspeccion="inspeccion" OnRespuestasGuardadas="RefrescarContadores" />
+                </MudStep>
+
+                <MudStep Title="Evidencias" SecondaryText="@ResumenEvidencias">
+                    <PasoEvidencias Inspeccion="inspeccion" OnEvidenciasCambiadas="RefrescarContadores" />
+                </MudStep>
+
+                <MudStep Title="Firma">
+                    <PasoFirma Inspeccion="inspeccion" OnFirmada="IrAlResultado" OnVolverAPreguntas="IrAPreguntas" />
+                </MudStep>
+            </ChildContent>
+
+            @* Botonera propia: los textos por defecto de MudStepper están en inglés y el paso
+               de firma tiene su propio botón de cierre. *@
+            <ActionContent Context="stepper">
+                <div class="d-flex justify-space-between align-center gap-2 mt-4" style="width:100%">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                               Disabled="@(pasoActivo == 0)"
+                               StartIcon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => stepper.PreviousStepAsync())">
+                        Atrás
+                    </MudButton>
+
+                    @if (pasoActivo < UltimoPaso)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   EndIcon="@Icons.Material.Filled.ArrowForward"
+                                   OnClick="@(() => AvanzarAsync(stepper))">
+                            Siguiente
+                        </MudButton>
+                    }
+                </div>
+            </ActionContent>
+        </MudStepper>
+    }
+
+</MudContainer>
+</TecnicoRouteGuard>
+
+@code {
+    [Parameter] public long IdInspeccion { get; set; }
+
+    private InspeccionEjecucionDto? inspeccion;
+    private bool cargando = true;
+    private int pasoActivo;
+
+    /// <summary>Índice del paso de firma: ahí no se muestra "Siguiente".</summary>
+    private const int UltimoPaso = 2;
+
+    private string ResumenPreguntas => inspeccion == null
+        ? string.Empty
+        : $"{inspeccion.ObligatoriasRespondidas} de {inspeccion.TotalObligatorias} obligatorias";
+
+    private string ResumenEvidencias => inspeccion == null
+        ? string.Empty
+        : $"{inspeccion.Evidencias.Count} fotografía(s)";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        var result = await HttpClientService.GetInspeccionEjecucionAsync(IdInspeccion);
+
+        if (result == null || !result.Success || result.Data == null)
+        {
+            Snackbar.Add(result?.Message ?? "Error al cargar la inspección", Severity.Error);
+            inspeccion = null;
+            cargando = false;
+            return;
+        }
+
+        inspeccion = result.Data;
+
+        // Una inspección cerrada es solo lectura: se muestra su resultado, no el flujo.
+        if (inspeccion.EstaCerrada)
+        {
+            NavigationManager.NavigateTo($"/inspecciones/{IdInspeccion}/resultado", replace: true);
+            return;
+        }
+
+        RefrescarContadores();
+        cargando = false;
+    }
+
+    /// <summary>
+    /// Recalcula los contadores sobre la copia en memoria para no volver a pedir la inspección
+    /// tras cada guardado. El servidor sigue siendo la fuente de verdad al firmar.
+    /// </summary>
+    private void RefrescarContadores()
+    {
+        if (inspeccion == null)
+        {
+            return;
+        }
+
+        inspeccion.TotalObligatorias = inspeccion.Preguntas.Count(p => p.Obligatoria);
+        inspeccion.ObligatoriasRespondidas = inspeccion.Preguntas.Count(p => p.Obligatoria && !p.FaltaResponder);
+        inspeccion.TotalNovedades = inspeccion.Preguntas.Count(p => p.EsNovedad);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Avanza al siguiente paso solo si el paso de preguntas está completo.
+    /// La validación va aquí y no solo en <see cref="PreviewInteraccionAsync"/> porque
+    /// <c>NextStepAsync</c> no pasa por ese hook: el hook cubre los clics en la cabecera.
+    /// </summary>
+    private async Task AvanzarAsync(MudStepper stepper)
+    {
+        if (PuedeSalirDePreguntas())
+        {
+            await stepper.NextStepAsync();
+        }
+    }
+
+    /// <summary>Bloquea los clics directos en la cabecera de pasos. Retroceder siempre se permite.</summary>
+    private Task PreviewInteraccionAsync(StepperInteractionEventArgs args)
+    {
+        if (args.Action == StepAction.Activate && args.StepIndex > 0 && !PuedeSalirDePreguntas())
+        {
+            args.Cancel = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Comprueba las dos reglas que impiden dejar el paso de preguntas: obligatorias sin
+    /// responder (regla 3 del SRS) y novedades sin observación (regla 4). Avisa y devuelve false.
+    /// </summary>
+    private bool PuedeSalirDePreguntas()
+    {
+        if (inspeccion == null)
+        {
+            return false;
+        }
+
+        var faltantes = inspeccion.Preguntas.Count(p => p.FaltaResponder);
+        if (faltantes > 0)
+        {
+            Snackbar.Add($"Faltan {faltantes} pregunta(s) obligatoria(s) por responder", Severity.Warning);
+            return false;
+        }
+
+        var novedadSinObservacion = inspeccion.Preguntas
+            .Count(p => p.EsNovedad && string.IsNullOrWhiteSpace(p.Observacion));
+        if (novedadSinObservacion > 0)
+        {
+            Snackbar.Add($"{novedadSinObservacion} novedad(es) sin observación: la observación es obligatoria", Severity.Warning);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void IrAPreguntas() => pasoActivo = 0;
+
+    private void IrAlResultado(InspeccionResultadoDto resultado)
+    {
+        NavigationManager.NavigateTo($"/inspecciones/{resultado.IdInspeccion}/resultado", replace: true);
+    }
+}

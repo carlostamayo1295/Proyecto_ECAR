@@ -108,7 +108,7 @@ public class EvidenciasController : ControllerBase
         {
             IdInspeccion = createDto.IdInspeccion,
             Archivo = createDto.Archivo,
-            UsuarioCarga = createDto.UsuarioCarga,
+            UsuarioCarga = createDto.UsuarioCarga ?? string.Empty,
             FechaCarga = DateTime.UtcNow
         };
 

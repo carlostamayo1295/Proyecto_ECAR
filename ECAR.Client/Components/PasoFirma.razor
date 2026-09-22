@@ -1,0 +1,93 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+
+@* PASO 3 — Firma y cierre.  Dueño: FE-3 (Gary).
+
+   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-3):
+   1. Componente FirmaCanvas.razor: canvas con eventos pointer (ratón y táctil), botones
+      Limpiar / Confirmar, exporta el PNG en base64 con toDataURL. JS propio en
+      wwwroot/js/firma.js, sin librerías externas (misma política que el QR).
+   2. Resumen antes de firmar: equipo, checklist y versión, nº de respuestas, nº de novedades
+      y nº de evidencias.
+   3. Texto legal, ya redactado más abajo, visible antes del botón de firmar.
+   4. Si el API responde con obligatorias faltantes, mostrarlas y ofrecer volver al paso 1
+      con OnVolverAPreguntas.
+
+   Lo que ya está resuelto aquí: la llamada de firma, el manejo del data URI y el reparto
+   de errores de validación. *@
+
+<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+    Paso pendiente de implementar (FE-3). El contrato con el API ya está disponible.
+</MudAlert>
+
+<MudText Typo="Typo.body2" Class="mb-2">
+    @Inspeccion.Preguntas.Count respuesta(s) · @Inspeccion.TotalNovedades novedad(es) ·
+    @Inspeccion.Evidencias.Count fotografía(s)
+</MudText>
+
+<MudText Typo="Typo.caption" Class="mud-text-secondary">@TextoLegal</MudText>
+
+@code {
+    [Parameter, EditorRequired]
+    public InspeccionEjecucionDto Inspeccion { get; set; } = null!;
+
+    /// <summary>Se dispara con el resultado cuando la inspección queda firmada y cerrada.</summary>
+    [Parameter]
+    public EventCallback<InspeccionResultadoDto> OnFirmada { get; set; }
+
+    /// <summary>Devuelve al paso de preguntas cuando el API reporta obligatorias faltantes.</summary>
+    [Parameter]
+    public EventCallback OnVolverAPreguntas { get; set; }
+
+    protected const string TextoLegal =
+        "Al firmar, declaro que realicé esta inspección y que la información registrada es veraz. " +
+        "La inspección quedará cerrada y no podrá modificarse.";
+
+    private bool firmando;
+
+    /// <summary>
+    /// Firma y cierra la inspección. Recibe el PNG tal como lo produce el canvas (con o sin
+    /// el prefijo data:), porque el API solo acepta el base64 pelado.
+    /// </summary>
+    protected async Task FirmarAsync(string firmaPng, string? observaciones = null)
+    {
+        if (firmando || string.IsNullOrWhiteSpace(firmaPng))
+        {
+            Snackbar.Add("Debe dibujar la firma antes de cerrar la inspección", Severity.Warning);
+            return;
+        }
+
+        firmando = true;
+        var result = await HttpClientService.FirmarInspeccionAsync(Inspeccion.IdInspeccion, new FirmarInspeccionDto
+        {
+            FirmaPngBase64 = QuitarPrefijoDataUri(firmaPng),
+            Observaciones = observaciones
+        });
+        firmando = false;
+
+        if (result == null || !result.Success || result.Data == null)
+        {
+            Snackbar.Add(result?.Message ?? "Error al firmar la inspección", Severity.Error);
+
+            // El API detalla en Errors las preguntas obligatorias que faltan por responder.
+            if (result?.Errors is { Count: > 0 })
+            {
+                foreach (var error in result.Errors)
+                {
+                    Snackbar.Add(error, Severity.Warning);
+                }
+                await OnVolverAPreguntas.InvokeAsync();
+            }
+            return;
+        }
+
+        Snackbar.Add(result.Message ?? "Inspección firmada y cerrada", Severity.Success);
+        await OnFirmada.InvokeAsync(result.Data);
+    }
+
+    private static string QuitarPrefijoDataUri(string firmaPng)
+    {
+        var separador = firmaPng.IndexOf("base64,", StringComparison.OrdinalIgnoreCase);
+        return separador >= 0 ? firmaPng[(separador + "base64,".Length)..] : firmaPng;
+    }
+}

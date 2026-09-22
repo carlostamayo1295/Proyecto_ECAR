@@ -114,7 +114,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar regeneración", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             var regenerado = await HttpClientService.RegenerateEquipoQrAsync(IdEquipo);
             if (regenerado == null || !regenerado.Success)

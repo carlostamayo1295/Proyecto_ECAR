@@ -66,7 +66,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedPageChanged="HandlePageChange" />
+                    SelectedChanged="HandlePageChange" />
             }
             else
             {
@@ -133,7 +133,7 @@
         var dialog = await DialogService.ShowAsync<RespuestaInspeccionModal>("Crear Nueva Respuesta");
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadRespuestasAsync();
         }
@@ -145,7 +145,7 @@
         var dialog = await DialogService.ShowAsync<RespuestaInspeccionModal>("Editar Respuesta", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadRespuestasAsync();
         }
@@ -157,7 +157,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             isLoading = true;
             try
