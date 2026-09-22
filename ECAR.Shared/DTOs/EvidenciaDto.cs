@@ -7,11 +7,21 @@ public class EvidenciaDto
     public long IdEvidencia { get; set; }
     public long IdInspeccion { get; set; }
     public string? NombreEquipo { get; set; }
+    /// <summary>Ruta relativa en el almacenamiento; no se muestra en pantalla.</summary>
     public string Archivo { get; set; } = string.Empty;
+
+    public string NombreOriginal { get; set; } = string.Empty;   // foto_balanza.jpg
+    public string TipoContenido { get; set; } = string.Empty;    // image/jpeg
+    public long TamanoBytes { get; set; }
     public DateTime FechaCarga { get; set; }
+    public long IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
 }
 
+// Contrato de transición: la carga real de fotografías es multipart
+// (POST /api/inspecciones/{id}/evidencias, BE-2) y no usa este DTO.
+// Se conserva mientras la pantalla de Evidencias siga registrando una referencia de texto;
+// se elimina cuando FE-2 migre `EvidenciaModal` al componente de cámara.
 public class CreateEvidenciaDto
 {
     [Required(ErrorMessage = "La inspección es requerida")]
@@ -20,7 +30,7 @@ public class CreateEvidenciaDto
     [Required(ErrorMessage = "El archivo es requerido")]
     public string Archivo { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "El usuario que carga la evidencia es requerido")]
-    [MaxLength(100, ErrorMessage = "El usuario no puede exceder 100 caracteres")]
-    public string UsuarioCarga { get; set; } = string.Empty;
+    // El API toma el usuario del JWT; se acepta por compatibilidad y se ignora.
+    public string? UsuarioCarga { get; set; }
 }
+

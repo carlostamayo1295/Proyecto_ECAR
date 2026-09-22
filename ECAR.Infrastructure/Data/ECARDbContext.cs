@@ -1,4 +1,5 @@
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECAR.Infrastructure.Data;
@@ -88,10 +89,19 @@ public class ECARDbContext : DbContext
         // Configuración de Inspeccion
         modelBuilder.Entity<Inspeccion>(entity =>
         {
+            entity.Property(e => e.Estado)
+                .HasDefaultValue(InspeccionEstados.EnCurso);
             entity.HasIndex(e => e.IdEquipo);
             entity.HasIndex(e => e.IdUsuario);
+            entity.HasIndex(e => e.IdChecklist);
+            entity.HasIndex(e => e.Estado);
+            entity.HasIndex(e => new { e.IdUsuario, e.Estado });
             entity.HasIndex(e => e.FechaInspeccion);
             entity.HasIndex(e => e.Resultado);
+            entity.HasOne(e => e.Checklist)
+                .WithMany(c => c.Inspecciones)
+                .HasForeignKey(e => e.IdChecklist)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Configuración de RespuestaInspeccion
@@ -106,13 +116,18 @@ public class ECARDbContext : DbContext
         modelBuilder.Entity<Evidencia>(entity =>
         {
             entity.HasIndex(e => e.IdInspeccion);
-            entity.HasIndex(e => e.UsuarioCarga);
+            entity.HasIndex(e => e.IdUsuarioCarga);
             entity.HasIndex(e => e.FechaCarga);
 
             entity.HasOne(e => e.Inspeccion)
                 .WithMany(i => i.Evidencias)
                 .HasForeignKey(e => e.IdInspeccion)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.UsuarioCargaDetalle)
+                .WithMany()
+                .HasForeignKey(e => e.IdUsuarioCarga)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Configuración de Hallazgo

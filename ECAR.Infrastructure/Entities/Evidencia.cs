@@ -19,15 +19,30 @@ public class Evidencia
     public string Archivo { get; set; } = string.Empty;
 
     [Required]
+    [MaxLength(200)]
+    [Column("NombreOriginal")]
+    public string NombreOriginal { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    [Column("TipoContenido")]
+    public string TipoContenido { get; set; } = string.Empty;
+
+    [Column("TamanoBytes")]
+    public long TamanoBytes { get; set; }
+
+    [Required]
     [Column("FechaCarga")]
     public DateTime FechaCarga { get; set; } = DateTime.UtcNow;
 
     [Required]
-    [MaxLength(100)]
-    [Column("UsuarioCarga")]
-    public string UsuarioCarga { get; set; } = string.Empty;
+    [Column("IdUsuarioCarga")]
+    public long IdUsuarioCarga { get; set; }
 
     // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;
+
+    [ForeignKey("IdUsuarioCarga")]
+    public virtual Usuario UsuarioCargaDetalle { get; set; } = null!;
 }

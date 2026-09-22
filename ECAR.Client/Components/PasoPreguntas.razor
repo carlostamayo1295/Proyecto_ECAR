@@ -1,0 +1,79 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+
+@* PASO 1 — Preguntas y respuestas.  Dueño: FE-1 (Erica).
+
+   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-1):
+   1. Recorrer Inspeccion.Preguntas en orden y pintar cada una con RespuestaPreguntaInput
+      (ya existe: SiNo = dos casillas, Texto = campo de texto).
+   2. Marcar visualmente las obligatorias y mostrar el campo Observación; hacerlo obligatorio
+      cuando la pregunta sea Sí/No respondida con "No" (regla 4 del SRS).
+   3. Guardado incremental: llamar a GuardarAsync con debounce de 500 ms al cambiar una
+      respuesta, y mostrar el indicador "Guardando / Guardado / Error al guardar".
+
+   Lo que ya está resuelto aquí: el contrato con la página contenedora y la llamada al API.
+   No hace falta tocar EjecutarInspeccion.razor. *@
+
+<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+    Paso pendiente de implementar (FE-1). El contrato con el API ya está disponible.
+</MudAlert>
+
+@if (Inspeccion.Preguntas.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true">
+        Este checklist no tiene preguntas configuradas.
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        @Inspeccion.Preguntas.Count pregunta(s) · @Inspeccion.TotalObligatorias obligatoria(s)
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public InspeccionEjecucionDto Inspeccion { get; set; } = null!;
+
+    /// <summary>Avisa a la página contenedora para que refresque los contadores del paso.</summary>
+    [Parameter]
+    public EventCallback OnRespuestasGuardadas { get; set; }
+
+    private bool guardando;
+
+    /// <summary>
+    /// Envía un lote de respuestas y refleja lo guardado en la copia en memoria.
+    /// Se puede llamar con una sola respuesta (guardado incremental) o con todas.
+    /// </summary>
+    protected async Task GuardarAsync(IEnumerable<RespuestaEjecucionDto> respuestas)
+    {
+        var lote = respuestas.ToList();
+        if (lote.Count == 0 || guardando)
+        {
+            return;
+        }
+
+        guardando = true;
+        var result = await HttpClientService.GuardarRespuestasAsync(
+            Inspeccion.IdInspeccion, new GuardarRespuestasDto { Respuestas = lote });
+        guardando = false;
+
+        if (result == null || !result.Success)
+        {
+            Snackbar.Add(result?.Message ?? "Error al guardar las respuestas", Severity.Error);
+            return;
+        }
+
+        foreach (var guardada in lote)
+        {
+            var pregunta = Inspeccion.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
+            if (pregunta != null)
+            {
+                pregunta.Respuesta = guardada.Respuesta;
+                pregunta.Observacion = guardada.Observacion;
+            }
+        }
+
+        await OnRespuestasGuardadas.InvokeAsync();
+    }
+}

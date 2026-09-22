@@ -1,7 +1,9 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.API.Services;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,19 +11,23 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class EvidenciasController : ControllerBase
 {
     private readonly ECARDbContext _context;
+    private readonly ICurrentUser _currentUser;
 
-    public EvidenciasController(ECARDbContext context)
+    public EvidenciasController(ECARDbContext context, ICurrentUser currentUser)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<EvidenciaDto>>>> GetEvidencias([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, [FromQuery] long? idInspeccion = null)
     {
         var query = _context.Evidencias
+            .Include(e => e.UsuarioCargaDetalle)
             .Include(e => e.Inspeccion)
                 .ThenInclude(i => i.Equipo)
             .AsQueryable();
@@ -35,7 +41,7 @@ public class EvidenciasController : ControllerBase
         {
             query = query.Where(e =>
                 e.Inspeccion.Equipo.NombreEquipo.Contains(search) ||
-                e.UsuarioCarga.Contains(search));
+                e.UsuarioCargaDetalle.Nombre.Contains(search));
         }
 
         var totalCount = await query.CountAsync();
@@ -50,8 +56,12 @@ public class EvidenciasController : ControllerBase
                 IdInspeccion = e.IdInspeccion,
                 NombreEquipo = e.Inspeccion.Equipo.NombreEquipo,
                 Archivo = e.Archivo,
+                NombreOriginal = e.NombreOriginal,
+                TipoContenido = e.TipoContenido,
+                TamanoBytes = e.TamanoBytes,
                 FechaCarga = e.FechaCarga,
-                UsuarioCarga = e.UsuarioCarga
+                IdUsuarioCarga = e.IdUsuarioCarga,
+                UsuarioCarga = e.UsuarioCargaDetalle.Nombre
             })
             .ToListAsync();
 
@@ -70,6 +80,7 @@ public class EvidenciasController : ControllerBase
     public async Task<ActionResult<ApiResponse<EvidenciaDto>>> GetEvidencia(long id)
     {
         var evidencia = await _context.Evidencias
+            .Include(e => e.UsuarioCargaDetalle)
             .Include(e => e.Inspeccion)
                 .ThenInclude(i => i.Equipo)
             .FirstOrDefaultAsync(e => e.IdEvidencia == id);
@@ -85,8 +96,12 @@ public class EvidenciasController : ControllerBase
             IdInspeccion = evidencia.IdInspeccion,
             NombreEquipo = evidencia.Inspeccion?.Equipo?.NombreEquipo,
             Archivo = evidencia.Archivo,
+            NombreOriginal = evidencia.NombreOriginal,
+            TipoContenido = evidencia.TipoContenido,
+            TamanoBytes = evidencia.TamanoBytes,
             FechaCarga = evidencia.FechaCarga,
-            UsuarioCarga = evidencia.UsuarioCarga
+            IdUsuarioCarga = evidencia.IdUsuarioCarga,
+            UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre
         };
 
         return Ok(ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto));
@@ -108,7 +123,10 @@ public class EvidenciasController : ControllerBase
         {
             IdInspeccion = createDto.IdInspeccion,
             Archivo = createDto.Archivo,
-            UsuarioCarga = createDto.UsuarioCarga,
+            NombreOriginal = Path.GetFileName(createDto.Archivo),
+            TipoContenido = "application/octet-stream",
+            TamanoBytes = 0,
+            IdUsuarioCarga = _currentUser.IdUsuario,
             FechaCarga = DateTime.UtcNow
         };
 
@@ -121,8 +139,12 @@ public class EvidenciasController : ControllerBase
             IdInspeccion = evidencia.IdInspeccion,
             NombreEquipo = inspeccion.Equipo?.NombreEquipo,
             Archivo = evidencia.Archivo,
+            NombreOriginal = evidencia.NombreOriginal,
+            TipoContenido = evidencia.TipoContenido,
+            TamanoBytes = evidencia.TamanoBytes,
             FechaCarga = evidencia.FechaCarga,
-            UsuarioCarga = evidencia.UsuarioCarga
+            IdUsuarioCarga = evidencia.IdUsuarioCarga,
+            UsuarioCarga = _currentUser.Nombre
         };
 
         return CreatedAtAction(nameof(GetEvidencia), new { id = evidencia.IdEvidencia },
