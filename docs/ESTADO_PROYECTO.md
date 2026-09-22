@@ -90,6 +90,7 @@ ECAR lo pide, es una tabla puente nueva (fase posterior).
 | Checklists + versiones + nueva versión | `/checklists` | API real ✅ |
 | Preguntas de checklist (admin) | `/checklists/preguntas` | API real ✅ |
 | Inspecciones | `/inspecciones` | API real (CRUD básico, sin flujo de ejecución) |
+| **Ejecutar inspección** | `/inspecciones/ejecutar/{id}` | 🔵 **Esqueleto (FE-0)** — stepper y contratos listos; los tres pasos los implementan FE-1/2/3 |
 | Respuestas de inspección (admin) | `/inspecciones/respuestas` | **Mock** (`MockDataService`) — Fase 3 |
 | Evidencias | `/evidencias` | API real (solo texto; sin archivo) — Fase 3 |
 | Hallazgos | `/hallazgos` | API real (CRUD) |
@@ -97,6 +98,16 @@ ECAR lo pide, es una tabla puente nueva (fase posterior).
 
 `MockDataService` queda reducido a *Respuestas de inspección* y al lookup de preguntas que
 usa `RespuestaInspeccionModal`. Desaparece con la Fase 3.
+
+### Guardas de ruta
+
+| Guarda | Deja pasar | Si no hay sesión |
+|---|---|---|
+| `AdminRouteGuard` | Administrador | Envía al inicio |
+| `TecnicoRouteGuard` *(nuevo)* | Administrador y Técnico | Envía a `/login?returnUrl=…` y vuelve al destino |
+
+La segunda es necesaria porque a la ejecución de inspecciones se llega escaneando un QR desde
+el teléfono, sin sesión previa.
 
 ---
 
@@ -207,7 +218,33 @@ dotnet test ECAR.API.Tests/ECAR.API.Tests.csproj                                
 dotnet ef migrations has-pending-model-changes --project ECAR.Infrastructure --startup-project ECAR.API  # sin cambios
 ```
 
-Avisos del cliente: 26 `MUD0002` + 72 `CS8602` + 2 `CS8601` (sin cambios; ninguno nuevo).
+Avisos de la solución: **0** (eran 100 hasta el 22/09).
+
+---
+
+## 7.1. Base de frontend para Fase 3 (22/09/2026, FE-0)
+
+Preparación que desbloquea a FE-1, FE-2 y FE-3; no implementa todavía ninguna pantalla de
+inspección. Detalle en [`GUIA_FRONTEND_FASE3.md`](GUIA_FRONTEND_FASE3.md).
+
+- **DTOs** (`ECAR.Shared`): `IniciarInspeccionDto`, `PreguntaEjecucionDto`,
+  `InspeccionEjecucionDto`, `GuardarRespuestasDto` + `RespuestaEjecucionDto`,
+  `FirmarInspeccionDto`, `InspeccionResultadoDto`, y las constantes `InspeccionEstados` /
+  `InspeccionResultados`.
+- **`HttpClientService`**: 13 métodos para los endpoints de la fase, incluida la subida
+  multipart de fotografías y la descarga de la imagen como data URI.
+- **`Pages/EjecutarInspeccion.razor`**: esqueleto con `MudStepper` de tres pasos, carga única
+  del estado, recálculo local de contadores, bloqueo de avance por las reglas 3 y 4 del SRS y
+  redirección automática al resultado si la inspección ya está cerrada.
+- **`Components/PasoPreguntas|PasoEvidencias|PasoFirma.razor`**: un componente por persona, con
+  el contrato y las llamadas al API ya resueltos; falta solo la interfaz.
+- **`Components/TecnicoRouteGuard.razor`** y `returnUrl` en `/login`.
+- **Limpieza**: los 100 avisos de compilación a 0 (ver sección 8).
+
+Verificado en el navegador: la guarda redirige al login conservando el destino y vuelve a él;
+el stepper se dibuja con cabecera y contadores; el avance se bloquea con el aviso correcto
+cuando falta una obligatoria; a 375 px no hay scroll horizontal; la paginación de
+`/auditoria` ahora sí recarga datos al cambiar de página.
 
 ---
 
@@ -229,8 +266,12 @@ Avisos del cliente: 26 `MUD0002` + 72 `CS8602` + 2 `CS8601` (sin cambios; ningun
   Auditoría. Se protegen al implementar su fase (Fase 3 los dos primeros).
 - **Regla SRS #2 sin cumplir:** `CreateInspeccionDto.IdUsuario` viene del body.
 - **Auditoría automática (Fase 4)**, **reportes (Fase 4)**, **dashboard (Fase 5)**: no iniciados.
-- **Avisos de compilación:** 26 `MUD0002` (`SelectedPageChanged` en `MudPagination`, 13
-  páginas) + 74 nullability. Ya ocultaron un error real (roles de usuario). PR de limpieza.
+- ~~**Avisos de compilación**~~ ✅ **Resuelto el 22/09 (FE-0): la solución está en 0 errores y
+  0 advertencias.** No eran cosméticos: los 26 `MUD0002` venían de `SelectedPageChanged`, un
+  parámetro que **no existe** en `MudPagination` (el correcto es `SelectedChanged`), así que
+  **la paginación no recargaba datos en las 13 pantallas paginadas**; los 72 `CS8602` eran
+  `DialogResult?` desreferenciado sin comprobar null. Segundo defecto real escondido tras
+  `MUD0002`, después del de asignación de roles en Fase 1.
 - **`pageSize` inconsistente:** 5 controladores validan `<= 100`, 8 no.
 - **Solape Users/UsuariosRoles:** dos vías para asignar roles; decidir la oficial.
 - **Codificación:** `PreguntasChecklistController.cs` y `Entities/PreguntaChecklist.cs` están

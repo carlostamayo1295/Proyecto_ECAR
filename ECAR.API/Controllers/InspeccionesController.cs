@@ -314,6 +314,7 @@ public class InspeccionesController : ControllerBase
     private Task<Inspeccion?> CargarEjecucionAsync(long id) => _context.Inspecciones
         .AsNoTracking()
         .Include(i => i.Equipo)
+            .ThenInclude(e => e.Ubicacion)
         .Include(i => i.Usuario)
         .Include(i => i.Checklist)
             .ThenInclude(c => c.Preguntas)
@@ -341,12 +342,30 @@ public class InspeccionesController : ControllerBase
         var respuestasPorPregunta = inspeccion.Respuestas
             .ToDictionary(respuesta => respuesta.IdPregunta);
 
+        // Contadores que la pantalla de ejecución usa para el stepper (reglas 3 y 4 del SRS).
+        var preguntasChecklist = inspeccion.Checklist.Preguntas.ToList();
+        var obligatorias = preguntasChecklist.Where(pregunta => pregunta.Obligatoria).ToList();
+        var obligatoriasRespondidas = obligatorias.Count(pregunta =>
+            respuestasPorPregunta.TryGetValue(pregunta.IdPregunta, out var respuesta)
+            && !string.IsNullOrWhiteSpace(respuesta.Respuesta));
+        var novedades = preguntasChecklist.Count(pregunta =>
+            pregunta.TipoRespuesta == TiposRespuesta.SiNo
+            && respuestasPorPregunta.TryGetValue(pregunta.IdPregunta, out var respuesta)
+            && string.Equals(respuesta.Respuesta, "No", StringComparison.OrdinalIgnoreCase));
+
         return new InspeccionEjecucionDto
         {
             IdInspeccion = inspeccion.IdInspeccion,
             IdEquipo = inspeccion.IdEquipo,
             CodigoInternoEquipo = inspeccion.Equipo.CodigoInterno,
             NombreEquipo = inspeccion.Equipo.NombreEquipo,
+            UbicacionNombre = inspeccion.Equipo.Ubicacion == null
+                ? null
+                : $"{inspeccion.Equipo.Ubicacion.Planta} - {inspeccion.Equipo.Ubicacion.Area}",
+            Criticidad = inspeccion.Equipo.Criticidad,
+            TotalObligatorias = obligatorias.Count,
+            ObligatoriasRespondidas = obligatoriasRespondidas,
+            TotalNovedades = novedades,
             IdChecklist = inspeccion.IdChecklist,
             NombreChecklist = inspeccion.Checklist.Nombre,
             VersionChecklist = inspeccion.Checklist.Version,

@@ -1,5 +1,6 @@
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Components.Forms;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -1335,6 +1336,277 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting preguntas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // ===================== FASE 3 — EJECUCIÓN DE INSPECCIONES =====================
+    // Contrato acordado entre FE-0 y BE-0 (docs/PLAN_FASE3_TAREAS.md §3.2).
+    // Todos siguen la convención del archivo: token en la cabecera, ApiResponse<T> y null si la
+    // llamada falla; la pantalla siempre debe avisar con Snackbar, nunca dejar un control vacío.
+
+    /// <summary>Tamaño máximo aceptado al leer una fotografía del dispositivo (5 MB).</summary>
+    public const long MaxEvidenciaBytes = 5 * 1024 * 1024;
+
+    /// <summary>
+    /// Inicia una inspección para un equipo y checklist. Si el técnico ya tiene una inspección
+    /// en curso para ese equipo, el API responde 409 y devuelve la existente en Data: la pantalla
+    /// debe continuarla en vez de mostrar un error.
+    /// </summary>
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> IniciarInspeccionAsync(IniciarInspeccionDto iniciarDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/inspecciones/iniciar", iniciarDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error iniciando inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Estado completo de la inspección: cabecera, preguntas con sus respuestas y evidencias.
+    /// Es la única llamada que necesita la pantalla de ejecución para dibujarse.
+    /// </summary>
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> GetInspeccionEjecucionAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/inspecciones/{id}/ejecucion");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting inspeccion ejecucion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
+    /// para el guardado incremental mientras el técnico avanza.
+    /// </summary>
+    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GuardarRespuestasAsync(long idInspeccion,
+        GuardarRespuestasDto guardarDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error guardando respuestas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GetRespuestasInspeccionAsync(long idInspeccion)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/inspecciones/{idInspeccion}/respuestas");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting respuestas inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Listado paginado para la pantalla de administración de respuestas (solo consulta).</summary>
+    public async Task<ApiResponse<PagedResultDto<RespuestaInspeccionDto>>?> GetRespuestasInspeccionAsync(
+        int page = 1, int pageSize = 10, string? search = null, long? idInspeccion = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = $"api/respuestasinspeccion?page={page}&pageSize={pageSize}";
+            if (!string.IsNullOrEmpty(search))
+            {
+                query += $"&search={Uri.EscapeDataString(search)}";
+            }
+            if (idInspeccion.HasValue)
+            {
+                query += $"&idInspeccion={idInspeccion.Value}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<RespuestaInspeccionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting respuestas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Inspecciones del técnico autenticado, opcionalmente filtradas por estado.</summary>
+    public async Task<ApiResponse<List<InspeccionDto>>?> GetMisInspeccionesAsync(string? estado = null)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            var query = "api/inspecciones/mias";
+            if (!string.IsNullOrEmpty(estado))
+            {
+                query += $"?estado={Uri.EscapeDataString(estado)}";
+            }
+
+            var response = await _httpClient.GetAsync(query);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<InspeccionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting mis inspecciones: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Sube una fotografía como evidencia (multipart). El archivo llega desde MudFileUpload;
+    /// conviene comprimirlo antes con RequestImageFileAsync para no agotar la red de planta.
+    /// </summary>
+    public async Task<ApiResponse<EvidenciaDto>?> UploadEvidenciaAsync(long idInspeccion, IBrowserFile archivo)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+
+            using var contenido = new MultipartFormDataContent();
+            await using var stream = archivo.OpenReadStream(MaxEvidenciaBytes);
+            using var archivoContenido = new StreamContent(stream);
+            archivoContenido.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(archivo.ContentType);
+            contenido.Add(archivoContenido, "archivo", archivo.Name);
+
+            var response = await _httpClient.PostAsync($"api/inspecciones/{idInspeccion}/evidencias", contenido);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EvidenciaDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error subiendo evidencia: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<List<EvidenciaDto>>?> GetEvidenciasInspeccionAsync(long idInspeccion)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/inspecciones/{idInspeccion}/evidencias");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<EvidenciaDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting evidencias inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    // El endpoint de la imagen exige token, así que un <img src> directo no sirve: se descargan
+    // los bytes y la pantalla los muestra como data URI (mismo patrón que el QR de Fase 2).
+    public async Task<byte[]?> GetEvidenciaImageAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/evidencias/{id}/archivo");
+            await RemoveAuthorizationHeaderAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting evidencia image: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Imagen de la evidencia lista para el atributo Src de MudImage.</summary>
+    public async Task<string?> GetEvidenciaImageDataUrlAsync(long id, string tipoContenido = "image/jpeg")
+    {
+        var bytes = await GetEvidenciaImageAsync(id);
+        return bytes == null ? null : $"data:{tipoContenido};base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    /// <summary>
+    /// Firma y cierra la inspección. Si falta alguna pregunta obligatoria o una novedad sin
+    /// observación, el API responde 400 y detalla los faltantes en Errors.
+    /// </summary>
+    public async Task<ApiResponse<InspeccionResultadoDto>?> FirmarInspeccionAsync(long id, FirmarInspeccionDto firmarDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync($"api/inspecciones/{id}/firmar", firmarDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionResultadoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error firmando inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    public async Task<ApiResponse<InspeccionResultadoDto>?> GetInspeccionResultadoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/inspecciones/{id}/resultado");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionResultadoDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting inspeccion resultado: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }

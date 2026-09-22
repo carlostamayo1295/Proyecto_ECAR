@@ -80,7 +80,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedPageChanged="HandlePageChange" />
+                    SelectedChanged="HandlePageChange" />
             }
             else
             {
@@ -164,7 +164,7 @@
         var dialog = await DialogService.ShowAsync<HallazgoModal>("Registrar Nuevo Hallazgo");
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadHallazgosAsync();
         }
@@ -176,7 +176,7 @@
         var dialog = await DialogService.ShowAsync<HallazgoModal>("Editar Hallazgo", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadHallazgosAsync();
         }
@@ -194,7 +194,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             isLoading = true;
             try

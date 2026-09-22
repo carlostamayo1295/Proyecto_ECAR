@@ -74,7 +74,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedPageChanged="HandlePageChange" />
+                    SelectedChanged="HandlePageChange" />
             }
             else
             {
@@ -144,7 +144,7 @@
         var dialog = await DialogService.ShowAsync<ChecklistModal>("Crear Nuevo Checklist");
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadChecklistsAsync();
         }
@@ -156,7 +156,7 @@
         var dialog = await DialogService.ShowAsync<ChecklistModal>("Editar Checklist", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadChecklistsAsync();
         }
@@ -194,7 +194,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             isLoading = true;
             try
