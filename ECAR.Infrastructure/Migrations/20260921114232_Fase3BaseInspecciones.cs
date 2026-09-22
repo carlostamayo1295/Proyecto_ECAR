@@ -105,6 +105,12 @@ namespace ECAR.Infrastructure.Migrations
                     [NombreOriginal] = LEFT(e.[Archivo], 200)
                 FROM [Evidencias] e
                 INNER JOIN [Inspecciones] i ON i.[IdInspeccion] = e.[IdInspeccion];
+
+                UPDATE [Inspecciones]
+                SET [Estado] = N'Cerrada',
+                    [FechaCierre] = COALESCE([FechaCierre], [FechaInspeccion])
+                WHERE [FirmaDigital] IS NOT NULL
+                  AND LEN(LTRIM(RTRIM([FirmaDigital]))) > 0;
                 """);
 
             migrationBuilder.AlterColumn<long>(

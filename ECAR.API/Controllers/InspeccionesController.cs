@@ -1,6 +1,7 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.API.Services;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -31,6 +32,12 @@ public class InspeccionesController : ControllerBase
             .Include(i => i.Usuario)
             .Include(i => i.Checklist)
             .AsQueryable();
+
+        if (EsTecnicoSinPrivilegiosDeLecturaGlobal())
+        {
+            var idUsuario = _currentUser.IdUsuario;
+            query = query.Where(i => i.IdUsuario == idUsuario);
+        }
 
         if (!string.IsNullOrEmpty(search))
         {
@@ -93,10 +100,99 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<InspeccionDto>.ErrorResponse("Inspección no encontrada"));
         }
 
+        if (!PuedeLeer(inspeccion))
+        {
+            return Forbid();
+        }
+
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion)));
     }
 
+    [HttpPost("iniciar")]
+    [Authorize(Roles = "Administrador,Técnico")]
+    public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> IniciarInspeccion(
+        IniciarInspeccionDto iniciarDto)
+    {
+        var usuario = await _context.Usuarios.FindAsync(_currentUser.IdUsuario);
+        if (usuario == null || !usuario.Activo)
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
+                "El usuario autenticado no existe o no está habilitado en ECAR"));
+        }
+
+        var equipoExiste = await _context.Equipos.AnyAsync(e =>
+            e.IdEquipo == iniciarDto.IdEquipo && e.Activo);
+        if (!equipoExiste)
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
+                "El equipo indicado no existe o no está activo"));
+        }
+
+        var checklistExiste = await _context.Checklists.AnyAsync(c =>
+            c.IdChecklist == iniciarDto.IdChecklist && c.Activo);
+        if (!checklistExiste)
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
+                "El checklist indicado no existe o no está activo"));
+        }
+
+        var existente = await _context.Inspecciones
+            .Where(i => i.IdEquipo == iniciarDto.IdEquipo
+                && i.IdUsuario == usuario.IdUsuario
+                && i.Estado == InspeccionEstados.EnCurso)
+            .Select(i => i.IdInspeccion)
+            .FirstOrDefaultAsync();
+
+        if (existente != 0)
+        {
+            var ejecucionExistente = await CargarEjecucionAsync(existente);
+            return Conflict(ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
+                MapToEjecucionDto(ejecucionExistente!),
+                "Ya existe una inspección en curso para este equipo; puede continuarla"));
+        }
+
+        var inspeccion = new Inspeccion
+        {
+            IdEquipo = iniciarDto.IdEquipo,
+            IdChecklist = iniciarDto.IdChecklist,
+            IdUsuario = usuario.IdUsuario,
+            FechaInspeccion = DateTime.UtcNow,
+            Estado = InspeccionEstados.EnCurso
+        };
+
+        _context.Inspecciones.Add(inspeccion);
+        await _context.SaveChangesAsync();
+
+        var ejecucion = await CargarEjecucionAsync(inspeccion.IdInspeccion);
+        return CreatedAtAction(
+            nameof(GetEjecucion),
+            new { id = inspeccion.IdInspeccion },
+            ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
+                MapToEjecucionDto(ejecucion!),
+                "Inspección iniciada exitosamente"));
+    }
+
+    [HttpGet("{id}/ejecucion")]
+    public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> GetEjecucion(long id)
+    {
+        var inspeccion = await CargarEjecucionAsync(id);
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
+                "Inspección no encontrada"));
+        }
+
+        if (!PuedeLeer(inspeccion))
+        {
+            return Forbid();
+        }
+
+        return Ok(ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
+            MapToEjecucionDto(inspeccion)));
+    }
+
     [HttpPost]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> CreateInspeccion(CreateInspeccionDto createDto)
     {
         var equipo = await _context.Equipos.FindAsync(createDto.IdEquipo);
@@ -111,16 +207,12 @@ public class InspeccionesController : ControllerBase
             return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El usuario autenticado no existe o no está habilitado en ECAR"));
         }
 
-        var checklist = createDto.IdChecklist.HasValue
-            ? await _context.Checklists.FirstOrDefaultAsync(c =>
-                c.IdChecklist == createDto.IdChecklist.Value && c.Activo)
-            : await _context.Checklists
-                .Where(c => c.Activo)
-                .OrderByDescending(c => c.FechaCreacion)
-                .FirstOrDefaultAsync();
+        var checklist = await _context.Checklists.FirstOrDefaultAsync(c =>
+            c.IdChecklist == createDto.IdChecklist && c.Activo);
         if (checklist == null)
         {
-            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("No existe un checklist activo para iniciar la inspección"));
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse(
+                "El checklist indicado no existe o no está activo"));
         }
 
         // Regla de negocio: si existe novedad, la observación es obligatoria
@@ -154,6 +246,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> UpdateInspeccion(long id, UpdateInspeccionDto updateDto)
     {
         var inspeccion = await _context.Inspecciones
@@ -167,6 +260,11 @@ public class InspeccionesController : ControllerBase
         if (inspeccion == null)
         {
             return NotFound(ApiResponse<InspeccionDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (!PuedeModificar(inspeccion))
+        {
+            return Forbid();
         }
 
         if (updateDto.Resultado != null)
@@ -192,6 +290,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteInspeccion(long id)
     {
         var inspeccion = await _context.Inspecciones.FindAsync(id);
@@ -201,10 +300,96 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Inspección no encontrada"));
         }
 
+        if (!PuedeModificar(inspeccion))
+        {
+            return Forbid();
+        }
+
         _context.Inspecciones.Remove(inspeccion);
         await _context.SaveChangesAsync();
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Inspección eliminada exitosamente"));
+    }
+
+    private Task<Inspeccion?> CargarEjecucionAsync(long id) => _context.Inspecciones
+        .AsNoTracking()
+        .Include(i => i.Equipo)
+        .Include(i => i.Usuario)
+        .Include(i => i.Checklist)
+            .ThenInclude(c => c.Preguntas)
+        .Include(i => i.Respuestas)
+        .Include(i => i.Evidencias)
+            .ThenInclude(e => e.UsuarioCargaDetalle)
+        .FirstOrDefaultAsync(i => i.IdInspeccion == id);
+
+    private bool EsTecnicoSinPrivilegiosDeLecturaGlobal() =>
+        _currentUser.IsInRole("Técnico")
+        && !_currentUser.IsInRole("Administrador")
+        && !_currentUser.IsInRole("Auditor");
+
+    private bool PuedeLeer(Inspeccion inspeccion) =>
+        _currentUser.IsInRole("Administrador")
+        || _currentUser.IsInRole("Auditor")
+        || (_currentUser.IsInRole("Técnico") && inspeccion.IdUsuario == _currentUser.IdUsuario);
+
+    private bool PuedeModificar(Inspeccion inspeccion) =>
+        _currentUser.IsInRole("Administrador")
+        || (_currentUser.IsInRole("Técnico") && inspeccion.IdUsuario == _currentUser.IdUsuario);
+
+    private static InspeccionEjecucionDto MapToEjecucionDto(Inspeccion inspeccion)
+    {
+        var respuestasPorPregunta = inspeccion.Respuestas
+            .ToDictionary(respuesta => respuesta.IdPregunta);
+
+        return new InspeccionEjecucionDto
+        {
+            IdInspeccion = inspeccion.IdInspeccion,
+            IdEquipo = inspeccion.IdEquipo,
+            CodigoInternoEquipo = inspeccion.Equipo.CodigoInterno,
+            NombreEquipo = inspeccion.Equipo.NombreEquipo,
+            IdChecklist = inspeccion.IdChecklist,
+            NombreChecklist = inspeccion.Checklist.Nombre,
+            VersionChecklist = inspeccion.Checklist.Version,
+            IdUsuario = inspeccion.IdUsuario,
+            NombreUsuario = inspeccion.Usuario.Nombre,
+            FechaInspeccion = inspeccion.FechaInspeccion,
+            Estado = inspeccion.Estado,
+            Preguntas = inspeccion.Checklist.Preguntas
+                .OrderBy(pregunta => pregunta.Orden)
+                .ThenBy(pregunta => pregunta.IdPregunta)
+                .Select(pregunta =>
+                {
+                    respuestasPorPregunta.TryGetValue(pregunta.IdPregunta, out var respuesta);
+                    return new PreguntaEjecucionDto
+                    {
+                        IdPregunta = pregunta.IdPregunta,
+                        Pregunta = pregunta.Pregunta,
+                        TipoRespuesta = pregunta.TipoRespuesta,
+                        Obligatoria = pregunta.Obligatoria,
+                        Orden = pregunta.Orden,
+                        IdRespuesta = respuesta?.IdRespuesta,
+                        Respuesta = respuesta?.Respuesta,
+                        Observacion = respuesta?.Observacion
+                    };
+                })
+                .ToList(),
+            Evidencias = inspeccion.Evidencias
+                .OrderBy(evidencia => evidencia.FechaCarga)
+                .Select(evidencia => new EvidenciaDto
+                {
+                    IdEvidencia = evidencia.IdEvidencia,
+                    IdInspeccion = evidencia.IdInspeccion,
+                    NombreEquipo = inspeccion.Equipo.NombreEquipo,
+                    Archivo = evidencia.Archivo,
+                    NombreOriginal = evidencia.NombreOriginal,
+                    TipoContenido = evidencia.TipoContenido,
+                    TamanoBytes = evidencia.TamanoBytes,
+                    FechaCarga = evidencia.FechaCarga,
+                    IdUsuarioCarga = evidencia.IdUsuarioCarga,
+                    UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre
+                })
+                .ToList()
+        };
     }
 
     private static InspeccionDto MapToDto(Inspeccion i)

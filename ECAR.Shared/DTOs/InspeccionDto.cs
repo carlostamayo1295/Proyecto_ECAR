@@ -29,7 +29,8 @@ public class CreateInspeccionDto
     // Se conserva para compatibilidad; el API identifica al inspector desde el JWT.
     public long IdUsuario { get; set; }
 
-    public long? IdChecklist { get; set; }
+    [Range(1, long.MaxValue, ErrorMessage = "El checklist es requerido")]
+    public long IdChecklist { get; set; }
 
     [Required(ErrorMessage = "La fecha de inspección es requerida")]
     public DateTime FechaInspeccion { get; set; }
