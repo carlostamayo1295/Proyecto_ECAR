@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ECAR.Infrastructure.Migrations
 {
     [DbContext(typeof(ECARDbContext))]
-    [Migration("20260921114232_Fase3BaseInspecciones")]
-    partial class Fase3BaseInspecciones
+    [Migration("20260922222833_AgregarOrdenPregunta")]
+    partial class AgregarOrdenPregunta
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

@@ -95,6 +95,10 @@ builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthS
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
+// Configurar almacenamiento de evidencias
+builder.Services.Configure<ECAR.API.Configuration.EvidenciasOptions>(builder.Configuration.GetSection("Evidencias"));
+builder.Services.AddScoped<ECAR.API.Services.IEvidenciaStorage, ECAR.API.Services.EvidenciaStorageDisco>();
+
 // Configurar CORS
 builder.Services.AddCors(options =>
 {

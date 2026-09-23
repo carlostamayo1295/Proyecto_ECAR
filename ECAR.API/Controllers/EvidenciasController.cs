@@ -6,6 +6,7 @@ using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace ECAR.API.Controllers;
 
@@ -16,11 +17,13 @@ public class EvidenciasController : ControllerBase
 {
     private readonly ECARDbContext _context;
     private readonly ICurrentUser _currentUser;
+    private readonly IEvidenciaStorage _storage;
 
-    public EvidenciasController(ECARDbContext context, ICurrentUser currentUser)
+    public EvidenciasController(ECARDbContext context, ICurrentUser currentUser, IEvidenciaStorage storage) 
     {
         _context = context;
         _currentUser = currentUser;
+        _storage = storage;
     }
 
     [HttpGet]
@@ -108,62 +111,114 @@ public class EvidenciasController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<ApiResponse<EvidenciaDto>>> CreateEvidencia(CreateEvidenciaDto createDto)
+public async Task<ActionResult<ApiResponse<EvidenciaDto>>> CreateEvidencia([FromForm] long idInspeccion, IFormFile archivo)
+{
+    // 1. Validaciones del ticket ECAR-202
+    if (archivo == null || archivo.Length == 0)
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("No se envió ningún archivo."));
+
+    var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+    if (extension != ".jpg" && extension != ".jpeg" && extension != ".png")
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("Formato inválido. Solo se permiten JPG o PNG."));
+
+    if (archivo.Length > 5 * 1024 * 1024)
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("El archivo supera el límite de 5 MB."));
+    
+    using var memoryStream = new MemoryStream();
+    await archivo.CopyToAsync(memoryStream);
+    var bytes = memoryStream.ToArray();
+
+    if (bytes.Length < 4)
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("El archivo está vacío o incompleto."));
+
+    bool esPdf = bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46;
+    bool esJpg = bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
+    bool esPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
+
+    if (esPdf || (!esJpg && !esPng))
     {
-        var inspeccion = await _context.Inspecciones
-            .Include(i => i.Equipo)
-            .FirstOrDefaultAsync(i => i.IdInspeccion == createDto.IdInspeccion);
-
-        if (inspeccion == null)
-        {
-            return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección indicada no existe"));
-        }
-
-        var evidencia = new Evidencia
-        {
-            IdInspeccion = createDto.IdInspeccion,
-            Archivo = createDto.Archivo,
-            NombreOriginal = Path.GetFileName(createDto.Archivo),
-            TipoContenido = "application/octet-stream",
-            TamanoBytes = 0,
-            IdUsuarioCarga = _currentUser.IdUsuario,
-            FechaCarga = DateTime.UtcNow
-        };
-
-        _context.Evidencias.Add(evidencia);
-        await _context.SaveChangesAsync();
-
-        var evidenciaDto = new EvidenciaDto
-        {
-            IdEvidencia = evidencia.IdEvidencia,
-            IdInspeccion = evidencia.IdInspeccion,
-            NombreEquipo = inspeccion.Equipo?.NombreEquipo,
-            Archivo = evidencia.Archivo,
-            NombreOriginal = evidencia.NombreOriginal,
-            TipoContenido = evidencia.TipoContenido,
-            TamanoBytes = evidencia.TamanoBytes,
-            FechaCarga = evidencia.FechaCarga,
-            IdUsuarioCarga = evidencia.IdUsuarioCarga,
-            UsuarioCarga = _currentUser.Nombre
-        };
-
-        return CreatedAtAction(nameof(GetEvidencia), new { id = evidencia.IdEvidencia },
-            ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto, "Evidencia cargada exitosamente"));
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("El archivo no es una imagen válida o es un PDF disfrazado."));
     }
+
+    // 2. Buscar inspección y validar estado
+    var inspeccion = await _context.Inspecciones
+        .Include(i => i.Equipo)
+        .FirstOrDefaultAsync(i => i.IdInspeccion == idInspeccion);
+
+    if (inspeccion == null)
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección indicada no existe"));
+
+    // NOTA: Asegúrate de que la propiedad de estado se llame así en tu entidad Inspeccion
+    // Si tu lógica requiere validar que esté "En curso", descomenta esta línea:
+    // if (inspeccion.Estado != "En curso") return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección no está En curso."));
+    
+    // Validar que el usuario actual tenga permiso o esté asociado a la inspección/equipo
+// (Puedes cambiar 'inspeccion.IdTecnico' por el campo exacto que relacione al usuario con la inspección en tu base de datos)
+    var idUsuarioActual = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "1");
+
+    if (inspeccion.IdUsuario != idUsuarioActual)
+    {
+        return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("No estás autorizado para subir evidencias a esta inspección."));
+    }
+
+    // 3. Guardar el archivo en el disco duro (Usando el servicio que creamos)
+    using var stream = archivo.OpenReadStream();
+    var rutaRelativa = await _storage.GuardarAsync(stream, extension, idInspeccion);
+
+    // 4. Guardar en Base de Datos
+    var evidencia = new Evidencia
+    {
+        IdInspeccion = idInspeccion,
+        Archivo = rutaRelativa, // Ruta generada por el disco
+        NombreOriginal = Path.GetFileName(archivo.FileName),
+        TipoContenido = archivo.ContentType, // Ahora guardamos el tipo real
+        TamanoBytes = archivo.Length,        // Ahora guardamos el tamaño real en bytes
+        IdUsuarioCarga = _currentUser.IdUsuario,
+        FechaCarga = DateTime.UtcNow
+    };
+
+    _context.Evidencias.Add(evidencia);
+    await _context.SaveChangesAsync();
+
+    // 5. Retornar el DTO (como lo tenías)
+    var evidenciaDto = new EvidenciaDto
+    {
+        IdEvidencia = evidencia.IdEvidencia,
+        IdInspeccion = evidencia.IdInspeccion,
+        NombreEquipo = inspeccion.Equipo?.NombreEquipo,
+        Archivo = evidencia.Archivo,
+        NombreOriginal = evidencia.NombreOriginal,
+        TipoContenido = evidencia.TipoContenido,
+        TamanoBytes = evidencia.TamanoBytes,
+        FechaCarga = evidencia.FechaCarga,
+        IdUsuarioCarga = evidencia.IdUsuarioCarga,
+        UsuarioCarga = _currentUser.Nombre
+    };
+
+    return CreatedAtAction(nameof(GetEvidencia), new { id = evidencia.IdEvidencia }, 
+        ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto, "Evidencia cargada exitosamente"));
+}
 
     [HttpDelete("{id}")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteEvidencia(long id)
     {
         var evidencia = await _context.Evidencias.FindAsync(id);
-
+    
         if (evidencia == null)
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
         }
 
+        // 1. Eliminar el archivo físico del disco
+        if (!string.IsNullOrEmpty(evidencia.Archivo))
+        {
+            await _storage.EliminarAsync(evidencia.Archivo);
+        }
+
+        // 2. Eliminar el registro de la base de datos
         _context.Evidencias.Remove(evidencia);
         await _context.SaveChangesAsync();
 
-        return Ok(ApiResponse<bool>.SuccessResponse(true, "Evidencia eliminada exitosamente"));
+        return Ok(ApiResponse<bool>.SuccessResponse(data: true, message: "Evidencia eliminada exitosamente"));
     }
 }
