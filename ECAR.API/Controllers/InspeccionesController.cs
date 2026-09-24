@@ -289,6 +289,72 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección actualizada exitosamente"));
     }
 
+    /// <summary>
+    /// Guarda o actualiza (Upsert) por lote las respuestas de una inspección en curso.
+    /// Consumido por Blazor (PasoPreguntas.razor)
+    /// </summary>
+    [HttpPut("{id}/respuestas")]
+    [Authorize(Roles = "Administrador,Técnico")]
+    public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> GuardarRespuestas(
+        long id,
+        [FromBody] GuardarRespuestasDto dto)
+    {
+        var inspeccion = await _context.Inspecciones
+            .Include(i => i.Respuestas)
+            .FirstOrDefaultAsync(i => i.IdInspeccion == id);
+
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<InspeccionEjecucionDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        // 1. Validación de permisos: Solo el técnico asignado o Admin
+        if (!PuedeModificar(inspeccion))
+        {
+            return Forbid();
+        }
+
+        // 2. Validación 21 CFR Part 11: Inmutabilidad si la inspección no está en curso
+        if (inspeccion.Estado != InspeccionEstados.EnCurso)
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
+                "Solo se pueden guardar respuestas en inspecciones que estén 'En curso'"));
+        }
+
+        // 3. Lógica de UPSERT por lote (Actualizar si existe, insertar si no)
+        foreach (var item in dto.Respuestas)
+        {
+            var respuestaExistente = inspeccion.Respuestas
+                .FirstOrDefault(r => r.IdPregunta == item.IdPregunta);
+
+            if (respuestaExistente != null)
+            {
+                // UPDATE
+                respuestaExistente.Respuesta = item.Respuesta;
+                respuestaExistente.Observacion = item.Observacion;
+            }
+            else
+            {
+                // INSERT
+                inspeccion.Respuestas.Add(new RespuestaInspeccion
+                {
+                    IdInspeccion = id,
+                    IdPregunta = item.IdPregunta,
+                    Respuesta = item.Respuesta,
+                    Observacion = item.Observacion
+                });
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        // 4. Retorna el DTO de ejecución actualizado para que Blazor recalcule contadores en tiempo real
+        var ejecucionActualizada = await CargarEjecucionAsync(id);
+        return Ok(ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
+            MapToEjecucionDto(ejecucionActualizada!),
+            "Respuestas guardadas exitosamente"));
+    }
+
     [HttpDelete("{id}")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteInspeccion(long id)
