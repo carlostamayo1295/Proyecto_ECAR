@@ -1081,4 +1081,23 @@ public class HttpClientService
             return null;
         }
     }
+    
+    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GuardarRespuestasAsync(long idInspeccion,
+        GuardarRespuestasDto guardarDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error guardando respuestas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
 }
