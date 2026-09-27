@@ -92,6 +92,8 @@ builder.Services.AddOptions<ActiveDirectoryOptions>()
     .ValidateOnStart();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 // Configurar CORS
 builder.Services.AddCors(options =>

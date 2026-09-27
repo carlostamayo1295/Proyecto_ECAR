@@ -1,0 +1,103 @@
+﻿@page "/equipos/qr/{Token}"
+@layout EmptyLayout
+@inject HttpClientService HttpClientService
+
+<div class="qr-page">
+    @if (cargando)
+    {
+        <div class="qr-loading">
+            <MudProgressCircular Indeterminate="true" />
+        </div>
+    }
+    else if (equipo == null)
+    {
+        <MudCard Class="qr-card">
+            <MudCardContent Class="text-center pa-6">
+                <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Large" Color="Color.Default" />
+                <MudText Typo="Typo.h6" Class="mt-3">Código no encontrado</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                    Este código QR no corresponde a ningún equipo registrado.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    }
+    else
+    {
+        <MudCard Class="qr-card">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">@equipo.Equipo.NombreEquipo</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @equipo.Equipo.CodigoInterno
+                    </MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudChip T="string" Color="@CriticidadColor(equipo.Equipo.Criticidad)" Size="Size.Small">
+                        @(equipo.Equipo.Criticidad ?? "Sin criticidad")
+                    </MudChip>
+                </CardHeaderActions>
+            </MudCardHeader>
+
+            <MudCardContent>
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <tbody>
+                        <tr><td>Marca</td><td>@equipo.Equipo.Marca</td></tr>
+                        <tr><td>Modelo</td><td>@equipo.Equipo.Modelo</td></tr>
+                        <tr><td>Categoría</td><td>@equipo.Equipo.CategoriaNombre</td></tr>
+                        <tr><td>Ubicación</td><td>@equipo.Equipo.UbicacionNombre</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+
+                <MudDivider Class="my-3" />
+
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Checklists disponibles</MudText>
+
+                @if (equipo.ChecklistsActivos.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Este equipo no tiene checklists activos asignados.
+                    </MudAlert>
+                }
+                else
+                {
+                    @foreach (var checklist in equipo.ChecklistsActivos)
+                    {
+                        <MudPaper Class="pa-3 mb-2" Outlined="true">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.body1">@checklist.Nombre</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        Versión @checklist.Version
+                                    </MudText>
+                                </div>
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">Activo</MudChip>
+                            </div>
+                        </MudPaper>
+                    }
+                }
+            </MudCardContent>
+        </MudCard>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    private bool cargando = true;
+    private ConsultaQrDto? equipo;
+
+    // Consulta pública: no requiere sesión. Un token desconocido o un equipo inactivo devuelven 404
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await HttpClientService.GetEquipoByQrAsync(Token);
+        equipo = result != null && result.Success ? result.Data : null;
+        cargando = false;
+    }
+
+    private Color CriticidadColor(string? criticidad) => criticidad switch
+    {
+        "Alta" => Color.Error,
+        "Media" => Color.Warning,
+        _ => Color.Default
+    };
+}

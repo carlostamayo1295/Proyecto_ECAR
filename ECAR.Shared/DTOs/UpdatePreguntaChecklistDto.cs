@@ -6,4 +6,5 @@ public class UpdatePreguntaChecklistDto
     public string Pregunta { get; set; } = string.Empty;
     public string TipoRespuesta { get; set; } = string.Empty;
     public bool Obligatoria { get; set; }
+    public int Orden { get; set; } = 1;
 }

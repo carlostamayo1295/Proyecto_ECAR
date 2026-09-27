@@ -3,6 +3,7 @@ using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class ChecklistsController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -51,8 +53,9 @@ public class ChecklistsController : ControllerBase
                     IdChecklist = p.IdChecklist,
                     Pregunta = p.Pregunta,
                     TipoRespuesta = p.TipoRespuesta,
-                    Obligatoria = p.Obligatoria
-                }).ToList()
+                    Obligatoria = p.Obligatoria,
+                    Orden = p.Orden
+                }).OrderBy(p => p.Orden).ToList()
             })
             .ToListAsync();
 
@@ -85,6 +88,7 @@ public class ChecklistsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<ChecklistDto>>> CreateChecklist(CreateChecklistDto createDto)
     {
         var tipoInvalido = GetInvalidTipoRespuesta(createDto.Preguntas);
@@ -113,16 +117,7 @@ public class ChecklistsController : ControllerBase
 
         if (createDto.Preguntas != null && createDto.Preguntas.Any())
         {
-            foreach (var pregunta in createDto.Preguntas)
-            {
-                _context.PreguntasChecklist.Add(new PreguntaChecklist
-                {
-                    IdChecklist = checklist.IdChecklist,
-                    Pregunta = pregunta.Pregunta,
-                    TipoRespuesta = pregunta.TipoRespuesta,
-                    Obligatoria = pregunta.Obligatoria
-                });
-            }
+            AgregarPreguntas(checklist.IdChecklist, createDto.Preguntas);
             await _context.SaveChangesAsync();
         }
 
@@ -135,6 +130,7 @@ public class ChecklistsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<ChecklistDto>>> UpdateChecklist(long id, UpdateChecklistDto updateDto)
     {
         var checklist = await _context.Checklists
@@ -144,6 +140,14 @@ public class ChecklistsController : ControllerBase
         if (checklist == null)
         {
             return NotFound(ApiResponse<ChecklistDto>.ErrorResponse("Checklist no encontrado"));
+        }
+
+        // Regla SRS #6: un checklist ya respondido en inspecciones es evidencia histórica.
+        // Sus preguntas no se reemplazan; se crea una versión nueva.
+        if (updateDto.Preguntas != null && await TieneRespuestasAsync(id))
+        {
+            return Conflict(ApiResponse<ChecklistDto>.ErrorResponse(
+                "Este checklist ya se usó en inspecciones. Para modificar sus preguntas cree una versión nueva."));
         }
 
         var tipoInvalido = GetInvalidTipoRespuesta(updateDto.Preguntas);
@@ -169,16 +173,7 @@ public class ChecklistsController : ControllerBase
             var existentes = _context.PreguntasChecklist.Where(p => p.IdChecklist == id);
             _context.PreguntasChecklist.RemoveRange(existentes);
 
-            foreach (var pregunta in updateDto.Preguntas)
-            {
-                _context.PreguntasChecklist.Add(new PreguntaChecklist
-                {
-                    IdChecklist = id,
-                    Pregunta = pregunta.Pregunta,
-                    TipoRespuesta = pregunta.TipoRespuesta,
-                    Obligatoria = pregunta.Obligatoria
-                });
-            }
+            AgregarPreguntas(id, updateDto.Preguntas);
             await _context.SaveChangesAsync();
         }
 
@@ -190,6 +185,7 @@ public class ChecklistsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteChecklist(long id)
     {
         var checklist = await _context.Checklists.FindAsync(id);
@@ -204,6 +200,120 @@ public class ChecklistsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Checklist desactivado exitosamente"));
+    }
+
+    // Versionamiento: todas las versiones de un checklist comparten Nombre; solo una está activa
+    [HttpGet("{id}/versiones")]
+    public async Task<ActionResult<ApiResponse<List<ChecklistVersionDto>>>> GetVersiones(long id)
+    {
+        var checklist = await _context.Checklists.FindAsync(id);
+        if (checklist == null)
+        {
+            return NotFound(ApiResponse<List<ChecklistVersionDto>>.ErrorResponse("Checklist no encontrado"));
+        }
+
+        var versiones = await _context.Checklists
+            .Where(c => c.Nombre == checklist.Nombre)
+            .OrderByDescending(c => c.Activo)
+            .ThenByDescending(c => c.FechaCreacion)
+            .Select(c => new ChecklistVersionDto
+            {
+                IdChecklist = c.IdChecklist,
+                Nombre = c.Nombre,
+                Version = c.Version,
+                Activo = c.Activo,
+                FechaCreacion = c.FechaCreacion,
+                TotalPreguntas = c.Preguntas.Count,
+                TieneRespuestas = c.Preguntas.Any(p => p.Respuestas.Any())
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<ChecklistVersionDto>>.SuccessResponse(versiones));
+    }
+
+    // Crea una versión nueva copiando las preguntas de la actual y deja la anterior como histórica
+    [HttpPost("{id}/nueva-version")]
+    [Authorize(Roles = "Administrador")]
+    public async Task<ActionResult<ApiResponse<ChecklistDto>>> CreateVersion(long id, CreateChecklistVersionDto createDto)
+    {
+        var origen = await _context.Checklists
+            .Include(c => c.Preguntas)
+            .FirstOrDefaultAsync(c => c.IdChecklist == id);
+
+        if (origen == null)
+        {
+            return NotFound(ApiResponse<ChecklistDto>.ErrorResponse("Checklist no encontrado"));
+        }
+
+        var version = createDto.Version.Trim();
+        if (string.Equals(origen.Version, version, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ApiResponse<ChecklistDto>.ErrorResponse("La nueva versión debe ser diferente de la actual"));
+        }
+
+        var duplicada = await _context.Checklists
+            .AnyAsync(c => c.Nombre == origen.Nombre && c.Version == version);
+        if (duplicada)
+        {
+            return Conflict(ApiResponse<ChecklistDto>.ErrorResponse($"Ya existe la versión '{version}' del checklist '{origen.Nombre}'"));
+        }
+
+        // Solo puede haber una versión activa por nombre: las demás pasan a históricas
+        var activas = await _context.Checklists
+            .Where(c => c.Nombre == origen.Nombre && c.Activo)
+            .ToListAsync();
+        foreach (var activa in activas)
+        {
+            activa.Activo = false;
+        }
+
+        var nueva = new Checklist
+        {
+            Nombre = origen.Nombre,
+            Version = version,
+            Activo = true
+        };
+
+        _context.Checklists.Add(nueva);
+        await _context.SaveChangesAsync();
+
+        foreach (var pregunta in origen.Preguntas.OrderBy(p => p.Orden))
+        {
+            _context.PreguntasChecklist.Add(new PreguntaChecklist
+            {
+                IdChecklist = nueva.IdChecklist,
+                Pregunta = pregunta.Pregunta,
+                TipoRespuesta = pregunta.TipoRespuesta,
+                Obligatoria = pregunta.Obligatoria,
+                Orden = pregunta.Orden
+            });
+        }
+        await _context.SaveChangesAsync();
+
+        await _context.Entry(nueva).Collection(c => c.Preguntas).LoadAsync();
+
+        return CreatedAtAction(nameof(GetChecklist), new { id = nueva.IdChecklist },
+            ApiResponse<ChecklistDto>.SuccessResponse(MapToDto(nueva), $"Versión '{version}' creada exitosamente"));
+    }
+
+    private Task<bool> TieneRespuestasAsync(long idChecklist) =>
+        _context.RespuestasInspeccion.AnyAsync(r => r.Pregunta.IdChecklist == idChecklist);
+
+    // El orden lo fija el servidor según la posición en que llegan las preguntas
+    private void AgregarPreguntas(long idChecklist, IEnumerable<CreatePreguntaChecklistDto> preguntas)
+    {
+        var orden = 1;
+        foreach (var pregunta in preguntas)
+        {
+            _context.PreguntasChecklist.Add(new PreguntaChecklist
+            {
+                IdChecklist = idChecklist,
+                Pregunta = pregunta.Pregunta,
+                TipoRespuesta = pregunta.TipoRespuesta,
+                Obligatoria = pregunta.Obligatoria,
+                Orden = orden++
+            });
+        }
     }
 
     /// <summary>Devuelve un mensaje de error cuando una pregunta usa un tipo de respuesta fuera del catálogo.</summary>
@@ -225,13 +335,14 @@ public class ChecklistsController : ControllerBase
             Version = checklist.Version,
             Activo = checklist.Activo,
             FechaCreacion = checklist.FechaCreacion,
-            Preguntas = checklist.Preguntas.Select(p => new PreguntaChecklistDto
+            Preguntas = checklist.Preguntas.OrderBy(p => p.Orden).Select(p => new PreguntaChecklistDto
             {
                 IdPregunta = p.IdPregunta,
                 IdChecklist = p.IdChecklist,
                 Pregunta = p.Pregunta,
                 TipoRespuesta = p.TipoRespuesta,
-                Obligatoria = p.Obligatoria
+                Obligatoria = p.Obligatoria,
+                Orden = p.Orden
             }).ToList()
         };
     }

@@ -51,6 +51,8 @@ public class Equipo
     [Column("IdUbicacion")]
     public long? IdUbicacion { get; set; }
 
+    // Token opaco (hex de 32 caracteres) que codifica la etiqueta QR; la imagen se genera bajo demanda
+    [MaxLength(64)]
     [Column("QRCode")]
     public string? QRCode { get; set; }
 

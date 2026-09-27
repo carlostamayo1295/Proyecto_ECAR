@@ -52,7 +52,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage" 
-                    SelectedPageChanged="HandlePageChange" />
+                    SelectedChanged="HandlePageChange" />
             }
             else
             {
@@ -120,7 +120,7 @@
         var dialog = await DialogService.ShowAsync<RoleModal>("Crear Nuevo Rol");
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadRolesAsync();
         }
@@ -132,7 +132,7 @@
         var dialog = await DialogService.ShowAsync<RoleModal>("Editar Rol", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadRolesAsync();
         }
@@ -144,7 +144,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             isLoading = true;
             try

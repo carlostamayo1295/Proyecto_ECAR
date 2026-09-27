@@ -66,10 +66,6 @@
                         }
                     </MudSelect>
                 </MudItem>
-                <MudItem xs="12">
-                    <MudTextField T="string" Label="Código QR" @bind-Value="qrCode"
-                        Variant="Variant.Outlined" Immediate="true" Class="mb-3" />
-                </MudItem>
                 @if (IsEditMode)
                 {
                     <MudItem xs="12">
@@ -110,7 +106,6 @@
     private string? criticidad;
     private long? idCategoria;
     private long? idUbicacion;
-    private string? qrCode;
     private bool activo = true;
 
     private List<LookupDto> categorias = new();
@@ -133,7 +128,6 @@
             criticidad = Equipo.Criticidad;
             idCategoria = Equipo.IdCategoria;
             idUbicacion = Equipo.IdUbicacion;
-            qrCode = Equipo.QRCode;
             activo = Equipo.Activo;
         }
     }
@@ -165,7 +159,6 @@
                     Criticidad = criticidad ?? string.Empty,
                     IdCategoria = idCategoria ?? 0,
                     IdUbicacion = idUbicacion ?? 0,
-                    QRCode = qrCode ?? string.Empty,
                     Activo = activo
                 };
 
@@ -194,8 +187,7 @@
                     Fabricante = fabricante,
                     Criticidad = criticidad,
                     IdCategoria = idCategoria,
-                    IdUbicacion = idUbicacion,
-                    QRCode = qrCode
+                    IdUbicacion = idUbicacion
                 };
 
                 var result = await HttpClientService.CreateEquipoAsync(createDto);

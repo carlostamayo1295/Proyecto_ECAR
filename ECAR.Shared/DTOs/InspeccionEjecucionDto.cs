@@ -17,7 +17,7 @@ public class InspeccionEjecucionDto
 
     // --- Cabecera (solo lectura en pantalla) ---
     public long IdEquipo { get; set; }
-    public string CodigoInterno { get; set; } = string.Empty;
+    public string CodigoInternoEquipo { get; set; } = string.Empty;
     public string NombreEquipo { get; set; } = string.Empty;
     public string? UbicacionNombre { get; set; }
     public string? Criticidad { get; set; }
@@ -36,7 +36,7 @@ public class InspeccionEjecucionDto
     public List<EvidenciaDto> Evidencias { get; set; } = new();
 
     // --- Contadores calculados por el servidor ---
-    // El cliente los recalcula localmente tras cada guardado solo para refrescar la UI.
+    // El cliente los recalcula localmente tras cada guardado para refrescar la UI sin releer.
     public int TotalObligatorias { get; set; }
     public int ObligatoriasRespondidas { get; set; }
     public int TotalNovedades { get; set; }

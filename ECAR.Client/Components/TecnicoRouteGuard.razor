@@ -1,0 +1,50 @@
+@inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+@* Protege las pantallas de ejecución de inspecciones: las usan el Técnico y el Administrador.
+   A diferencia de AdminRouteGuard, si no hay sesión envía al login conservando la URL de
+   destino, porque a estas páginas se llega escaneando un QR desde el teléfono. *@
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool isAuthorized;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await AuthorizationService.GetTokenAsync();
+
+        if (string.IsNullOrEmpty(token))
+        {
+            var returnUrl = Uri.EscapeDataString(
+                NavigationManager.ToBaseRelativePath(NavigationManager.Uri));
+            NavigationManager.NavigateTo($"/login?returnUrl={returnUrl}");
+            return;
+        }
+
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        isAuthorized = roles.Contains("Administrador") || roles.Contains("Técnico");
+
+        if (!isAuthorized)
+        {
+            Snackbar.Add("Acceso no autorizado. Solo técnicos y administradores pueden ejecutar inspecciones.", Severity.Error);
+            NavigationManager.NavigateTo("/");
+        }
+
+        isLoading = false;
+    }
+}
+
+@if (isLoading)
+{
+    <MudContainer Class="d-flex justify-center align-center" Style="min-height: 100vh;">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    </MudContainer>
+}
+else if (isAuthorized)
+{
+    @ChildContent
+}

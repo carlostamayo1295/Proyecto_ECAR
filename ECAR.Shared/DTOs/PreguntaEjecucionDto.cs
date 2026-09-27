@@ -16,6 +16,9 @@ public class PreguntaEjecucionDto
 
     public bool Obligatoria { get; set; }
 
+    /// <summary>Id de la fila de respuesta, si ya existe. El upsert va por IdPregunta, no por este id.</summary>
+    public long? IdRespuesta { get; set; }
+
     /// <summary>Respuesta guardada; <c>null</c> cuando la pregunta aún no se ha respondido.</summary>
     public string? Respuesta { get; set; }
 

@@ -1,0 +1,81 @@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+
+@* PASO 2 — Evidencias fotográficas.  Dueño: FE-2 (Santiago).
+
+   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-2):
+   1. MudFileUpload<IBrowserFile> con Accept="image/*" y capture="environment" para que en el
+      teléfono se abra la cámara trasera (regla 9 del SRS).
+   2. Comprimir antes de subir con archivo.RequestImageFileAsync("image/jpeg", 1600, 1600):
+      la red de planta no aguanta fotos de 8 MB.
+   3. Galería de miniaturas con MudImage (data URI vía CargarMiniaturaAsync), nombre, tamaño
+      y botón eliminar con ConfirmDialog.
+
+   Lo que ya está resuelto aquí: subida, borrado y descarga de la imagen contra el API. *@
+
+<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+    Paso pendiente de implementar (FE-2). El contrato con el API ya está disponible.
+</MudAlert>
+
+<MudText Typo="Typo.body2" Class="mud-text-secondary">
+    @Inspeccion.Evidencias.Count fotografía(s) adjunta(s)
+</MudText>
+
+@code {
+    [Parameter, EditorRequired]
+    public InspeccionEjecucionDto Inspeccion { get; set; } = null!;
+
+    /// <summary>Avisa a la página contenedora para que refresque el resumen del paso.</summary>
+    [Parameter]
+    public EventCallback OnEvidenciasCambiadas { get; set; }
+
+    private bool subiendo;
+
+    /// <summary>Sube una fotografía y la añade a la lista en memoria.</summary>
+    protected async Task SubirAsync(IBrowserFile archivo)
+    {
+        if (subiendo)
+        {
+            return;
+        }
+
+        if (archivo.Size > HttpClientService.MaxEvidenciaBytes)
+        {
+            Snackbar.Add("La fotografía supera el máximo de 5 MB", Severity.Warning);
+            return;
+        }
+
+        subiendo = true;
+        var result = await HttpClientService.UploadEvidenciaAsync(Inspeccion.IdInspeccion, archivo);
+        subiendo = false;
+
+        if (result == null || !result.Success || result.Data == null)
+        {
+            Snackbar.Add(result?.Message ?? "Error al subir la fotografía", Severity.Error);
+            return;
+        }
+
+        Inspeccion.Evidencias.Add(result.Data);
+        Snackbar.Add("Fotografía cargada", Severity.Success);
+        await OnEvidenciasCambiadas.InvokeAsync();
+    }
+
+    /// <summary>Elimina una evidencia (solo mientras la inspección siga en curso).</summary>
+    protected async Task EliminarAsync(EvidenciaDto evidencia)
+    {
+        var result = await HttpClientService.DeleteEvidenciaAsync(evidencia.IdEvidencia);
+
+        if (result == null || !result.Success)
+        {
+            Snackbar.Add(result?.Message ?? "Error al eliminar la fotografía", Severity.Error);
+            return;
+        }
+
+        Inspeccion.Evidencias.Remove(evidencia);
+        await OnEvidenciasCambiadas.InvokeAsync();
+    }
+
+    /// <summary>Imagen lista para el atributo Src de MudImage; null si no se pudo descargar.</summary>
+    protected Task<string?> CargarMiniaturaAsync(EvidenciaDto evidencia) =>
+        HttpClientService.GetEvidenciaImageDataUrlAsync(evidencia.IdEvidencia, evidencia.TipoContenido);
+}
