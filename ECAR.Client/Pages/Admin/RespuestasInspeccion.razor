@@ -1,7 +1,6 @@
 ﻿@page "/inspecciones/respuestas"
-@inject MockDataService MockDataService
+@inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
@@ -10,17 +9,12 @@
                 <MudText Typo="Typo.h5">Respuestas de Inspección</MudText>
                 <MudText Typo="Typo.body2">Respuestas registradas durante una inspección</MudText>
             </CardHeaderContent>
-            <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nueva Respuesta
-                </MudButton>
-            </CardHeaderActions>
         </MudCardHeader>
 
         <MudCardContent>
             <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
                 Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                Class="mb-4" />
+                Class="mb-4" DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged" />
 
             @if (isLoading)
             {
@@ -35,7 +29,6 @@
                         <MudTh>Pregunta</MudTh>
                         <MudTh>Respuesta</MudTh>
                         <MudTh>Observación</MudTh>
-                        <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>@context.IdRespuesta.ToString()</MudTd>
@@ -51,16 +44,6 @@
                             {
                                 <MudChip T="string" Color="Color.Default" Size="Size.Small">Sin novedad</MudChip>
                             }
-                        </MudTd>
-                        <MudTd>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteRespuesta(context)" Class="action-button">
-                                Eliminar
-                            </MudButton>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -97,7 +80,7 @@
 
         try
         {
-            var result = await MockDataService.GetRespuestasInspeccionAsync(currentPage, pageSize, searchText);
+            var result = await HttpClientService.GetRespuestasInspeccionAsync(currentPage, pageSize, searchText);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -122,67 +105,16 @@
         }
     }
 
+    private async Task OnSearchChanged()
+    {
+        currentPage = 1;
+        await LoadRespuestasAsync();
+    }
+
     private async Task HandlePageChange(int newPage)
     {
         currentPage = newPage;
         await LoadRespuestasAsync();
-    }
-
-    private async Task OpenCreateDialog()
-    {
-        var dialog = await DialogService.ShowAsync<RespuestaInspeccionModal>("Crear Nueva Respuesta");
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
-        {
-            await LoadRespuestasAsync();
-        }
-    }
-
-    private async Task OpenEditDialog(RespuestaInspeccionDto respuesta)
-    {
-        var parameters = new DialogParameters { ["Respuesta"] = respuesta };
-        var dialog = await DialogService.ShowAsync<RespuestaInspeccionModal>("Editar Respuesta", parameters);
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
-        {
-            await LoadRespuestasAsync();
-        }
-    }
-
-    private async Task DeleteRespuesta(RespuestaInspeccionDto respuesta)
-    {
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la respuesta #{respuesta.IdRespuesta}?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
-        {
-            isLoading = true;
-            try
-            {
-                var deleteResult = await MockDataService.DeleteRespuestaInspeccionAsync(respuesta.IdRespuesta);
-
-                if (deleteResult != null && deleteResult.Success)
-                {
-                    Snackbar.Add("Respuesta eliminada exitosamente", Severity.Success);
-                    await LoadRespuestasAsync();
-                }
-                else
-                {
-                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar respuesta", Severity.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-            }
-            finally
-            {
-                isLoading = false;
-            }
-        }
     }
 }
 
