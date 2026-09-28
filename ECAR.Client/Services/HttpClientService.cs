@@ -1397,24 +1397,24 @@ public class HttpClientService
         /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
         /// para el guardado incremental mientras el técnico avanza.
         /// </summary>
-    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GuardarRespuestasAsync(long idInspeccion,
-        GuardarRespuestasDto guardarDto)
-    {
-        try
+        public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
+            GuardarRespuestasDto guardarDto)
         {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
+            try
+            {
+                await AddAuthorizationHeaderAsync();
+                var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
+                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
+                await RemoveAuthorizationHeaderAsync();
+                return apiResponse;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error guardando respuestas: {ex.Message}");
+                await RemoveAuthorizationHeaderAsync();
+                return null;
+            }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error guardando respuestas: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
 
     public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GetRespuestasInspeccionAsync(long idInspeccion)
     {

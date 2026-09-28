@@ -14,9 +14,6 @@
    Lo que ya está resuelto aquí: el contrato con la página contenedora y la llamada al API.
    No hace falta tocar EjecutarInspeccion.razor. *@
 
-<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-    Paso pendiente de implementar (FE-1). El contrato con el API ya está disponible.
-</MudAlert>
 
 @if (guardando)
 {
@@ -109,22 +106,21 @@ else
             Inspeccion.IdInspeccion, new GuardarRespuestasDto { Respuestas = lote });
         guardando = false;
 
-        if (result == null || !result.Success)
+        if (result == null || !result.Success || result.Data == null)
         {
             Snackbar.Add(result?.Message ?? "Error al guardar las respuestas", Severity.Error);
             return;
         }
 
-        foreach (var guardada in lote)
-        {
-            var pregunta = Inspeccion.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
-            if (pregunta != null)
-            {
-                pregunta.Respuesta = guardada.Respuesta;
-                pregunta.Observacion = guardada.Observacion;
-            }
-        }
+        var actualizada = result.Data;
+        Inspeccion.Preguntas = actualizada.Preguntas;
+        Inspeccion.TotalObligatorias = actualizada.TotalObligatorias;
+        Inspeccion.ObligatoriasRespondidas = actualizada.ObligatoriasRespondidas;
+        Inspeccion.TotalNovedades = actualizada.TotalNovedades;
+        Inspeccion.Evidencias = actualizada.Evidencias;
 
+        Snackbar.Add("Respuesta guardada", Severity.Success);
+        
         await OnRespuestasGuardadas.InvokeAsync();
     }
 }
