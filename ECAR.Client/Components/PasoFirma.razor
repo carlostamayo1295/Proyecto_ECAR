@@ -43,7 +43,12 @@
         "Al firmar, declaro que realicé esta inspección y que la información registrada es veraz. " +
         "La inspección quedará cerrada y no podrá modificarse.";
 
+    // Aquí el guard sí es correcto y debe quedarse: firmar dos veces cerraría la inspección
+    // por duplicado. Úsalo también para deshabilitar el botón mientras dura el envío.
     private bool firmando;
+
+    /// <summary>true mientras el cierre está en curso. Enlázalo al Disabled del botón de firmar.</summary>
+    protected bool Firmando => firmando;
 
     /// <summary>
     /// Firma y cierra la inspección. Recibe el PNG tal como lo produce el canvas (con o sin
@@ -51,19 +56,31 @@
     /// </summary>
     protected async Task FirmarAsync(string firmaPng, string? observaciones = null)
     {
-        if (firmando || string.IsNullOrWhiteSpace(firmaPng))
+        // Doble envío: no es que falte la firma, es que ya se está cerrando. El aviso tiene
+        // que decir eso; si no, el técnico vuelve a dibujar creyendo que se perdió.
+        if (firmando)
+        {
+            Snackbar.Add("La inspección se está cerrando, espere un momento", Severity.Info);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(firmaPng))
         {
             Snackbar.Add("Debe dibujar la firma antes de cerrar la inspección", Severity.Warning);
             return;
         }
 
         firmando = true;
+        await InvokeAsync(StateHasChanged);
+
         var result = await HttpClientService.FirmarInspeccionAsync(Inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             FirmaPngBase64 = QuitarPrefijoDataUri(firmaPng),
             Observaciones = observaciones
         });
+
         firmando = false;
+        await InvokeAsync(StateHasChanged);
 
         if (result == null || !result.Success || result.Data == null)
         {
