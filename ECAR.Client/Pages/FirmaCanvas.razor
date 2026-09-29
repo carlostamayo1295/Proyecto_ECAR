@@ -1,0 +1,47 @@
+﻿@inject IJSRuntime JSRuntime
+
+<div class="firma-container d-flex flex-column align-center">
+    <canvas @ref="canvasRef" width="340" height="200" style="border: 1px solid #ccc; border-radius: 8px; touch-action: none; background-color: white;"></canvas>
+    
+    <div class="mt-4 d-flex gap-4">
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="LimpiarFirma">
+            Limpiar
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmarFirma">
+            Confirmar
+        </MudButton>
+    </div>
+</div>
+
+@code {
+    private ElementReference canvasRef;
+
+    // Este es el puente de comunicación hacia el componente padre (PasoFirma)
+    [Parameter]
+    public EventCallback<string> OnFirmaConfirmada { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("FirmaCanvas.init", canvasRef);
+        }
+    }
+
+    private async Task LimpiarFirma()
+    {
+        await JSRuntime.InvokeVoidAsync("FirmaCanvas.limpiar", canvasRef);
+    }
+
+    private async Task ConfirmarFirma()
+    {
+        // 1. Obtenemos el texto base64 del JavaScript
+        string firmaBase64 = await JSRuntime.InvokeAsync<string>("FirmaCanvas.obtenerBase64", canvasRef);
+        
+        // 2. Le enviamos la firma al componente padre para que ejecute el guardado
+        if (OnFirmaConfirmada.HasDelegate)
+        {
+            await OnFirmaConfirmada.InvokeAsync(firmaBase64);
+        }
+    }
+}}

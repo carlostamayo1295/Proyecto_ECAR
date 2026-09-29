@@ -1,31 +1,28 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 
-@* PASO 3 — Firma y cierre.  Dueño: FE-3 (Gary).
+<MudCard Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" Class="mb-3">Resumen antes de firmar</MudText>
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.body2"><b>Equipo:</b> @Inspeccion.NombreEquipo</MudText>
+            <MudText Typo="Typo.body2"><b>Checklist:</b> @Inspeccion.NombreChecklist (v. @Inspeccion.VersionChecklist)</MudText>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.body2"><b>Preguntas:</b> @Inspeccion.Preguntas.Count respuesta(s)</MudText>
+            <MudText Typo="Typo.body2"><b>Novedades:</b> @Inspeccion.TotalNovedades novedad(es)</MudText>
+            <MudText Typo="Typo.body2"><b>Evidencias:</b> @Inspeccion.Evidencias.Count fotografía(s)</MudText>
+        </MudItem>
+    </MudGrid>
+</MudCard>
 
-   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-3):
-   1. Componente FirmaCanvas.razor: canvas con eventos pointer (ratón y táctil), botones
-      Limpiar / Confirmar, exporta el PNG en base64 con toDataURL. JS propio en
-      wwwroot/js/firma.js, sin librerías externas (misma política que el QR).
-   2. Resumen antes de firmar: equipo, checklist y versión, nº de respuestas, nº de novedades
-      y nº de evidencias.
-   3. Texto legal, ya redactado más abajo, visible antes del botón de firmar.
-   4. Si el API responde con obligatorias faltantes, mostrarlas y ofrecer volver al paso 1
-      con OnVolverAPreguntas.
-
-   Lo que ya está resuelto aquí: la llamada de firma, el manejo del data URI y el reparto
-   de errores de validación. *@
-
-<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-    Paso pendiente de implementar (FE-3). El contrato con el API ya está disponible.
+<MudAlert Severity="Severity.Warning" Class="mb-4 text-justify">
+    @TextoLegal
 </MudAlert>
 
-<MudText Typo="Typo.body2" Class="mb-2">
-    @Inspeccion.Preguntas.Count respuesta(s) · @Inspeccion.TotalNovedades novedad(es) ·
-    @Inspeccion.Evidencias.Count fotografía(s)
-</MudText>
-
-<MudText Typo="Typo.caption" Class="mud-text-secondary">@TextoLegal</MudText>
+<div class="d-flex justify-center mb-2">
+    <FirmaCanvas OnFirmaConfirmada="ProcesarFirmaCanvas" />
+</div>
 
 @code {
     [Parameter, EditorRequired]
@@ -45,6 +42,10 @@
 
     private bool firmando;
 
+    private async Task ProcesarFirmaCanvas(string firmaBase64)
+    {
+        await FirmarAsync(firmaBase64);
+    }
     /// <summary>
     /// Firma y cierra la inspección. Recibe el PNG tal como lo produce el canvas (con o sin
     /// el prefijo data:), porque el API solo acepta el base64 pelado.

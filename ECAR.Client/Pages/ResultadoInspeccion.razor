@@ -1,0 +1,125 @@
+﻿@page "/inspecciones/{IdInspeccion:int}/resultado"
+@inject HttpClientService Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-4">
+    <MudCard Class="pa-6">
+        
+        <!-- Encabezado del Resultado -->
+        <div class="d-flex justify-between align-center mb-4">
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">Resultado de Inspección</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Estado: Cerrada e Inmutable</MudText>
+            </div>
+            <MudChip T="string" Color="@ObtenerColorResultado(resultado?.Resultado)">
+                @(resultado?.Resultado ?? "Cargando...")
+            </MudChip>
+        </div>
+
+        <MudDivider Class="mb-4" />
+
+        <!-- Resumen de Datos -->
+        <MudGrid Spacing="3" Class="mb-4">
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.body2"><b>Equipo:</b> @resultado?.NombreEquipo (@resultado?.CodigoInterno)</MudText>
+                <MudText Typo="Typo.body2"><b>Ubicación:</b> @resultado?.UbicacionNombre</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <!-- Uso de ?. para evitar problemas con DateTime? -->
+                <MudText Typo="Typo.body2"><b>Fecha de Cierre:</b> @resultado?.FechaCierre?.ToString("yyyy-MM-dd HH:mm")</MudText>
+                <MudText Typo="Typo.body2"><b>Técnico Responsable:</b> @resultado?.NombreUsuario</MudText>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Bloque de Auditoría y Hash (SHA-256) -->
+        <MudCard Elevation="2" Class="pa-4 mb-4" Style="background-color: #F8F9FA;">
+            <MudText Typo="Typo.subtitle2" Class="mb-1 text-primary"><b>Auditoría Criptográfica</b></MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                Este hash SHA-256 garantiza la inmutabilidad de la inspección en el servidor.
+            </MudText>
+            <code style="word-break: break-all; background: #E9ECEF; padding: 4px 8px; border-radius: 4px; display: block;">
+                @(resultado?.FirmaHash ?? "Calculando hash de auditoría...")
+            </code>
+        </MudCard>
+
+        <!-- Visualización de la Firma Capturada -->
+        <div class="mb-4 text-center">
+            <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del Técnico</b></MudText>
+            @if (!string.IsNullOrEmpty(resultado?.FirmaPngBase64))
+            {
+                <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid #ccc; border-radius: 4px; max-width: 300px; background: white;" />
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Cargando imagen de firma...</MudText>
+            }
+        </div>
+
+        <!-- Botones de Acción (Solo lectura e Impresión) -->
+        <div class="d-flex justify-end gap-3 mt-6">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="VolverListado">
+                Volver al Listado
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImprimirReporte">
+                <MudIcon Icon="@Icons.Material.Filled.Print" Class="mr-2" /> Imprimir / PDF
+            </MudButton>
+        </div>
+
+    </MudCard>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int IdInspeccion { get; set; }
+
+    private InspeccionResultadoDto? resultado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarResultadoInspeccion();
+    }
+
+    private async Task CargarResultadoInspeccion()
+    {
+        try
+        {
+            var response = await Http.GetInspeccionResultadoAsync(IdInspeccion);
+            
+            if (response != null && response.Success)
+            {
+                resultado = response.Data;
+            }
+            else
+            {
+                Snackbar.Add(response?.Message ?? "No se pudo cargar el resultado de la inspección.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error de conexión al cargar el resultado.", Severity.Error);
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private Color ObtenerColorResultado(string? estado)
+    {
+        return estado switch
+        {
+            "Conforme" => Color.Success,
+            "ConNovedad" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private void VolverListado()
+    {
+        Navigation.NavigateTo("/inspecciones");
+    }
+
+    private async Task ImprimirReporte()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+}
