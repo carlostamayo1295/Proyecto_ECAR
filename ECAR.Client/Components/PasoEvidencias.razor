@@ -29,25 +29,30 @@
     [Parameter]
     public EventCallback OnEvidenciasCambiadas { get; set; }
 
-    private bool subiendo;
+    // Nº de fotografías subiéndose ahora mismo. Se usa para el indicador de progreso, nunca
+    // para descartar una subida: tirar una foto en silencio perdería evidencia de la
+    // inspección sin que el técnico se entere.
+    private int _subidasEnCurso;
+
+    /// <summary>true mientras haya alguna fotografía subiéndose. Úsalo para la barra de progreso.</summary>
+    protected bool Subiendo => _subidasEnCurso > 0;
 
     /// <summary>Sube una fotografía y la añade a la lista en memoria.</summary>
     protected async Task SubirAsync(IBrowserFile archivo)
     {
-        if (subiendo)
-        {
-            return;
-        }
-
         if (archivo.Size > HttpClientService.MaxEvidenciaBytes)
         {
             Snackbar.Add("La fotografía supera el máximo de 5 MB", Severity.Warning);
             return;
         }
 
-        subiendo = true;
+        _subidasEnCurso++;
+        await InvokeAsync(StateHasChanged);
+
         var result = await HttpClientService.UploadEvidenciaAsync(Inspeccion.IdInspeccion, archivo);
-        subiendo = false;
+
+        _subidasEnCurso--;
+        await InvokeAsync(StateHasChanged);
 
         if (result == null || !result.Success || result.Data == null)
         {
