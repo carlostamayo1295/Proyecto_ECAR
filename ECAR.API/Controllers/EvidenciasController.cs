@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.API.Services;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
@@ -119,6 +120,12 @@ public class EvidenciasController : ControllerBase
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección indicada no existe"));
         }
 
+        // Regla 6 del SRS: sobre una inspección cerrada no se añaden evidencias.
+        if (inspeccion.Estado == InspeccionEstados.Cerrada)
+        {
+            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
+        }
+
         var evidencia = new Evidencia
         {
             IdInspeccion = createDto.IdInspeccion,
@@ -159,6 +166,12 @@ public class EvidenciasController : ControllerBase
         if (evidencia == null)
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
+        }
+
+        // Regla 6 del SRS: tampoco se borran las evidencias de una inspección cerrada.
+        if (await _context.ObtenerEstadoEscrituraAsync(evidencia.IdInspeccion) == EstadoEscritura.Cerrada)
+        {
+            return Conflict(ApiResponse<bool>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
         }
 
         _context.Evidencias.Remove(evidencia);
