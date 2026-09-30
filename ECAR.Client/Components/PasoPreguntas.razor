@@ -109,6 +109,15 @@ else
 
         // Actualización en sitio: no se reemplaza la colección para no pisar lo que el
         // técnico esté escribiendo en otra pregunta.
+        //
+        // Del eco del servidor solo se toma IdRespuesta, que es lo único que no teníamos: el
+        // id de la fila recién insertada. Respuesta y Observacion NO se copian de vuelta, y es
+        // a propósito. El API guarda literalmente lo que le mandamos (no recorta, no normaliza,
+        // no calcula nada), así que el eco no aporta información nueva; lo único que puede
+        // hacer es pisar lo que el técnico haya escrito durante el viaje de ida y vuelta.
+        // Caso real: en una pregunta de texto se escribe, se hace una pausa de medio segundo
+        // (salta el debounce y se envía), se sigue escribiendo, y al volver la respuesta el
+        // campo revertía a la frase a medias que se había enviado.
         foreach (var guardada in lote)
         {
             var pregunta = Inspeccion.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
@@ -116,8 +125,6 @@ else
             if (pregunta != null && confirmada != null)
             {
                 pregunta.IdRespuesta = confirmada.IdRespuesta;
-                pregunta.Respuesta = confirmada.Respuesta;
-                pregunta.Observacion = confirmada.Observacion;
             }
         }
 

@@ -146,6 +146,30 @@ confirmaste y toma solo los contadores tal cual. Si haces
 cualquier otra pregunta en ese momento. `GuardarAsync` ya lo hace correctamente; no lo
 cambies.
 
+### Tampoco copies de vuelta lo que el usuario acaba de escribir
+
+La versión anterior de `GuardarAsync` actualizaba en sitio, sí, pero copiaba del eco del
+servidor los tres campos:
+
+```csharp
+pregunta.IdRespuesta = confirmada.IdRespuesta;
+pregunta.Respuesta   = confirmada.Respuesta;    // ← mal
+pregunta.Observacion = confirmada.Observacion;  // ← mal
+```
+
+Actualizar "en sitio" no basta: el problema no era la colección, era el campo. Entre que sale
+la petición y vuelve la respuesta pasan cientos de milisegundos, y en una pregunta de texto el
+técnico sigue escribiendo. Al llegar el eco, el campo revertía a la frase a medias que se había
+enviado. Se reproduce así: escribir, parar medio segundo (salta el debounce y se envía), seguir
+escribiendo sin levantar las manos.
+
+**Del eco toma solo lo que no tenías**, que es `IdRespuesta` (el id de la fila recién
+insertada). `Respuesta` y `Observacion` ya las tienes, y más frescas que el servidor: el API las
+guarda literalmente como se las mandas, sin recortar ni normalizar, así que el eco no aporta
+nada. Lo mismo vale para cualquier otro campo que el usuario pueda estar editando en ese
+momento. Los contadores (`TotalObligatorias`, `ObligatoriasRespondidas`, `TotalNovedades`) sí se
+toman del servidor: esos los calcula él y el cliente no los puede deducir.
+
 ### Decisión de diseño: el resultado es una página, no un paso
 
 El plan hablaba de cuatro pasos. El cuarto, **Resultado, es una ruta propia**
