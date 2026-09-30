@@ -1,23 +1,20 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
-
 @* PASO 1 — Preguntas y respuestas.  Dueño: FE-1 (Erica).
 
-   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-1):
-   1. Recorrer Inspeccion.Preguntas en orden y pintar cada una con RespuestaPreguntaInput
-      (ya existe: SiNo = dos casillas, Texto = campo de texto).
-   2. Marcar visualmente las obligatorias y mostrar el campo Observación; hacerlo obligatorio
-      cuando la pregunta sea Sí/No respondida con "No" (regla 4 del SRS).
-   3. Guardado incremental: llamar a GuardarAsync con debounce de 500 ms al cambiar una
-      respuesta, y mostrar el indicador "Guardando / Guardado / Error al guardar".
+   Pinta cada pregunta de Inspeccion.Preguntas con RespuestaPreguntaInput y persiste cada
+   cambio con debounce por pregunta (ver ProgramarGuardado): tanto la respuesta como la
+   Observación (obligatoria cuando la pregunta es Sí/No y quedó en "No", regla 4 del SRS)
+   se guardan solas, sin esperar a que el técnico toque otro campo.
 
-   Lo que ya está resuelto aquí: el contrato con la página contenedora y la llamada al API.
-   No hace falta tocar EjecutarInspeccion.razor. *@
+   El indicador Estado (cabecera) muestra Guardando/Guardado/Error; el Snackbar queda
+   reservado solo para errores, para no saturar la pantalla en preguntas de texto. *@
 
-
-@if (guardando)
+@if (Estado != EstadoGuardado.Inactivo)
 {
-    <MudText Typo="Typo.caption" Color="Color.Info" Class="mb-2">Guardando...</MudText>
+    <MudText Typo="Typo.caption" Class="d-block mb-2" Color="@ColorEstado">
+        @TextoEstado
+    </MudText>
 }
 
 @if (Inspeccion.Preguntas.Count == 0)
@@ -38,7 +35,11 @@ else
         @if (pregunta.EsNovedad)
         {
             <MudTextField T="string" Label="Observación" @bind-Value="pregunta.Observacion"
-                          Variant="Variant.Outlined" Lines="2" Required="true" />
+                          @bind-Value:after="() => ProgramarGuardado(pregunta)"
+                          Variant="Variant.Outlined" Lines="2" Required="true"
+                          Immediate="true" DebounceInterval="500"
+                          Error="@(pregunta.EsNovedad && string.IsNullOrWhiteSpace(pregunta.Observacion))"
+                          ErrorText="La observación es obligatoria cuando hay novedad" />
         }
     }
 }
@@ -51,18 +52,49 @@ else
     [Parameter]
     public EventCallback OnRespuestasGuardadas { get; set; }
 
-    private bool guardando;
-    private CancellationTokenSource? _debounceCts;
+    protected enum EstadoGuardado { Inactivo, Guardando, Guardado, Error }
+
+    /// <summary>Estado del último guardado; lo pinta el indicador de la cabecera.</summary>
+    protected EstadoGuardado Estado { get; private set; } = EstadoGuardado.Inactivo;
+
+    // Contador de peticiones en vuelo. No se usa para descartar guardados: solo para saber
+    // si queda alguno pendiente antes de mostrar "Guardado".
+    private int _guardadosEnCurso;
+
+    private string TextoEstado => Estado switch
+    {
+        EstadoGuardado.Guardando => "Guardando…",
+        EstadoGuardado.Guardado => "Guardado",
+        EstadoGuardado.Error => "Error al guardar",
+        _ => string.Empty
+    };
+
+    private Color ColorEstado => Estado switch
+    {
+        EstadoGuardado.Error => Color.Error,
+        EstadoGuardado.Guardado => Color.Success,
+        _ => Color.Default
+    };
+
+    private readonly Dictionary<long, CancellationTokenSource> _debounces = new();
+
+    private void ProgramarGuardado(PreguntaEjecucionDto pregunta)
+    {
+        if (_debounces.TryGetValue(pregunta.IdPregunta, out var anterior))
+        {
+            anterior.Cancel();
+            anterior.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        _debounces[pregunta.IdPregunta] = cts;
+        _ = EsperarYGuardarAsync(pregunta, cts.Token);
+    }
 
     private void OnRespuestaCambiada(PreguntaEjecucionDto pregunta, string nuevoValor)
     {
         pregunta.Respuesta = nuevoValor;
-
-        _debounceCts?.Cancel();
-        _debounceCts = new CancellationTokenSource();
-        var token = _debounceCts.Token;
-
-        _ = EsperarYGuardarAsync(pregunta, token);
+        ProgramarGuardado(pregunta);
     }
 
     private async Task EsperarYGuardarAsync(PreguntaEjecucionDto pregunta, CancellationToken token)
@@ -92,35 +124,70 @@ else
     /// <summary>
     /// Envía un lote de respuestas y refleja lo guardado en la copia en memoria.
     /// Se puede llamar con una sola respuesta (guardado incremental) o con todas.
+    /// Se invoca desde tareas lanzadas fuera del ciclo de render (debounce), por eso el
+    /// repintado va siempre por InvokeAsync.
     /// </summary>
     protected async Task GuardarAsync(IEnumerable<RespuestaEjecucionDto> respuestas)
     {
         var lote = respuestas.ToList();
-        if (lote.Count == 0 || guardando)
+        if (lote.Count == 0)
         {
             return;
         }
 
-        guardando = true;
+        // Nunca se descarta un guardado porque haya otro en vuelo: el upsert del API es
+        // idempotente por (IdInspeccion, IdPregunta), así que dos envíos no se pisan, y
+        // tirar uno en silencio perdería la respuesta del técnico sin avisar.
+        _guardadosEnCurso++;
+        await CambiarEstadoAsync(EstadoGuardado.Guardando);
+
         var result = await HttpClientService.GuardarRespuestasAsync(
             Inspeccion.IdInspeccion, new GuardarRespuestasDto { Respuestas = lote });
-        guardando = false;
+
+        _guardadosEnCurso--;
 
         if (result == null || !result.Success || result.Data == null)
         {
+            await CambiarEstadoAsync(EstadoGuardado.Error);
             Snackbar.Add(result?.Message ?? "Error al guardar las respuestas", Severity.Error);
             return;
         }
 
-        var actualizada = result.Data;
-        Inspeccion.Preguntas = actualizada.Preguntas;
-        Inspeccion.TotalObligatorias = actualizada.TotalObligatorias;
-        Inspeccion.ObligatoriasRespondidas = actualizada.ObligatoriasRespondidas;
-        Inspeccion.TotalNovedades = actualizada.TotalNovedades;
-        Inspeccion.Evidencias = actualizada.Evidencias;
+        // Actualización en sitio: no se reemplaza la colección para no pisar lo que el
+        // técnico esté escribiendo en otra pregunta.
+        foreach (var guardada in lote)
+        {
+            var pregunta = Inspeccion.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
+            var confirmada = result.Data.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
+            if (pregunta != null && confirmada != null)
+            {
+                pregunta.IdRespuesta = confirmada.IdRespuesta;
+                pregunta.Respuesta = confirmada.Respuesta;
+                pregunta.Observacion = confirmada.Observacion;
+            }
+        }
 
-        Snackbar.Add("Respuesta guardada", Severity.Success);
-        
+        // Los contadores sí son escalares: la fuente de verdad es el servidor.
+        Inspeccion.TotalObligatorias = result.Data.TotalObligatorias;
+        Inspeccion.ObligatoriasRespondidas = result.Data.ObligatoriasRespondidas;
+        Inspeccion.TotalNovedades = result.Data.TotalNovedades;
+
+        // Solo se anuncia "Guardado" cuando no queda ningún envío pendiente.
+        if (_guardadosEnCurso == 0)
+        {
+            await CambiarEstadoAsync(EstadoGuardado.Guardado);
+        }
+
         await OnRespuestasGuardadas.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Cambia el estado y repinta. Va por InvokeAsync porque GuardarAsync se llama desde
+    /// tareas lanzadas fuera del ciclo de render: sin esto el indicador no se actualiza.
+    /// </summary>
+    private async Task CambiarEstadoAsync(EstadoGuardado nuevo)
+    {
+        Estado = nuevo;
+        await InvokeAsync(StateHasChanged);
     }
 }

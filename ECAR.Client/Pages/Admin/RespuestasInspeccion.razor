@@ -12,9 +12,21 @@
         </MudCardHeader>
 
         <MudCardContent>
-            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                Class="mb-4" DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged" />
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                                  DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudAutocomplete T="InspeccionDto" Label="Filtrar por inspección" @bind-Value="inspeccionSeleccionada"
+                                     @bind-Value:after="OnInspeccionChanged"
+                                     SearchFunc="BuscarInspeccionesAsync" ToStringFunc="@(i => i == null ? string.Empty : $"#{i.IdInspeccion} - {i.NombreEquipo}")"
+                                     Variant="Variant.Outlined"
+                                     MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
+                                     Clearable="true" />
+                </MudItem>
+            </MudGrid>
 
             @if (isLoading)
             {
@@ -69,6 +81,13 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
+    // El API rechaza pageSize mayor que 100; además el desplegable solo muestra los primeros resultados.
+    private const int MaxResultadosBusqueda = 20;
+
+    private InspeccionDto? inspeccionSeleccionada;
+
+    // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
+    private bool errorInspeccionesAvisado;
     protected override async Task OnInitializedAsync()
     {
         await LoadRespuestasAsync();
@@ -80,7 +99,8 @@
 
         try
         {
-            var result = await HttpClientService.GetRespuestasInspeccionAsync(currentPage, pageSize, searchText);
+            var result = await HttpClientService.GetRespuestasInspeccionAsync(
+                currentPage, pageSize, searchText, inspeccionSeleccionada?.IdInspeccion);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -111,12 +131,39 @@
         await LoadRespuestasAsync();
     }
 
+    // El filtro se resuelve en el API para que la lista funcione con muchas inspecciones.
+    private async Task<IEnumerable<InspeccionDto>> BuscarInspeccionesAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetInspeccionesAsync(1, MaxResultadosBusqueda, valor);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            if (!errorInspeccionesAvisado)
+            {
+                errorInspeccionesAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar las inspecciones", Severity.Error);
+            }
+
+            return Array.Empty<InspeccionDto>();
+        }
+
+        errorInspeccionesAvisado = false;
+        return respuesta.Data?.Data ?? new List<InspeccionDto>();
+    }
+
+    private async Task OnInspeccionChanged()
+    {
+        currentPage = 1;
+        await LoadRespuestasAsync();
+    }
+
     private async Task HandlePageChange(int newPage)
     {
         currentPage = newPage;
         await LoadRespuestasAsync();
     }
 }
+
 
 <style>
 .action-button {
