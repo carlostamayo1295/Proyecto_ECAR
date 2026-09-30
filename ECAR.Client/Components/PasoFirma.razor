@@ -20,19 +20,37 @@
     @TextoLegal
 </MudAlert>
 
+<!-- Componente del Canvas para capturar la firma -->
 <div class="d-flex justify-center mb-2">
-    <FirmaCanvas OnFirmaConfirmada="ProcesarFirmaCanvas" />
+    <FirmaCanvas OnFirmaConfirmada="RecibirFirma" />
 </div>
+
+@if (!string.IsNullOrWhiteSpace(firmaCapturada))
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+        Firma capturada. Revise el resumen y pulse "Firmar y cerrar" para terminar la inspección[cite: 2].
+    </MudAlert>
+}
+
+<!-- Campo de observaciones generales opcional -->
+<MudTextField @bind-Value="observacionesCierre" Label="Observaciones generales (opcional)"
+              Variant="Variant.Outlined" Lines="3" Class="mb-3" />
+
+<!-- Botón definitivo independiente para cerrar la inspección -->
+<MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
+           StartIcon="@Icons.Material.Filled.Lock"
+           Disabled="@(Firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
+           OnClick="@(() => FirmarAsync(firmaCapturada!, observacionesCierre))">
+    @(Firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")[cite: 2]
+</MudButton>
 
 @code {
     [Parameter, EditorRequired]
     public InspeccionEjecucionDto Inspeccion { get; set; } = null!;
 
-    /// <summary>Se dispara con el resultado cuando la inspección queda firmada y cerrada.</summary>
     [Parameter]
     public EventCallback<InspeccionResultadoDto> OnFirmada { get; set; }
 
-    /// <summary>Devuelve al paso de preguntas cuando el API reporta obligatorias faltantes.</summary>
     [Parameter]
     public EventCallback OnVolverAPreguntas { get; set; }
 
@@ -41,19 +59,17 @@
         "La inspección quedará cerrada y no podrá modificarse.";
 
     private bool firmando;
-
-    /// <summary>true mientras el cierre está en curso. Enlázalo al Disabled del botón de firmar.</summary>
     protected bool Firmando => firmando;
 
-    private async Task ProcesarFirmaCanvas(string firmaBase64)
+    private string? firmaCapturada;
+    private string? observacionesCierre;
+
+    // Recibe el trazo validado desde el componente del canvas sin cerrar la inspección todavía
+    private void RecibirFirma(string firmaBase64)
     {
-        await FirmarAsync(firmaBase64);
+        firmaCapturada = firmaBase64;
     }
 
-    /// <summary>
-    /// Firma y cierra la inspección. Recibe el PNG tal como lo produce el canvas (con o sin
-    /// el prefijo data:), porque el API solo acepta el base64 pelado.
-    /// </summary>
     protected async Task FirmarAsync(string firmaPng, string? observaciones = null)
     {
         if (firmando)

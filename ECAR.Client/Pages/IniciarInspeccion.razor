@@ -1,0 +1,78 @@
+﻿@page "/inspecciones/iniciar"
+@inject HttpClientService HttpClientService
+@inject NavigationManager NavigationManager
+
+<div class="d-flex justify-center align-center" style="height: 80vh;">
+    <MudCard Elevation="2" Class="pa-6 text-center" Style="max-width: 400px; width: 100%;">
+        @if (_cargando)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" Class="mb-4" />
+            <MudText Typo="Typo.h6">Iniciando inspección...</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                Por favor espere mientras inicia la sesión y el equipo.
+            </MudText>
+        }
+        else if (_error != null)
+        {
+            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-2" />
+            <MudText Typo="Typo.h6" Color="Color.Error">No se pudo iniciar</MudText>
+            <MudText Typo="Typo.body2" Class="my-3">@_error</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="VolverAlQr">
+                Volver al escáner QR
+            </MudButton>
+        }
+    </MudCard>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "equipo")]
+    public long? IdEquipo { get; set; }
+
+    [SupplyParameterFromQuery(Name = "checklist")]
+    public long? IdChecklist { get; set; }
+
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IdEquipo.HasValue || !IdChecklist.HasValue)
+        {
+            _error = "Los parámetros del equipo o checklist son inválidos.";
+            _cargando = false;
+            return;
+        }
+
+        try
+        {
+            var result = await HttpClientService.IniciarInspeccionAsync(new IniciarInspeccionDto
+            {
+                IdEquipo = IdEquipo.Value,
+                IdChecklist = IdChecklist.Value
+            });
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                NavigationManager.NavigateTo($"/inspecciones/ejecutar/{result.Data.IdInspeccion}", replace: true);
+            }
+            else
+            {
+                // Si el servidor responde un error (por ejemplo, 401 Unauthorized), mandamos al login
+                var currentUri = NavigationManager.Uri;
+                var loginUrl = $"/login?returnUrl={Uri.EscapeDataString(currentUri)}";
+                NavigationManager.NavigateTo(loginUrl, forceLoad: true);
+            }
+        }
+        catch (Exception)
+        {
+            var currentUri = NavigationManager.Uri;
+            var loginUrl = $"/login?returnUrl={Uri.EscapeDataString(currentUri)}";
+            NavigationManager.NavigateTo(loginUrl, forceLoad: true);
+        }
+    }
+
+    private void VolverAlQr()
+    {
+        NavigationManager.NavigateTo("/equipos/qr");
+    }
+}
