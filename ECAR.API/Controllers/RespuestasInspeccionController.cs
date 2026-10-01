@@ -1,9 +1,8 @@
-﻿using ECAR.Infrastructure.Data;
+﻿using ECAR.API.Services;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECAR.API.Controllers;
 
@@ -12,41 +11,28 @@ namespace ECAR.API.Controllers;
 [Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class RespuestasInspeccionController : ControllerBase
 {
-    private readonly ECARDbContext _context;
+    private readonly IInspeccionService _inspeccionService;
+    private readonly ICurrentUser _currentUser;
 
-    public RespuestasInspeccionController(ECARDbContext context)
+    public RespuestasInspeccionController(IInspeccionService inspeccionService, ICurrentUser currentUser)
     {
-        _context = context;
+        _inspeccionService = inspeccionService;
+        _currentUser = currentUser;
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<PagedResultDto<RespuestaInspeccionDto>>>> GetRespuestas([FromQuery] PagedRequestDto request)
+    public async Task<ActionResult<ApiResponse<PagedResultDto<RespuestaInspeccionDto>>>> GetRespuestas(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] long? idInspeccion = null)
     {
-        var query = _context.RespuestasInspeccion.AsNoTracking();
+        var usuarioId = _currentUser.IdUsuario;
+        var esAdmin = _currentUser.IsInRole("Administrador");
+        var esAuditor = _currentUser.IsInRole("Auditor");
 
-        var totalCount = await query.CountAsync();
-
-        var respuestas = await query
-            .OrderByDescending(r => r.IdRespuesta)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .Select(r => new RespuestaInspeccionDto
-            {
-                IdRespuesta = r.IdRespuesta,
-                IdInspeccion = r.IdInspeccion,
-                IdPregunta = r.IdPregunta,
-                Respuesta = r.Respuesta,
-                Observacion = r.Observacion
-            })
-            .ToListAsync();
-
-        var pagedResult = new PagedResultDto<RespuestaInspeccionDto>
-        {
-            Data = respuestas,
-            TotalCount = totalCount,
-            Page = request.PageNumber,
-            PageSize = request.PageSize
-        };
+        var pagedResult = await _inspeccionService.ObtenerRespuestasPaginadasAsync(
+            page, pageSize, search, idInspeccion, usuarioId, esAdmin, esAuditor);
 
         return Ok(ApiResponse<PagedResultDto<RespuestaInspeccionDto>>.SuccessResponse(pagedResult));
     }

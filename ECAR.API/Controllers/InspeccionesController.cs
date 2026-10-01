@@ -1,6 +1,7 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.API.Services;
+using ECAR.API.Exceptions;
 using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
@@ -17,11 +18,13 @@ public class InspeccionesController : ControllerBase
 {
     private readonly ECARDbContext _context;
     private readonly ICurrentUser _currentUser;
+    private readonly IInspeccionService _inspeccionService;
 
-    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser)
+    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser, IInspeccionService inspeccionService)
     {
         _context = context;
         _currentUser = currentUser;
+        _inspeccionService = inspeccionService;
     }
 
     [HttpGet]
@@ -82,6 +85,38 @@ public class InspeccionesController : ControllerBase
         };
 
         return Ok(ApiResponse<PagedResultDto<InspeccionDto>>.SuccessResponse(pagedResult));
+    }
+
+    // Punto 2: GET /api/inspecciones/mias?estado=
+    [HttpGet("mias")]
+    public async Task<ActionResult<ApiResponse<List<InspeccionDto>>>> GetMisInspecciones([FromQuery] string? estado)
+    {
+        var usuarioId = _currentUser.IdUsuario;
+        var result = await _inspeccionService.ObtenerMisInspeccionesAsync(usuarioId, estado);
+        return Ok(ApiResponse<List<InspeccionDto>>.SuccessResponse(result));
+    }
+
+    // Punto 1: GET /api/inspecciones/{id}/respuestas
+    [HttpGet("{id}/respuestas")]
+    public async Task<ActionResult<ApiResponse<List<RespuestaInspeccionDto>>>> GetRespuestas(long id)
+    {
+        try
+        {
+            var usuarioId = _currentUser.IdUsuario;
+            var esAdmin = _currentUser.IsInRole("Administrador");
+            var esAuditor = _currentUser.IsInRole("Auditor");
+
+            var respuestas = await _inspeccionService.ObtenerRespuestasAsync(id, usuarioId, esAdmin, esAuditor);
+            return Ok(ApiResponse<List<RespuestaInspeccionDto>>.SuccessResponse(respuestas));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<List<RespuestaInspeccionDto>>.ErrorResponse(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("{id}")]
@@ -215,7 +250,6 @@ public class InspeccionesController : ControllerBase
                 "El checklist indicado no existe o no está activo"));
         }
 
-        // Regla de negocio: si existe novedad, la observación es obligatoria
         if (!string.IsNullOrWhiteSpace(createDto.Resultado)
             && createDto.Resultado.Contains("novedad", StringComparison.OrdinalIgnoreCase)
             && string.IsNullOrWhiteSpace(createDto.Observaciones))
@@ -289,70 +323,41 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección actualizada exitosamente"));
     }
 
-    /// <summary>
-    /// Guarda o actualiza (Upsert) por lote las respuestas de una inspección en curso.
-    /// Consumido por Blazor (PasoPreguntas.razor)
-    /// </summary>
+    // Punto 6, 3, 4, 5: Guardar respuestas usando el servicio y devolviendo 409 Conflict si está cerrada
     [HttpPut("{id}/respuestas")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> GuardarRespuestas(
         long id,
         [FromBody] GuardarRespuestasDto dto)
     {
-        var inspeccion = await _context.Inspecciones
-            .Include(i => i.Respuestas)
-            .FirstOrDefaultAsync(i => i.IdInspeccion == id);
-
-        if (inspeccion == null)
+        try
         {
-            return NotFound(ApiResponse<InspeccionEjecucionDto>.ErrorResponse("Inspección no encontrada"));
-        }
+            var usuarioId = _currentUser.IdUsuario;
+            var esAdmin = _currentUser.IsInRole("Administrador");
 
-        // 1. Validación de permisos: Solo el técnico asignado o Admin
-        if (!PuedeModificar(inspeccion))
+            await _inspeccionService.GuardarRespuestasAsync(id, dto, usuarioId, esAdmin);
+
+            var ejecucionActualizada = await CargarEjecucionAsync(id);
+            return Ok(ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
+                MapToEjecucionDto(ejecucionActualizada!),
+                "Respuestas guardadas exitosamente"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
-
-        // 2. Validación 21 CFR Part 11: Inmutabilidad si la inspección no está en curso
-        if (inspeccion.Estado != InspeccionEstados.EnCurso)
+        catch (InspeccionCerradaException ex) // Retorna 409 Conflict
         {
-            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
-                "Solo se pueden guardar respuestas en inspecciones que estén 'En curso'"));
+            return Conflict(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
         }
-
-        // 3. Lógica de UPSERT por lote (Actualizar si existe, insertar si no)
-        foreach (var item in dto.Respuestas)
+        catch (ArgumentException ex) // Retorna 400 BadRequest para validaciones
         {
-            var respuestaExistente = inspeccion.Respuestas
-                .FirstOrDefault(r => r.IdPregunta == item.IdPregunta);
-
-            if (respuestaExistente != null)
-            {
-                // UPDATE
-                respuestaExistente.Respuesta = item.Respuesta;
-                respuestaExistente.Observacion = item.Observacion;
-            }
-            else
-            {
-                // INSERT
-                inspeccion.Respuestas.Add(new RespuestaInspeccion
-                {
-                    IdInspeccion = id,
-                    IdPregunta = item.IdPregunta,
-                    Respuesta = item.Respuesta,
-                    Observacion = item.Observacion
-                });
-            }
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
         }
-
-        await _context.SaveChangesAsync();
-
-        // 4. Retorna el DTO de ejecución actualizado para que Blazor recalcule contadores en tiempo real
-        var ejecucionActualizada = await CargarEjecucionAsync(id);
-        return Ok(ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
-            MapToEjecucionDto(ejecucionActualizada!),
-            "Respuestas guardadas exitosamente"));
     }
 
     [HttpDelete("{id}")]
@@ -408,7 +413,6 @@ public class InspeccionesController : ControllerBase
         var respuestasPorPregunta = inspeccion.Respuestas
             .ToDictionary(respuesta => respuesta.IdPregunta);
 
-        // Contadores que la pantalla de ejecución usa para el stepper (reglas 3 y 4 del SRS).
         var preguntasChecklist = inspeccion.Checklist.Preguntas.ToList();
         var obligatorias = preguntasChecklist.Where(pregunta => pregunta.Obligatoria).ToList();
         var obligatoriasRespondidas = obligatorias.Count(pregunta =>
