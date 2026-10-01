@@ -25,6 +25,7 @@
 </div>
 
 @code {
+
     [SupplyParameterFromQuery(Name = "equipo")]
     public long? IdEquipo { get; set; }
 
@@ -51,17 +52,18 @@
                 IdChecklist = IdChecklist.Value
             });
 
-            if (result != null && result.Success && result.Data != null)
+            // Tanto si fue creada (Success) como si ya existía una en curso (409 con Data lleno),
+            // navegamos usando el IdInspeccion que venga en Data.
+            if (result?.Data != null)
             {
                 NavigationManager.NavigateTo($"/inspecciones/ejecutar/{result.Data.IdInspeccion}", replace: true);
+                return;
             }
-            else
-            {
-                // Si el servidor responde un error (por ejemplo, 401 Unauthorized), mandamos al login
-                var currentUri = NavigationManager.Uri;
-                var loginUrl = $"/login?returnUrl={Uri.EscapeDataString(currentUri)}";
-                NavigationManager.NavigateTo(loginUrl, forceLoad: true);
-            }
+
+            // Solo si de verdad no vino ningún dato (probable 401/sin sesión), mandamos a login.
+            var currentUri = NavigationManager.Uri;
+            var loginUrl = $"/login?returnUrl={Uri.EscapeDataString(currentUri)}";
+            NavigationManager.NavigateTo(loginUrl, forceLoad: true);
         }
         catch (Exception)
         {
@@ -73,6 +75,6 @@
 
     private void VolverAlQr()
     {
-        NavigationManager.NavigateTo("/equipos/qr");
+        NavigationManager.NavigateTo("/", replace: true);
     }
 }

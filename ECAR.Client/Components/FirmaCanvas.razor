@@ -1,4 +1,5 @@
 ﻿@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
 
 <div class="firma-container d-flex flex-column align-center">
     <canvas @ref="canvasRef" width="340" height="200" style="border: 1px solid #ccc; border-radius: 8px; touch-action: none; background-color: white;"></canvas>
@@ -35,10 +36,16 @@
 
     private async Task ConfirmarFirma()
     {
-        // 1. Obtenemos el texto base64 del JavaScript
+        bool tieneTrazo = await JSRuntime.InvokeAsync<bool>("FirmaCanvas.tieneTrazo", canvasRef);
+
+        if (!tieneTrazo)
+        {
+            Snackbar.Add("Debe firmar antes de continuar. El recuadro está en blanco.", Severity.Warning);
+            return;
+        }
+
         string firmaBase64 = await JSRuntime.InvokeAsync<string>("FirmaCanvas.obtenerBase64", canvasRef);
-        
-        // 2. Le enviamos la firma al componente padre para que ejecute el guardado
+
         if (OnFirmaConfirmada.HasDelegate)
         {
             await OnFirmaConfirmada.InvokeAsync(firmaBase64);

@@ -1,0 +1,21 @@
+﻿@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .resultado-print-area,
+    .resultado-print-area * {
+        visibility: visible;
+    }
+
+    .resultado-print-area {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+    }
+
+    .print-hidden {
+        display: none !important;
+    }
+}
