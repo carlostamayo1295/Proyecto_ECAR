@@ -22,7 +22,7 @@ namespace ECAR.API.Services
             var año = DateTime.UtcNow.Year.ToString();
             var mes = DateTime.UtcNow.Month.ToString("D2");
             var nombreArchivo = $"{Guid.NewGuid()}{extension}";
-            
+
             var rutaRelativa = Path.Combine(año, mes, idInspeccion.ToString(), nombreArchivo);
             var rutaFisica = Path.Combine(_rutaBase, rutaRelativa);
 
@@ -40,7 +40,7 @@ namespace ECAR.API.Services
         public Task<Stream> AbrirAsync(string rutaRelativa)
         {
             var rutaFisica = Path.Combine(_rutaBase, rutaRelativa);
-            
+
             // Seguridad: Bloquear intentos de "Directory Traversal" (ej. ../../Windows/System32)
             if (!Path.GetFullPath(rutaFisica).StartsWith(_rutaBase))
                 throw new UnauthorizedAccessException("Intento de acceso a ruta no permitida.");

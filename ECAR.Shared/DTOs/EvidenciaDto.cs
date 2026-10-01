@@ -17,7 +17,7 @@ public class EvidenciaDto
     public long IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
 
-/// <summary>
+    /// <summary>
     /// Estado de la inspección a la que pertenece esta evidencia ("EnCurso" o "Cerrada").
     /// </summary>
     public string EstadoInspeccion { get; set; } = string.Empty;

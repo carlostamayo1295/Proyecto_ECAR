@@ -139,7 +139,7 @@ public class EvidenciasController : ControllerBase
     // POST: api/inspecciones/{idInspeccion}/evidencias
     [HttpPost("/api/inspecciones/{idInspeccion:long}/evidencias")]
     public async Task<ActionResult<ApiResponse<EvidenciaDto>>> CreateEvidencia(
-        long idInspeccion, 
+        long idInspeccion,
         IFormFile archivo)
     {
         if (archivo == null || archivo.Length == 0)
