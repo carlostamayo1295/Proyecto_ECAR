@@ -28,7 +28,7 @@
 @if (!string.IsNullOrWhiteSpace(firmaCapturada))
 {
     <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
-        Firma capturada. Revise el resumen y pulse "Firmar y cerrar" para terminar la inspección[cite: 2].
+        Firma capturada. Revise el resumen y pulse "Firmar y cerrar" para terminar la inspección.
     </MudAlert>
 }
 
@@ -41,7 +41,7 @@
            StartIcon="@Icons.Material.Filled.Lock"
            Disabled="@(Firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
            OnClick="@(() => FirmarAsync(firmaCapturada!, observacionesCierre))">
-    @(Firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")[cite: 2]
+    @(Firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")
 </MudButton>
 
 @code {
