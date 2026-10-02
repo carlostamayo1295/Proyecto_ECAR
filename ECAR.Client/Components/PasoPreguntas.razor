@@ -4,8 +4,12 @@
 
    Pinta cada pregunta de Inspeccion.Preguntas con RespuestaPreguntaInput y persiste cada
    cambio con debounce por pregunta (ver ProgramarGuardado): tanto la respuesta como la
-   Observación (obligatoria cuando la pregunta es Sí/No y quedó en "No", regla 4 del SRS)
-   se guardan solas, sin esperar a que el técnico toque otro campo.
+   Observación se guardan solas, sin esperar a que el técnico toque otro campo.
+
+   La Observación está siempre visible y solo es obligatoria cuando la pregunta es Sí/No y
+   quedó en "No" (regla 4 del SRS). Si se mostrara solo en novedad, al corregir "No" -> "Sí"
+   el campo desaparecería pero el texto seguiría guardado y reenviándose: una observación en
+   una respuesta conforme que el técnico ya no podría ver ni borrar.
 
    El indicador Estado (cabecera) muestra Guardando/Guardado/Error; el Snackbar queda
    reservado solo para errores, para no saturar la pantalla en preguntas de texto. *@
@@ -33,15 +37,14 @@ else
                                  Valor="@pregunta.Respuesta"
                                  ValorChanged="(nuevoValor) => OnRespuestaCambiada(pregunta, nuevoValor)" />
 
-        @if (pregunta.EsNovedad)
-        {
-            <MudTextField T="string" Label="Observación" @bind-Value="pregunta.Observacion"
-                          @bind-Value:after="() => ProgramarGuardado(pregunta)"
-                          Variant="Variant.Outlined" Lines="2" Required="true"
-                          Immediate="true" DebounceInterval="500"
-                          Error="@(pregunta.EsNovedad && string.IsNullOrWhiteSpace(pregunta.Observacion))"
-                          ErrorText="La observación es obligatoria cuando hay novedad" />
-        }
+        <MudTextField T="string" @bind-Value="pregunta.Observacion"
+                      @bind-Value:after="() => ProgramarGuardado(pregunta)"
+                      Label="@(pregunta.EsNovedad ? "Observación (obligatoria)" : "Observación (opcional)")"
+                      Variant="Variant.Outlined" Lines="2" Class="mb-4"
+                      Required="@pregunta.EsNovedad"
+                      Immediate="true" DebounceInterval="500"
+                      Error="@(pregunta.EsNovedad && string.IsNullOrWhiteSpace(pregunta.Observacion))"
+                      ErrorText="La observación es obligatoria cuando hay novedad" />
     }
 }
 
@@ -77,6 +80,10 @@ else
         _ => Color.Default
     };
 
+    // Un debounce por pregunta. A propósito NO se cancelan al desmontar el componente: si el
+    // técnico pulsa "Siguiente" dentro de los 500 ms de su última respuesta, MudStepper desmonta
+    // este paso, y es esa tarea pendiente la que termina de guardar. Cancelarla perdería la
+    // última respuesta sin avisar.
     private readonly Dictionary<long, CancellationTokenSource> _debounces = new();
 
     private void ProgramarGuardado(PreguntaEjecucionDto pregunta)
@@ -113,8 +120,8 @@ else
                     Observacion = pregunta.Observacion
                 }
             });
-
-            StateHasChanged();
+            // Sin StateHasChanged aquí: GuardarAsync ya repinta con InvokeAsync al cambiar el
+            // estado, y esta tarea corre fuera del ciclo de render.
         }
         catch (TaskCanceledException)
         {
