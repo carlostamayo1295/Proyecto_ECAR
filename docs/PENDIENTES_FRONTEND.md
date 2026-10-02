@@ -5,69 +5,57 @@
 
 ---
 
-## Dónde estamos
+## Resumen
 
-Las tres ramas del frontend y el arreglo del esqueleto están **mergeadas** en `integracion_fronEnd`:
+**Todo lo que el frontend podía hacer sin depender del backend está hecho.** Lo que queda son
+pruebas en ejecución y cambios que esperan endpoints que todavía no están en `develop`.
 
-| Rama | Persona | Merge | Conflictos |
-|---|---|---|---|
-| `fix/ECAR-206-guardado-fe0` | Juan Alberto (FE-0) | fast-forward | — |
-| `feature/ECAR-205-pantalla-ejecucion-preguntas` | Erica (FE-1) | `bb30c50` | 2 archivos |
-| `feature/F3-Santiago` | Santiago (FE-2) | `db8866d` | 1 archivo |
-| `feature/qr` | Gary (FE-3) | `2c771cf` | ninguno |
+Las tres ramas del frontend están mergeadas en esta rama, y el 02/10 se resolvieron sobre ella los
+pendientes de código de las cuatro personas:
 
-Las cuatro pantallas de la Fase 3 existen de punta a punta: ejecución con sus tres pasos, inicio
-desde QR y resultado firmado.
-
-**Lo que no se puede afirmar todavía es que funcionen.** Faltan en `develop` los endpoints de
-respuestas, evidencias, firma y resultado, que están en cuatro ramas de backend sin mergear. Nadie ha
-ejecutado una inspección completa.
-
----
-
-## Pendientes por persona
-
-| Persona | Documento | Defecto propio | Pendientes | Bloqueado por |
-|---|---|---|---|---|
-| **Juan Alberto** (FE-0) | [`PENDIENTES_FE0_JUAN_ALBERTO.md`](PENDIENTES_FE0_JUAN_ALBERTO.md) | — | 5 de código y docs + 4 de coordinación | — |
-| **Erica** (FE-1) | [`PENDIENTES_FE1_ERICA.md`](PENDIENTES_FE1_ERICA.md) | **1** | 4 | Juan David, para probar |
-| **Santiago** (FE-2) | [`PENDIENTES_FE2_SANTIAGO.md`](PENDIENTES_FE2_SANTIAGO.md) | ninguno | 4 | Carlos y Alejandro |
-| **Gary** (FE-3) | [`PENDIENTES_FE3_GARY.md`](PENDIENTES_FE3_GARY.md) | **1** | 4 | Simón, para probar |
-
-### El defecto real de cada uno, en una línea
-
-- **Gary** — un error de negocio o de red en `IniciarInspeccion` manda al técnico al login. Con un
-  equipo dado de baja, queda en bucle: login, vuelve, 400, login. **Es el más grave del frontend.**
-- **Erica** — la observación solo se ve cuando la pregunta ya es novedad. Si el técnico corrige "No"
-  → "Sí", el texto queda guardado e invisible y acaba en el resultado firmado, que es inmutable.
-- **Santiago** — ninguno en su código. Sus dos pendientes grandes esperan cambios de backend. Pero
-  tiene uno pequeño que **es urgente porque bloquea a otro**: borrar `CreateEvidenciaAsync`, sin lo
-  cual la rama de Alejandro no compila contra la integración.
-
----
-
-## Qué hacer primero, en orden
-
-1. **Borrar la rama `Integracion_fronEnd` (con I mayúscula).** Es un duplicado que en Windows choca
-   con la buena y hace que el `checkout` de todos los documentos apunte a la rama equivocada. No
-   tiene nada que no esté ya en la buena. → FE-0
-2. **Santiago borra `CreateEvidenciaAsync`.** Quince minutos, y desbloquea a Alejandro.
-3. **Gary arregla `IniciarInspeccion`.** Es el defecto que deja a un técnico atascado en planta.
-4. **Erica saca la observación del `@if`.**
-5. **Avisar a Juan David y a Alejandro** de lo que tienen roto antes de mergear. → FE-0
-
-Los pasos 2, 3 y 4 son independientes entre sí y no dependen del backend.
-
----
-
-## Bloqueos de backend que afectan al frontend
-
-| Quién | Qué | A quién bloquea |
+| Commit | Persona | Qué se resolvió |
 |---|---|---|
-| Juan David (BE-1) | Su rama **no compila**: 4 × `CS7036` en `BackendPhaseThreeTests.cs` | Erica (no puede entrar a `develop`) |
-| Alejandro (BE-2) | Su rama **borra la migración `Fase3BaseInspecciones`** y la recrea con otro nombre; romperá cualquier base de datos ya migrada | Santiago (subida real de fotos) |
-| Carlos (BE-0) | `GET /api/inspecciones` no acepta `estado` | Santiago (filtro honesto) |
-| Simón (BE-3) | `firma-inmutable` sin mergear | Gary (firmar y ver resultado) |
+| `43f6eba` | Erica (FE-1) | Observación siempre visible, obligatoria solo en novedad · `StateHasChanged` pelado retirado |
+| `b1d1c85` | Santiago (FE-2) | `CreateEvidenciaAsync` retirado (desbloquea BE-2) · filtro de estado honesto · `DataLabel` en las tablas para móvil |
+| `9396278` | Gary (FE-3) | `IniciarInspeccion` muestra los errores en vez de mandar al login · etiquetas y detalles |
+| `f17b02a` | Juan Alberto (FE-0) | `MockDataService` retirado · "Siguiente" dice qué preguntas faltan · sin llamadas al API sin sesión · sangría · `ESTADO_PROYECTO` §4 y guía al día |
 
-El detalle de cada uno, con líneas y evidencia, está en
-[`PENDIENTES_FE0_JUAN_ALBERTO.md`](PENDIENTES_FE0_JUAN_ALBERTO.md) §D.
+Los resolvió FE-0 a petición del líder del front. **Nadie tiene que rehacerlos**: si alguien tiene
+cambios locales sobre esos archivos, que actualice antes de seguir.
+
+---
+
+## Lo que queda, por persona
+
+| Persona | Documento | Pendiente | Depende de |
+|---|---|---|---|
+| **Juan Alberto** (FE-0) | [`PENDIENTES_FE0_JUAN_ALBERTO.md`](PENDIENTES_FE0_JUAN_ALBERTO.md) | Borrar la rama duplicada · coordinar backend · orden de merge · prueba completa | — |
+| **Erica** (FE-1) | [`PENDIENTES_FE1_ERICA.md`](PENDIENTES_FE1_ERICA.md) | Prueba manual con recarga | Juan David (BE-1) |
+| **Santiago** (FE-2) | [`PENDIENTES_FE2_SANTIAGO.md`](PENDIENTES_FE2_SANTIAGO.md) | Filtro de estado en servidor · ocultar "Eliminar" en cerradas · prueba con teléfono | Carlos (BE-0) y Alejandro (BE-2) |
+| **Gary** (FE-3) | [`PENDIENTES_FE3_GARY.md`](PENDIENTES_FE3_GARY.md) | Pruebas de firma, resultado y QR desde el teléfono | Simón (BE-3) |
+
+---
+
+## Bloqueos de backend
+
+| Quién | Qué | Bloquea a |
+|---|---|---|
+| Juan David (BE-1) | Su rama **no compila**: 4 × `CS7036` en `BackendPhaseThreeTests.cs` (140, 165, 211, 239) | Erica |
+| Alejandro (BE-2) | Su rama **borra la migración `Fase3BaseInspecciones`** y la recrea con otro nombre; rompería cualquier base de datos ya migrada. Con `b1d1c85`, en cambio, **ya compila** contra esta rama | Santiago |
+| Carlos (BE-0) | `GET /api/inspecciones` no acepta `estado` | Santiago |
+| Simón (BE-3) | `firma-inmutable` sin mergear | Gary |
+
+Detalle y evidencia en [`PENDIENTES_FE0_JUAN_ALBERTO.md`](PENDIENTES_FE0_JUAN_ALBERTO.md) §C.
+
+---
+
+## Antes de hacer `checkout`
+
+En GitHub existe una segunda rama, **`Integracion_fronEnd` con I mayúscula**, que **no** es esta.
+En Windows las dos chocan porque el disco no distingue mayúsculas. Hasta que se borre, comprueba:
+
+```bash
+git ls-remote origin integracion_fronEnd
+```
+
+Si el commit es `96def9f`, estás viendo la equivocada.
