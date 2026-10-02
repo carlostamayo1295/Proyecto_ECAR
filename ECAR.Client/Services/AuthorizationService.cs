@@ -38,7 +38,7 @@ public class AuthorizationService
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var jwtToken = tokenHandler.ReadJwtToken(token);
-            
+
             var roleClaims = jwtToken.Claims
                 .Where(c => c.Type == ClaimTypes.Role)
                 .Select(c => c.Value)
@@ -76,7 +76,7 @@ public class AuthorizationService
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var jwtToken = tokenHandler.ReadJwtToken(token);
-            
+
             var nameClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name);
             return nameClaim?.Value;
         }
@@ -98,7 +98,7 @@ public class AuthorizationService
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var jwtToken = tokenHandler.ReadJwtToken(token);
-            
+
             var emailClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
             return emailClaim?.Value;
         }
@@ -120,7 +120,7 @@ public class AuthorizationService
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var jwtToken = tokenHandler.ReadJwtToken(token);
-            
+
             var userIdClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
             return userIdClaim?.Value;
         }
