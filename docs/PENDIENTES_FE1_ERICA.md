@@ -3,7 +3,7 @@
 **De:** Juan Alberto (FE-0) · **Para:** Erica Avendaño (FE-1)
 **Rama de trabajo:** `integracion_fronEnd` (commit `75f6c45`)
 **Sustituye a:** la lista anterior del 30/09, que apuntaba a `feature/ECAR-205-pantalla-ejecucion-preguntas`
-**Actualizado:** 02/10/2026
+**Actualizado:** 02/10/2026 · Índice general: [`PENDIENTES_FRONTEND.md`](PENDIENTES_FRONTEND.md)
 
 ---
 
@@ -20,6 +20,11 @@ Eso cambia dos cosas para ti:
    ```bash
    git fetch origin && git checkout -b fix/fe1-observacion origin/integracion_fronEnd
    ```
+
+   > **Ojo antes de correr eso.** En GitHub hay una segunda rama, `Integracion_fronEnd` con **I
+   > mayúscula**, que no es la buena. En Windows las dos chocan porque el disco no distingue
+   > mayúsculas. Comprueba con `git ls-remote origin integracion_fronEnd` que el commit no es
+   > `96def9f`. Si lo es, avísame antes de tocar nada.
 2. **Ya no tienes que abrir un PR de tu rama.** Lo que queda son cuatro cosas pequeñas; cuando las
    tengas, un PR corto contra `integracion_fronEnd` y listo.
 
