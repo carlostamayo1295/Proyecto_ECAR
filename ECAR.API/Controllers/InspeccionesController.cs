@@ -301,6 +301,12 @@ public class InspeccionesController : ControllerBase
             return Forbid();
         }
 
+        // Regla 6 del SRS: una inspección cerrada es evidencia histórica y no admite cambios.
+        if (EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(MensajeInspeccionCerrada));
+        }
+
         if (updateDto.Resultado != null)
             inspeccion.Resultado = updateDto.Resultado;
 
@@ -376,10 +382,249 @@ public class InspeccionesController : ControllerBase
             return Forbid();
         }
 
+        // Regla 6 del SRS: una inspección cerrada tampoco se borra.
+        if (EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<bool>.ErrorResponse(MensajeInspeccionCerrada));
+        }
+
         _context.Inspecciones.Remove(inspeccion);
         await _context.SaveChangesAsync();
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Inspección eliminada exitosamente"));
+    }
+
+    /// <summary>
+    /// Firma y cierra la inspección: son la misma acción, no existe cerrada sin firma.
+    /// Valida obligatorias (regla 3 del SRS), novedad→observación (regla 4), y la firma PNG;
+    /// después calcula Resultado y FirmaHash y deja la inspección inmutable (regla 6).
+    /// </summary>
+    [HttpPost("{id}/firmar")]
+    [Authorize(Roles = "Administrador,Técnico")]
+    public async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarInspeccion(
+        long id, FirmarInspeccionDto firmarDto)
+    {
+        var inspeccion = await CargarCierreAsync(id, seguimiento: true);
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<InspeccionResultadoDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        // La firma es personal: solo el inspector que ejecutó la inspección puede cerrarla,
+        // aunque quien llame sea Administrador.
+        if (inspeccion.IdUsuario != _currentUser.IdUsuario)
+        {
+            return Forbid();
+        }
+
+        if (EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(MensajeInspeccionCerrada));
+        }
+
+        var faltantes = ValidarContenidoParaCierre(inspeccion);
+        if (faltantes.Count > 0)
+        {
+            return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
+                "La inspección no puede cerrarse: faltan datos obligatorios", faltantes));
+        }
+
+        if (!FirmaInspeccion.TryValidarPng(firmarDto.FirmaPngBase64, out var firmaPng, out var errorFirma))
+        {
+            return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(errorFirma));
+        }
+
+        var fechaCierre = DateTime.UtcNow;
+        inspeccion.Estado = InspeccionEstados.Cerrada;
+        inspeccion.FechaCierre = fechaCierre;
+        inspeccion.Resultado = TieneNovedades(inspeccion)
+            ? InspeccionResultados.ConNovedad
+            : InspeccionResultados.Conforme;
+
+        if (!string.IsNullOrWhiteSpace(firmarDto.Observaciones))
+        {
+            inspeccion.Observaciones = firmarDto.Observaciones;
+        }
+
+        inspeccion.FirmaDigital = firmaPng;
+        inspeccion.FirmaHash = FirmaInspeccion.CalcularHash(
+            inspeccion, inspeccion.Respuestas, inspeccion.Evidencias, fechaCierre, firmaPng);
+
+        // Un único SaveChanges: estado, resultado, firma y hash se guardan en la misma
+        // transacción, de modo que no puede quedar una inspección cerrada a medias.
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(
+            MapToResultadoDto(inspeccion),
+            "Inspección firmada y cerrada exitosamente"));
+    }
+
+    /// <summary>Vista de solo lectura de una inspección ya cerrada: resumen, respuestas, evidencias, firma y hash.</summary>
+    [HttpGet("{id}/resultado")]
+    public async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> GetResultado(long id)
+    {
+        var inspeccion = await CargarCierreAsync(id, seguimiento: false);
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<InspeccionResultadoDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (!PuedeLeer(inspeccion))
+        {
+            return Forbid();
+        }
+
+        if (!EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
+                "La inspección aún está en curso; consúltela en /api/inspecciones/{id}/ejecucion"));
+        }
+
+        return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(MapToResultadoDto(inspeccion)));
+    }
+
+    private const string MensajeInspeccionCerrada = InmutabilidadInspeccion.MensajeCerrada;
+
+    private static bool EstaCerrada(Inspeccion inspeccion) =>
+        inspeccion.Estado == InspeccionEstados.Cerrada;
+
+    /// <summary>
+    /// Comprueba las reglas 3 y 4 del SRS y devuelve todos los incumplimientos de una vez,
+    /// para que la pantalla de firma pueda listarle al técnico qué le falta sin ir de uno en uno.
+    /// </summary>
+    private static List<string> ValidarContenidoParaCierre(Inspeccion inspeccion)
+    {
+        var respuestasPorPregunta = inspeccion.Respuestas
+            .ToDictionary(respuesta => respuesta.IdPregunta);
+        var faltantes = new List<string>();
+
+        foreach (var pregunta in inspeccion.Checklist.Preguntas
+            .OrderBy(pregunta => pregunta.Orden)
+            .ThenBy(pregunta => pregunta.IdPregunta))
+        {
+            respuestasPorPregunta.TryGetValue(pregunta.IdPregunta, out var respuesta);
+            var sinResponder = respuesta == null || string.IsNullOrWhiteSpace(respuesta.Respuesta);
+
+            if (pregunta.Obligatoria && sinResponder)
+            {
+                faltantes.Add($"La pregunta obligatoria «{pregunta.Pregunta}» no tiene respuesta");
+                continue;
+            }
+
+            if (!sinResponder
+                && EsNovedad(pregunta.TipoRespuesta, respuesta!.Respuesta)
+                && string.IsNullOrWhiteSpace(respuesta.Observacion))
+            {
+                faltantes.Add($"La novedad de «{pregunta.Pregunta}» requiere una observación");
+            }
+        }
+
+        return faltantes;
+    }
+
+    private static bool TieneNovedades(Inspeccion inspeccion)
+    {
+        var tipoPorPregunta = inspeccion.Checklist.Preguntas
+            .ToDictionary(pregunta => pregunta.IdPregunta, pregunta => pregunta.TipoRespuesta);
+
+        return inspeccion.Respuestas.Any(respuesta =>
+            tipoPorPregunta.TryGetValue(respuesta.IdPregunta, out var tipo)
+            && EsNovedad(tipo, respuesta.Respuesta));
+    }
+
+    /// <summary>Una respuesta Sí/No marcada como "No" es una novedad (regla 4 del SRS).</summary>
+    private static bool EsNovedad(string? tipoRespuesta, string? respuesta) =>
+        tipoRespuesta == TiposRespuesta.SiNo
+        && string.Equals(respuesta, "No", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Carga todo lo que interviene en el cierre. Con <paramref name="seguimiento"/> en true
+    /// para firmar (hay que escribir) y en false para la consulta del resultado.
+    /// </summary>
+    private Task<Inspeccion?> CargarCierreAsync(long id, bool seguimiento)
+    {
+        var query = _context.Inspecciones.AsQueryable();
+        if (!seguimiento)
+        {
+            query = query.AsNoTracking();
+        }
+
+        return query
+            .Include(i => i.Equipo)
+                .ThenInclude(e => e.Ubicacion)
+            .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
+                .ThenInclude(c => c.Preguntas)
+            .Include(i => i.Respuestas)
+            .Include(i => i.Evidencias)
+                .ThenInclude(e => e.UsuarioCargaDetalle)
+            .FirstOrDefaultAsync(i => i.IdInspeccion == id);
+    }
+
+    private static InspeccionResultadoDto MapToResultadoDto(Inspeccion inspeccion)
+    {
+        var respuestasPorPregunta = inspeccion.Respuestas
+            .ToDictionary(respuesta => respuesta.IdPregunta);
+
+        var preguntas = inspeccion.Checklist.Preguntas
+            .OrderBy(pregunta => pregunta.Orden)
+            .ThenBy(pregunta => pregunta.IdPregunta)
+            .Select(pregunta =>
+            {
+                respuestasPorPregunta.TryGetValue(pregunta.IdPregunta, out var respuesta);
+                return new PreguntaEjecucionDto
+                {
+                    IdPregunta = pregunta.IdPregunta,
+                    Pregunta = pregunta.Pregunta,
+                    TipoRespuesta = pregunta.TipoRespuesta,
+                    Obligatoria = pregunta.Obligatoria,
+                    Orden = pregunta.Orden,
+                    IdRespuesta = respuesta?.IdRespuesta,
+                    Respuesta = respuesta?.Respuesta,
+                    Observacion = respuesta?.Observacion
+                };
+            })
+            .ToList();
+
+        return new InspeccionResultadoDto
+        {
+            IdInspeccion = inspeccion.IdInspeccion,
+            Estado = inspeccion.Estado,
+            Resultado = inspeccion.Resultado ?? string.Empty,
+            FechaInspeccion = inspeccion.FechaInspeccion,
+            FechaCierre = inspeccion.FechaCierre,
+            Observaciones = inspeccion.Observaciones,
+            IdEquipo = inspeccion.IdEquipo,
+            CodigoInterno = inspeccion.Equipo.CodigoInterno,
+            NombreEquipo = inspeccion.Equipo.NombreEquipo,
+            UbicacionNombre = inspeccion.Equipo.Ubicacion == null
+                ? null
+                : $"{inspeccion.Equipo.Ubicacion.Planta} - {inspeccion.Equipo.Ubicacion.Area}",
+            NombreChecklist = inspeccion.Checklist.Nombre,
+            VersionChecklist = inspeccion.Checklist.Version,
+            NombreUsuario = inspeccion.Usuario.Nombre,
+            Preguntas = preguntas,
+            TotalNovedades = preguntas.Count(pregunta => pregunta.EsNovedad),
+            Evidencias = inspeccion.Evidencias
+                .OrderBy(evidencia => evidencia.FechaCarga)
+                .Select(evidencia => new EvidenciaDto
+                {
+                    IdEvidencia = evidencia.IdEvidencia,
+                    IdInspeccion = evidencia.IdInspeccion,
+                    NombreEquipo = inspeccion.Equipo.NombreEquipo,
+                    Archivo = evidencia.Archivo,
+                    NombreOriginal = evidencia.NombreOriginal,
+                    TipoContenido = evidencia.TipoContenido,
+                    TamanoBytes = evidencia.TamanoBytes,
+                    FechaCarga = evidencia.FechaCarga,
+                    IdUsuarioCarga = evidencia.IdUsuarioCarga,
+                    UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre
+                })
+                .ToList(),
+            TieneFirma = !string.IsNullOrEmpty(inspeccion.FirmaDigital),
+            FirmaPngBase64 = inspeccion.FirmaDigital,
+            FirmaHash = inspeccion.FirmaHash
+        };
     }
 
     private Task<Inspeccion?> CargarEjecucionAsync(long id) => _context.Inspecciones

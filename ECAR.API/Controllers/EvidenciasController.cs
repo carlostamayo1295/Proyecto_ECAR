@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.API.Services;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
@@ -186,20 +187,19 @@ public class EvidenciasController : ControllerBase
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección indicada no existe."));
         }
 
-        // Validación de Estado EnCurso (Devuelve 409)
-        if (inspeccion.Estado != "EnCurso" && inspeccion.Estado != "En curso")
+        // Regla 6 del SRS: sobre una inspección cerrada no se añaden evidencias.
+        if (inspeccion.Estado != InspeccionEstados.EnCurso)
         {
-            return StatusCode(409, ApiResponse<EvidenciaDto>.ErrorResponse("La inspección está cerrada y no permite agregar evidencias."));
+            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
         }
 
         if (User.IsInRole("Técnico") && inspeccion.IdUsuario != _currentUser.IdUsuario)
         {
-            return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("No estás autorizado para subir evidencias a esta inspección."));
+            return Forbid();
         }
 
         memoryStream.Position = 0;
         var rutaRelativa = await _storage.GuardarAsync(memoryStream, extension, idInspeccion);
-
         var evidencia = new Evidencia
         {
             IdInspeccion = idInspeccion,
@@ -254,23 +254,28 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        if (evidencia.Inspeccion?.Estado != "EnCurso" && evidencia.Inspeccion?.Estado != "En curso")
+        // Regla 6 del SRS: tampoco se borran las evidencias de una inspección cerrada.
+        if (await _context.ObtenerEstadoEscrituraAsync(evidencia.IdInspeccion) == EstadoEscritura.Cerrada)
         {
-            return StatusCode(409, ApiResponse<bool>.ErrorResponse("No se puede eliminar evidencia de una inspección cerrada."));
+            return Conflict(ApiResponse<bool>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
         }
 
-        if (!User.IsInRole("Administrador") && evidencia.IdUsuarioCarga != _currentUser.IdUsuario)
+        if (!User.IsInRole("Administrador")
+            && evidencia.IdUsuarioCarga != _currentUser.IdUsuario
+            && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
         {
-            return StatusCode(403, ApiResponse<bool>.ErrorResponse("No tiene permisos para eliminar esta evidencia."));
+            return Forbid();
         }
 
-        if (!string.IsNullOrEmpty(evidencia.Archivo))
-        {
-            await _storage.EliminarAsync(evidencia.Archivo);
-        }
+        var rutaRelativa = evidencia.Archivo;
 
         _context.Evidencias.Remove(evidencia);
         await _context.SaveChangesAsync();
+
+        if (!string.IsNullOrEmpty(rutaRelativa))
+        {
+            await _storage.EliminarAsync(rutaRelativa);
+        }
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Evidencia eliminada exitosamente"));
     }
