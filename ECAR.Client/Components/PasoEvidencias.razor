@@ -41,7 +41,7 @@
                 <MudCard Outlined="true">
                     @if (miniaturas.TryGetValue(evidencia.IdEvidencia, out var src) && src != null)
                     {
-                        <MudImage Src="@src" ObjectFit="ObjectFit.Cover" Height="140" Width="200" Class="mud-width-full" />
+                        <MudImage Src="@src" ObjectFit="ObjectFit.Cover" Height="140" Class="mud-width-full" />
                     }
                     else
                     {

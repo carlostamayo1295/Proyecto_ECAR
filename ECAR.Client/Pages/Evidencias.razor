@@ -83,8 +83,8 @@
                             <MudTh>Acciones</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>@context.IdEvidencia</MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="ID">@context.IdEvidencia</MudTd>
+                            <MudTd DataLabel="Vista previa">
                                 <MudAvatar Square="true" Size="Size.Medium">
                                     @if (miniaturas.TryGetValue(context.IdEvidencia, out var src) && src != null)
                                     {
@@ -96,17 +96,17 @@
                                     }
                                 </MudAvatar>
                             </MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="Archivo">
                                 <MudText Typo="Typo.body2">@context.NombreOriginal</MudText>
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                     @FormatearTamano(context.TamanoBytes) · @context.TipoContenido
                                 </MudText>
                             </MudTd>
-                            <MudTd>@context.NombreEquipo</MudTd>
-                            <MudTd>#@context.IdInspeccion</MudTd>
-                            <MudTd>@context.UsuarioCarga</MudTd>
-                            <MudTd>@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="Equipo">@context.NombreEquipo</MudTd>
+                            <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
+                            <MudTd DataLabel="Subido por">@context.UsuarioCarga</MudTd>
+                            <MudTd DataLabel="Fecha de carga">@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                            <MudTd DataLabel="Acciones">
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(context)" Class="action-button">
                                     Eliminar

@@ -27,7 +27,8 @@
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined" Clearable="true"
-                        ValueChanged="OnEstadoChanged">
+                        ValueChanged="OnEstadoChanged"
+                        HelperText="Por ahora filtra solo las filas de esta página">
                         <MudSelectItem T="string" Value="@InspeccionEstados.EnCurso">En curso</MudSelectItem>
                         <MudSelectItem T="string" Value="@InspeccionEstados.Cerrada">Cerrada</MudSelectItem>
                     </MudSelect>
@@ -53,26 +54,26 @@
                         <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdInspeccion</MudTd>
-                        <MudTd>@context.NombreEquipo</MudTd>
-                        <MudTd>@context.NombreUsuario</MudTd>
-                        <MudTd>@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdInspeccion</MudTd>
+                        <MudTd DataLabel="Equipo">@context.NombreEquipo</MudTd>
+                        <MudTd DataLabel="Inspector">@context.NombreUsuario</MudTd>
+                        <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
+                        <MudTd DataLabel="Estado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                 Color="@(context.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
                                 Text="@(context.Estado == InspeccionEstados.EnCurso ? "En curso" : "Cerrada")" />
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Resultado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                 Color="@ResultadoColor(context.Resultado)"
                                 Text="@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)" />
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Firma">
                             <MudIcon Icon="@(context.TieneFirma ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
                                 Color="@(context.TieneFirma ? Color.Success : Color.Default)" Size="Size.Small" />
                         </MudTd>
-                        <MudTd>@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Evid. / Hall.">@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
+                        <MudTd DataLabel="Acciones">
                             @if (context.Estado == InspeccionEstados.EnCurso)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
