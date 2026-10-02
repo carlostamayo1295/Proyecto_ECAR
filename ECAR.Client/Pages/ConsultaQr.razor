@@ -96,6 +96,7 @@
     private bool cargando = true;
     private ConsultaQrDto? equipo;
 
+    // Consulta pública: no requiere sesión. Un token desconocido o un equipo inactivo devuelven 404
     protected override async Task OnInitializedAsync()
     {
         var result = await HttpClientService.GetEquipoByQrAsync(Token);

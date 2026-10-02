@@ -128,7 +128,7 @@
                 <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del Técnico</b></MudText>
                 @if (!string.IsNullOrEmpty(resultado.FirmaPngBase64))
                 {
-                    <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid #ccc; border-radius: 4px; max-width: 300px; background: white;" />
+                    <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; max-width: 300px; background: white;" />
                 }
             </div>
 
@@ -203,7 +203,7 @@
             var dataUrl = await Http.GetEvidenciaImageDataUrlAsync(
                 evidencia.IdEvidencia, evidencia.TipoContenido);
             _miniaturas[evidencia.IdEvidencia] = dataUrl;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
