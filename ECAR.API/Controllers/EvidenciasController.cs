@@ -1,12 +1,14 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
+using ECAR.API.Configuration;
 using ECAR.API.Services;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 
 namespace ECAR.API.Controllers;
@@ -19,18 +21,18 @@ public class EvidenciasController : ControllerBase
     private readonly ECARDbContext _context;
     private readonly ICurrentUser _currentUser;
     private readonly IEvidenciaStorage _storage;
-    private readonly IConfiguration _configuration;
+    private readonly EvidenciasOptions _options;
 
     public EvidenciasController(
         ECARDbContext context,
         ICurrentUser currentUser,
         IEvidenciaStorage storage,
-        IConfiguration configuration)
+        IOptions<EvidenciasOptions> options)
     {
         _context = context;
         _currentUser = currentUser;
         _storage = storage;
-        _configuration = configuration;
+        _options = options.Value;
     }
 
     // GET: api/evidencias O api/inspecciones/{idInspeccion}/evidencias
@@ -42,6 +44,9 @@ public class EvidenciasController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null)
     {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Evidencias
             .Include(e => e.UsuarioCargaDetalle)
             .Include(e => e.Inspeccion)
@@ -137,11 +142,42 @@ public class EvidenciasController : ControllerBase
         return Ok(ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto));
     }
 
+    // GET: api/evidencias/{id}/archivo
+    [HttpGet("{id:long}/archivo")]
+    public async Task<IActionResult> GetArchivo(long id)
+    {
+        var evidencia = await _context.Evidencias
+            .Include(e => e.Inspeccion)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.IdEvidencia == id);
+
+        if (evidencia == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
+        }
+
+        if (User.IsInRole("Técnico") && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var stream = await _storage.AbrirAsync(evidencia.Archivo);
+            return File(stream, evidencia.TipoContenido, enableRangeProcessing: true);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("El archivo de evidencia no existe en el almacenamiento"));
+        }
+    }
+
     // POST: api/inspecciones/{idInspeccion}/evidencias
     [HttpPost("/api/inspecciones/{idInspeccion:long}/evidencias")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<EvidenciaDto>>> CreateEvidencia(
         long idInspeccion,
-        IFormFile archivo)
+        [FromForm] IFormFile archivo)
     {
         if (archivo == null || archivo.Length == 0)
         {
@@ -154,7 +190,7 @@ public class EvidenciasController : ControllerBase
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("Formato inválido. Solo se permiten JPG o PNG."));
         }
 
-        var maxBytes = _configuration.GetValue<long?>("FileStorage:MaxSizeBytes") ?? (5 * 1024 * 1024);
+        var maxBytes = Math.Max(1, _options.TamanoMaximoMB) * 1024L * 1024L;
         if (archivo.Length > maxBytes)
         {
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse($"El archivo supera el límite permitido de {maxBytes / (1024 * 1024)} MB."));
@@ -177,6 +213,9 @@ public class EvidenciasController : ControllerBase
         {
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("El archivo no es una imagen válida o es un PDF disfrazado."));
         }
+
+        extension = esJpg ? ".jpg" : ".png";
+        var tipoContenido = esJpg ? "image/jpeg" : "image/png";
 
         var inspeccion = await _context.Inspecciones
             .Include(i => i.Equipo)
@@ -205,7 +244,7 @@ public class EvidenciasController : ControllerBase
             IdInspeccion = idInspeccion,
             Archivo = rutaRelativa,
             NombreOriginal = Path.GetFileName(archivo.FileName),
-            TipoContenido = archivo.ContentType,
+            TipoContenido = tipoContenido,
             TamanoBytes = archivo.Length,
             IdUsuarioCarga = _currentUser.IdUsuario,
             FechaCarga = DateTime.UtcNow
@@ -243,6 +282,7 @@ public class EvidenciasController : ControllerBase
 
     // DELETE: api/evidencias/{id}
     [HttpDelete("{id:long}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteEvidencia(long id)
     {
         var evidencia = await _context.Evidencias

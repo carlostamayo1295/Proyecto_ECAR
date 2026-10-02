@@ -115,7 +115,7 @@ public class InspeccionService : IInspeccionService
                 IdRespuesta = r.IdRespuesta,
                 IdInspeccion = r.IdInspeccion,
                 IdPregunta = r.IdPregunta,
-                Respuesta = r.Respuesta,
+                Respuesta = r.Respuesta ?? string.Empty,
                 Observacion = r.Observacion
             })
             .ToListAsync();
@@ -203,7 +203,7 @@ public class InspeccionService : IInspeccionService
                 IdRespuesta = r.IdRespuesta,
                 IdInspeccion = r.IdInspeccion,
                 IdPregunta = r.IdPregunta,
-                Respuesta = r.Respuesta,
+                Respuesta = r.Respuesta ?? string.Empty,
                 Observacion = r.Observacion
             })
             .ToListAsync();

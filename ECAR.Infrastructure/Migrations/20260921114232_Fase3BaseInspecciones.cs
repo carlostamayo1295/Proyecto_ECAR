@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ECAR.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class AgregarOrdenPregunta : Migration
+    public partial class Fase3BaseInspecciones : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -23,14 +23,10 @@ namespace ECAR.Infrastructure.Migrations
                 name: "IX_Evidencias_UsuarioCarga",
                 table: "Evidencias");
 
-            migrationBuilder.DropColumn(
-                name: "ChecklistIdChecklist",
-                table: "Inspecciones");
-
             migrationBuilder.RenameColumn(
                 name: "UsuarioCarga",
                 table: "Evidencias",
-                newName: "TipoContenido");
+                newName: "UsuarioCargaAnterior");
 
             migrationBuilder.AddColumn<string>(
                 name: "Estado",
@@ -57,15 +53,13 @@ namespace ECAR.Infrastructure.Migrations
                 name: "IdChecklist",
                 table: "Inspecciones",
                 type: "bigint",
-                nullable: false,
-                defaultValue: 0L);
+                nullable: true);
 
             migrationBuilder.AddColumn<long>(
                 name: "IdUsuarioCarga",
                 table: "Evidencias",
                 type: "bigint",
-                nullable: false,
-                defaultValue: 0L);
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "NombreOriginal",
@@ -75,12 +69,75 @@ namespace ECAR.Infrastructure.Migrations
                 nullable: false,
                 defaultValue: "");
 
+            migrationBuilder.AddColumn<string>(
+                name: "TipoContenido",
+                table: "Evidencias",
+                type: "nvarchar(100)",
+                maxLength: 100,
+                nullable: false,
+                defaultValue: "application/octet-stream");
+
             migrationBuilder.AddColumn<long>(
                 name: "TamanoBytes",
                 table: "Evidencias",
                 type: "bigint",
                 nullable: false,
                 defaultValue: 0L);
+
+            migrationBuilder.Sql(
+                """
+                IF EXISTS (SELECT 1 FROM [Inspecciones]) AND NOT EXISTS (SELECT 1 FROM [Checklists])
+                BEGIN
+                    INSERT INTO [Checklists] ([Nombre], [Version], [Activo], [FechaCreacion])
+                    VALUES (N'Checklist migrado', N'1.0', 1, SYSUTCDATETIME());
+                END;
+
+                UPDATE i
+                SET [IdChecklist] = COALESCE(
+                    i.[ChecklistIdChecklist],
+                    (SELECT TOP (1) c.[IdChecklist]
+                     FROM [Checklists] c
+                     ORDER BY c.[Activo] DESC, c.[IdChecklist]))
+                FROM [Inspecciones] i;
+
+                UPDATE e
+                SET [IdUsuarioCarga] = i.[IdUsuario],
+                    [NombreOriginal] = LEFT(e.[Archivo], 200)
+                FROM [Evidencias] e
+                INNER JOIN [Inspecciones] i ON i.[IdInspeccion] = e.[IdInspeccion];
+
+                UPDATE [Inspecciones]
+                SET [Estado] = N'Cerrada',
+                    [FechaCierre] = COALESCE([FechaCierre], [FechaInspeccion])
+                WHERE [FirmaDigital] IS NOT NULL
+                  AND LEN(LTRIM(RTRIM([FirmaDigital]))) > 0;
+                """);
+
+            migrationBuilder.AlterColumn<long>(
+                name: "IdChecklist",
+                table: "Inspecciones",
+                type: "bigint",
+                nullable: false,
+                oldClrType: typeof(long),
+                oldType: "bigint",
+                oldNullable: true);
+
+            migrationBuilder.AlterColumn<long>(
+                name: "IdUsuarioCarga",
+                table: "Evidencias",
+                type: "bigint",
+                nullable: false,
+                oldClrType: typeof(long),
+                oldType: "bigint",
+                oldNullable: true);
+
+            migrationBuilder.DropColumn(
+                name: "ChecklistIdChecklist",
+                table: "Inspecciones");
+
+            migrationBuilder.DropColumn(
+                name: "UsuarioCargaAnterior",
+                table: "Evidencias");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Inspecciones_Estado",
@@ -158,6 +215,32 @@ namespace ECAR.Infrastructure.Migrations
                 name: "FirmaHash",
                 table: "Inspecciones");
 
+            migrationBuilder.AddColumn<long>(
+                name: "ChecklistIdChecklist",
+                table: "Inspecciones",
+                type: "bigint",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "UsuarioCarga",
+                table: "Evidencias",
+                type: "nvarchar(100)",
+                maxLength: 100,
+                nullable: false,
+                defaultValue: "");
+
+            migrationBuilder.Sql(
+                """
+                UPDATE i
+                SET [ChecklistIdChecklist] = i.[IdChecklist]
+                FROM [Inspecciones] i;
+
+                UPDATE e
+                SET [UsuarioCarga] = u.[Nombre]
+                FROM [Evidencias] e
+                INNER JOIN [Usuarios] u ON u.[IdUsuario] = e.[IdUsuarioCarga];
+                """);
+
             migrationBuilder.DropColumn(
                 name: "IdChecklist",
                 table: "Inspecciones");
@@ -174,16 +257,9 @@ namespace ECAR.Infrastructure.Migrations
                 name: "TamanoBytes",
                 table: "Evidencias");
 
-            migrationBuilder.RenameColumn(
+            migrationBuilder.DropColumn(
                 name: "TipoContenido",
-                table: "Evidencias",
-                newName: "UsuarioCarga");
-
-            migrationBuilder.AddColumn<long>(
-                name: "ChecklistIdChecklist",
-                table: "Inspecciones",
-                type: "bigint",
-                nullable: true);
+                table: "Evidencias");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Inspecciones_ChecklistIdChecklist",

@@ -1,12 +1,15 @@
 using ECAR.API.Controllers;
+using ECAR.API.Configuration;
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace ECAR.API.Tests;
@@ -41,6 +44,17 @@ public class BackendPhaseThreeFirmaTests
         Checklist Checklist,
         PreguntaChecklist PreguntaSiNo,
         PreguntaChecklist PreguntaTexto);
+
+    private sealed class FakeEvidenciaStorage : IEvidenciaStorage
+    {
+        public Task<string> GuardarAsync(Stream stream, string extension, long idInspeccion) =>
+            Task.FromResult($"2026/10/{idInspeccion}/evidencia{extension}");
+
+        public Task<Stream> AbrirAsync(string rutaRelativa) =>
+            Task.FromResult<Stream>(new MemoryStream([0xFF, 0xD8, 0xFF, 0x00]));
+
+        public Task EliminarAsync(string rutaRelativa) => Task.CompletedTask;
+    }
 
     private static ECARDbContext CreateContext()
     {
@@ -134,7 +148,18 @@ public class BackendPhaseThreeFirmaTests
     private static InspeccionesController ControladorDe(
         Escenario escenario, Usuario usuario, params string[] roles) =>
         new(escenario.Context, new FakeCurrentUser(
-            usuario.IdUsuario, usuario.Nombre, roles.Length == 0 ? ["Técnico"] : roles));
+            usuario.IdUsuario, usuario.Nombre, roles.Length == 0 ? ["Técnico"] : roles),
+            new InspeccionService(escenario.Context));
+
+    private static EvidenciasController ControladorEvidenciasDe(
+        ECARDbContext context,
+        ICurrentUser currentUser) =>
+        new(context, currentUser, new FakeEvidenciaStorage(), Options.Create(new EvidenciasOptions
+        {
+            RutaBase = "EvidenciasPruebas",
+            TamanoMaximoMB = 5,
+            TiposPermitidos = "image/jpeg,image/png"
+        }));
 
     // ---------------------------------------------------------------- cierre exitoso
 
@@ -502,19 +527,22 @@ public class BackendPhaseThreeFirmaTests
         });
         var currentUser = new FakeCurrentUser(
             escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico");
-        await new InspeccionesController(context, currentUser)
+        await ControladorDe(escenario, escenario.Tecnico)
             .FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
                 FirmaPngBase64 = FirmaPngValida
             });
         context.ChangeTracker.Clear();
 
-        var action = await new EvidenciasController(context, currentUser)
-            .CreateEvidencia(new CreateEvidenciaDto
-            {
-                IdInspeccion = inspeccion.IdInspeccion,
-                Archivo = "2026/09/1/foto.jpg"
-            });
+        var contenido = new byte[] { 0xFF, 0xD8, 0xFF, 0x00 };
+        await using var stream = new MemoryStream(contenido);
+        var archivo = new FormFile(stream, 0, contenido.Length, "archivo", "foto.jpg")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/jpeg"
+        };
+        var action = await ControladorEvidenciasDe(context, currentUser)
+            .CreateEvidencia(inspeccion.IdInspeccion, archivo);
 
         Assert.IsType<ConflictObjectResult>(action.Result);
         Assert.Empty(await context.Evidencias.ToListAsync());
@@ -544,14 +572,14 @@ public class BackendPhaseThreeFirmaTests
         var currentUser = new FakeCurrentUser(
             escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico");
         context.ChangeTracker.Clear();
-        await new InspeccionesController(context, currentUser)
+        await ControladorDe(escenario, escenario.Tecnico)
             .FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
                 FirmaPngBase64 = FirmaPngValida
             });
         context.ChangeTracker.Clear();
 
-        var action = await new EvidenciasController(context, currentUser)
+        var action = await ControladorEvidenciasDe(context, currentUser)
             .DeleteEvidencia(evidencia.IdEvidencia);
 
         Assert.IsType<ConflictObjectResult>(action.Result);

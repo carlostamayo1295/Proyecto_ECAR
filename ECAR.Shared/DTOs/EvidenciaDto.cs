@@ -24,3 +24,16 @@ public class EvidenciaDto
 
 }
 
+// Contrato temporal para que el cliente anterior a FE-2 siga compilando mientras
+// la carga real de fotografías usa multipart en /api/inspecciones/{id}/evidencias.
+public class CreateEvidenciaDto
+{
+    [Required(ErrorMessage = "La inspección es requerida")]
+    public long IdInspeccion { get; set; }
+
+    [Required(ErrorMessage = "El archivo es requerido")]
+    public string Archivo { get; set; } = string.Empty;
+
+    public string? UsuarioCarga { get; set; }
+}
+

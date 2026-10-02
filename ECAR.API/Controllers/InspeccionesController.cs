@@ -30,6 +30,9 @@ public class InspeccionesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<InspeccionDto>>>> GetInspecciones([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Inspecciones
             .Include(i => i.Equipo)
             .Include(i => i.Usuario)
@@ -89,6 +92,7 @@ public class InspeccionesController : ControllerBase
 
     // Punto 2: GET /api/inspecciones/mias?estado=
     [HttpGet("mias")]
+    [Authorize(Roles = "Técnico")]
     public async Task<ActionResult<ApiResponse<List<InspeccionDto>>>> GetMisInspecciones([FromQuery] string? estado)
     {
         var usuarioId = _currentUser.IdUsuario;
@@ -250,22 +254,14 @@ public class InspeccionesController : ControllerBase
                 "El checklist indicado no existe o no está activo"));
         }
 
-        if (!string.IsNullOrWhiteSpace(createDto.Resultado)
-            && createDto.Resultado.Contains("novedad", StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrWhiteSpace(createDto.Observaciones))
-        {
-            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("Si la inspección tiene novedad, las observaciones son obligatorias"));
-        }
-
         var inspeccion = new Inspeccion
         {
             IdEquipo = createDto.IdEquipo,
             IdUsuario = usuario.IdUsuario,
             IdChecklist = checklist.IdChecklist,
             FechaInspeccion = createDto.FechaInspeccion,
-            Resultado = createDto.Resultado,
             Observaciones = createDto.Observaciones,
-            FirmaDigital = createDto.FirmaDigital
+            Estado = InspeccionEstados.EnCurso
         };
 
         _context.Inspecciones.Add(inspeccion);
@@ -307,22 +303,14 @@ public class InspeccionesController : ControllerBase
             return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(MensajeInspeccionCerrada));
         }
 
-        if (updateDto.Resultado != null)
-            inspeccion.Resultado = updateDto.Resultado;
+        if (updateDto.Resultado != null || updateDto.FirmaDigital != null)
+        {
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse(
+                "El resultado y la firma solo se establecen mediante el cierre firmado de la inspección"));
+        }
 
         if (updateDto.Observaciones != null)
             inspeccion.Observaciones = updateDto.Observaciones;
-
-        if (updateDto.FirmaDigital != null)
-            inspeccion.FirmaDigital = updateDto.FirmaDigital;
-
-        var resultado = inspeccion.Resultado;
-        if (!string.IsNullOrWhiteSpace(resultado)
-            && resultado.Contains("novedad", StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrWhiteSpace(inspeccion.Observaciones))
-        {
-            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("Si la inspección tiene novedad, las observaciones son obligatorias"));
-        }
 
         await _context.SaveChangesAsync();
 

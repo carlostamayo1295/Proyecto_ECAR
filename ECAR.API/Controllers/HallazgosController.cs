@@ -2,6 +2,7 @@ using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class HallazgosController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -93,6 +95,7 @@ public class HallazgosController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<HallazgoDto>>> CreateHallazgo(CreateHallazgoDto createDto)
     {
         var inspeccion = await _context.Inspecciones
@@ -124,6 +127,7 @@ public class HallazgosController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<HallazgoDto>>> UpdateHallazgo(long id, UpdateHallazgoDto updateDto)
     {
         var hallazgo = await _context.Hallazgos
@@ -157,6 +161,7 @@ public class HallazgosController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteHallazgo(long id)
     {
         var hallazgo = await _context.Hallazgos.FindAsync(id);

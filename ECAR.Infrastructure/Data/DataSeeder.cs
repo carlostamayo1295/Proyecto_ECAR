@@ -40,7 +40,7 @@ public static class DataSeeder
             await context.SaveChangesAsync();
         }
         else
-
+        
         {
             // PARCHE TEMPORAL - NO SUBIR A GIT: fuerza al admin existente a tomar
             // la contraseña actual de AdminPassword. Borrar este bloque después de usar.
@@ -49,7 +49,7 @@ public static class DataSeeder
             adminUsuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPasswordReset);
             await context.SaveChangesAsync();
         }
-
+        
 
         var adminRol = await context.Roles.SingleAsync(r => r.Nombre == "Administrador");
         if (!await context.UsuarioRoles.AnyAsync(ur =>

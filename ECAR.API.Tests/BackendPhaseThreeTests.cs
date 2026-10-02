@@ -35,6 +35,11 @@ public class BackendPhaseThreeTests
         return new ECARDbContext(options);
     }
 
+    private static InspeccionesController CreateController(
+        ECARDbContext context,
+        ICurrentUser currentUser) =>
+        new(context, currentUser, new InspeccionService(context));
+
     private static async Task<(Usuario Tecnico, Usuario OtroTecnico, Equipo Equipo, Checklist Checklist)>
         SeedEscenarioAsync(ECARDbContext context)
     {
@@ -137,7 +142,7 @@ public class BackendPhaseThreeTests
             escenario.Tecnico.IdUsuario,
             escenario.Tecnico.Nombre,
             "Técnico");
-        var controller = new InspeccionesController(context, currentUser);
+        var controller = CreateController(context, currentUser);
 
         var action = await controller.IniciarInspeccion(new IniciarInspeccionDto
         {
@@ -162,7 +167,7 @@ public class BackendPhaseThreeTests
     {
         await using var context = CreateContext();
         var escenario = await SeedEscenarioAsync(context);
-        var controller = new InspeccionesController(
+        var controller = CreateController(
             context,
             new FakeCurrentUser(escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico"));
         var dto = new IniciarInspeccionDto
@@ -208,7 +213,7 @@ public class BackendPhaseThreeTests
             Observacion = "Equipo operativo"
         });
         await context.SaveChangesAsync();
-        var controller = new InspeccionesController(
+        var controller = CreateController(
             context,
             new FakeCurrentUser(escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico"));
 
@@ -236,7 +241,7 @@ public class BackendPhaseThreeTests
         };
         context.Inspecciones.Add(inspeccion);
         await context.SaveChangesAsync();
-        var controller = new InspeccionesController(
+        var controller = CreateController(
             context,
             new FakeCurrentUser(escenario.OtroTecnico.IdUsuario, escenario.OtroTecnico.Nombre, "Técnico"));
 

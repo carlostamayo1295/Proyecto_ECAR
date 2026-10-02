@@ -14,6 +14,7 @@ namespace ECAR.API.Services
         {
             // Tomamos la ruta base que pusimos en el appsettings y sacamos la ruta absoluta
             _rutaBase = Path.GetFullPath(options.Value.RutaBase);
+            Directory.CreateDirectory(_rutaBase);
         }
 
         public async Task<string> GuardarAsync(Stream stream, string extension, long idInspeccion)
@@ -39,11 +40,7 @@ namespace ECAR.API.Services
 
         public Task<Stream> AbrirAsync(string rutaRelativa)
         {
-            var rutaFisica = Path.Combine(_rutaBase, rutaRelativa);
-
-            // Seguridad: Bloquear intentos de "Directory Traversal" (ej. ../../Windows/System32)
-            if (!Path.GetFullPath(rutaFisica).StartsWith(_rutaBase))
-                throw new UnauthorizedAccessException("Intento de acceso a ruta no permitida.");
+            var rutaFisica = ResolverRutaSegura(rutaRelativa);
 
             if (!File.Exists(rutaFisica))
                 throw new FileNotFoundException("El archivo de evidencia no existe.");
@@ -54,10 +51,7 @@ namespace ECAR.API.Services
 
         public Task EliminarAsync(string rutaRelativa)
         {
-            var rutaFisica = Path.Combine(_rutaBase, rutaRelativa);
-
-            if (!Path.GetFullPath(rutaFisica).StartsWith(_rutaBase))
-                throw new UnauthorizedAccessException("Intento de acceso a ruta no permitida.");
+            var rutaFisica = ResolverRutaSegura(rutaRelativa);
 
             if (File.Exists(rutaFisica))
             {
@@ -65,6 +59,21 @@ namespace ECAR.API.Services
             }
 
             return Task.CompletedTask;
+        }
+
+        private string ResolverRutaSegura(string rutaRelativa)
+        {
+            var rutaFisica = Path.GetFullPath(Path.Combine(_rutaBase, rutaRelativa));
+            var relativaNormalizada = Path.GetRelativePath(_rutaBase, rutaFisica);
+
+            if (Path.IsPathRooted(relativaNormalizada)
+                || relativaNormalizada == ".."
+                || relativaNormalizada.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                throw new UnauthorizedAccessException("Intento de acceso a ruta no permitida.");
+            }
+
+            return rutaFisica;
         }
     }
 }
