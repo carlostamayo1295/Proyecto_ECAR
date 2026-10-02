@@ -1,6 +1,7 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.API.Services;
+using ECAR.API.Exceptions;
 using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
@@ -17,11 +18,13 @@ public class InspeccionesController : ControllerBase
 {
     private readonly ECARDbContext _context;
     private readonly ICurrentUser _currentUser;
+    private readonly IInspeccionService _inspeccionService;
 
-    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser)
+    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser, IInspeccionService inspeccionService)
     {
         _context = context;
         _currentUser = currentUser;
+        _inspeccionService = inspeccionService;
     }
 
     [HttpGet]
@@ -82,6 +85,38 @@ public class InspeccionesController : ControllerBase
         };
 
         return Ok(ApiResponse<PagedResultDto<InspeccionDto>>.SuccessResponse(pagedResult));
+    }
+
+    // Punto 2: GET /api/inspecciones/mias?estado=
+    [HttpGet("mias")]
+    public async Task<ActionResult<ApiResponse<List<InspeccionDto>>>> GetMisInspecciones([FromQuery] string? estado)
+    {
+        var usuarioId = _currentUser.IdUsuario;
+        var result = await _inspeccionService.ObtenerMisInspeccionesAsync(usuarioId, estado);
+        return Ok(ApiResponse<List<InspeccionDto>>.SuccessResponse(result));
+    }
+
+    // Punto 1: GET /api/inspecciones/{id}/respuestas
+    [HttpGet("{id}/respuestas")]
+    public async Task<ActionResult<ApiResponse<List<RespuestaInspeccionDto>>>> GetRespuestas(long id)
+    {
+        try
+        {
+            var usuarioId = _currentUser.IdUsuario;
+            var esAdmin = _currentUser.IsInRole("Administrador");
+            var esAuditor = _currentUser.IsInRole("Auditor");
+
+            var respuestas = await _inspeccionService.ObtenerRespuestasAsync(id, usuarioId, esAdmin, esAuditor);
+            return Ok(ApiResponse<List<RespuestaInspeccionDto>>.SuccessResponse(respuestas));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<List<RespuestaInspeccionDto>>.ErrorResponse(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("{id}")]
@@ -215,7 +250,6 @@ public class InspeccionesController : ControllerBase
                 "El checklist indicado no existe o no está activo"));
         }
 
-        // Regla de negocio: si existe novedad, la observación es obligatoria
         if (!string.IsNullOrWhiteSpace(createDto.Resultado)
             && createDto.Resultado.Contains("novedad", StringComparison.OrdinalIgnoreCase)
             && string.IsNullOrWhiteSpace(createDto.Observaciones))
@@ -289,6 +323,43 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección actualizada exitosamente"));
     }
 
+    // Punto 6, 3, 4, 5: Guardar respuestas usando el servicio y devolviendo 409 Conflict si está cerrada
+    [HttpPut("{id}/respuestas")]
+    [Authorize(Roles = "Administrador,Técnico")]
+    public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> GuardarRespuestas(
+        long id,
+        [FromBody] GuardarRespuestasDto dto)
+    {
+        try
+        {
+            var usuarioId = _currentUser.IdUsuario;
+            var esAdmin = _currentUser.IsInRole("Administrador");
+
+            await _inspeccionService.GuardarRespuestasAsync(id, dto, usuarioId, esAdmin);
+
+            var ejecucionActualizada = await CargarEjecucionAsync(id);
+            return Ok(ApiResponse<InspeccionEjecucionDto>.SuccessResponse(
+                MapToEjecucionDto(ejecucionActualizada!),
+                "Respuestas guardadas exitosamente"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InspeccionCerradaException ex) // Retorna 409 Conflict
+        {
+            return Conflict(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
+        }
+        catch (ArgumentException ex) // Retorna 400 BadRequest para validaciones
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
+        }
+    }
+
     [HttpDelete("{id}")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteInspeccion(long id)
@@ -342,7 +413,6 @@ public class InspeccionesController : ControllerBase
         var respuestasPorPregunta = inspeccion.Respuestas
             .ToDictionary(respuesta => respuesta.IdPregunta);
 
-        // Contadores que la pantalla de ejecución usa para el stepper (reglas 3 y 4 del SRS).
         var preguntasChecklist = inspeccion.Checklist.Preguntas.ToList();
         var obligatorias = preguntasChecklist.Where(pregunta => pregunta.Obligatoria).ToList();
         var obligatoriasRespondidas = obligatorias.Count(pregunta =>
