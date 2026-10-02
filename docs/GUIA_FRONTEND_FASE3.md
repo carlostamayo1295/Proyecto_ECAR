@@ -211,6 +211,54 @@ botón "Iniciar inspección" de la página pública del QR:
 NavigationManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(destino)}");
 ```
 
+### Roles mixtos: `RolRouteGuard`
+
+Cuando la lista de roles no es la de las otras dos guardas, usa `Components/RolRouteGuard.razor`,
+que recibe los roles como parámetro y se comporta como `TecnicoRouteGuard` sin sesión:
+
+```razor
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
+               MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden ver esto.">
+    ... contenido de la pantalla ...
+</RolRouteGuard>
+```
+
+### No uses `@attribute [Authorize]`
+
+**En este proyecto no hace nada.** No falla ni redirige: simplemente nadie lo lee.
+`App.razor` monta un `<RouteView>` normal, no un `<AuthorizeRouteView>`, que es el único
+componente que evalúa ese atributo, y `Program.cs` no registra `AddAuthorizationCore()` ni
+ningún `AuthenticationStateProvider`. Por eso existen las guardas. Le pasó a la página del
+resultado y fue por una instrucción mía.
+
+Por la misma razón, `<AuthorizeView>` tampoco sirve. Para mostrar u ocultar algo según el rol
+dentro de una página, usa `AuthorizationService.GetUserRolesAsync()`, como hace el bloque del
+hash en `ResultadoInspeccion.razor`.
+
+### La guarda no detiene la página
+
+La guarda es un componente hijo: la página que la contiene **sigue ejecutando su
+`OnInitializedAsync`** aunque no haya sesión. Si la página llama al API ahí, esa llamada sale sin
+token mientras la guarda redirige, y el error se puede colar en pantalla. Comprueba el token
+antes de llamar:
+
+```csharp
+if (string.IsNullOrEmpty(await AuthorizationService.GetTokenAsync()))
+{
+    return;   // la guarda ya está mandando al login
+}
+```
+
+`EjecutarInspeccion` e `IniciarInspeccion` lo hacen así.
+
+### `EmptyLayout` no tiene proveedores de MudBlazor
+
+`Layout/EmptyLayout.razor` es solo `@Body`: no monta `MudThemeProvider`, `MudSnackbarProvider`,
+`MudDialogProvider` ni `MudPopoverProvider`. En una página con ese layout **no se ven los
+`Snackbar`, no abren los diálogos ni los desplegables** (`MudSelect`, `MudMenu`). La consulta
+pública del QR lo usa porque no necesita nada de eso; no lo copies a otras pantallas sin
+comprobarlo.
+
 ---
 
 ## 5. Criterio visual de la fase
@@ -250,7 +298,10 @@ Siguen las de Fase 2, con dos añadidos:
 - **Sin `TODO` dirigidos a otra persona.** Si falta algo de backend, el método devuelve `null`
   y la pantalla lo avisa; eso es suficiente.
 - Las pantallas de administración van dentro de `<AdminRouteGuard>`; las de ejecución, dentro
-  de `<TecnicoRouteGuard>`.
+  de `<TecnicoRouteGuard>`; las de roles mixtos, dentro de `<RolRouteGuard>`. Nunca
+  `@attribute [Authorize]` (§4).
+- En las tablas, cada `MudTd` lleva `DataLabel`. Por debajo de 600 px `MudTable` se apila en
+  tarjetas y sin etiqueta los valores salen sueltos.
 - Los comentarios del código, en español.
 
 ---

@@ -1303,102 +1303,103 @@ public class HttpClientService
             return null;
         }
     }
-        // Métodos del API de Preguntas de Checklist
-        public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(long idChecklist)
+
+    // Métodos del API de Preguntas de Checklist
+    public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(long idChecklist)
+    {
+        try
         {
-            try
-            {
-                await AddAuthorizationHeaderAsync();
-                var response = await _httpClient.GetAsync($"api/PreguntasChecklist/checklist/{idChecklist}");
-                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<PreguntaChecklistDto>>>();
-                await RemoveAuthorizationHeaderAsync();
-                return apiResponse;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting preguntas: {ex.Message}");
-                await RemoveAuthorizationHeaderAsync();
-                return null;
-            }
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/PreguntasChecklist/checklist/{idChecklist}");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<PreguntaChecklistDto>>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
         }
-
-        // ===================== FASE 3 — EJECUCIÓN DE INSPECCIONES =====================
-        // Contrato acordado entre FE-0 y BE-0 (docs/PLAN_FASE3_TAREAS.md §3.2).
-        // Todos siguen la convención del archivo: token en la cabecera, ApiResponse<T> y null si la
-        // llamada falla; la pantalla siempre debe avisar con Snackbar, nunca dejar un control vacío.
-
-        /// <summary>Tamaño máximo aceptado al leer una fotografía del dispositivo (5 MB).</summary>
-        public const long MaxEvidenciaBytes = 5 * 1024 * 1024;
-
-        /// <summary>
-        /// Inicia una inspección para un equipo y checklist. Si el técnico ya tiene una inspección
-        /// en curso para ese equipo, el API responde 409 y devuelve la existente en Data: la pantalla
-        /// debe continuarla en vez de mostrar un error.
-        /// </summary>
-        public async Task<ApiResponse<InspeccionEjecucionDto>?> IniciarInspeccionAsync(IniciarInspeccionDto iniciarDto)
+        catch (Exception ex)
         {
-            try
-            {
-                await AddAuthorizationHeaderAsync();
-                var response = await _httpClient.PostAsJsonAsync("api/inspecciones/iniciar", iniciarDto);
-                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
-                await RemoveAuthorizationHeaderAsync();
-                return apiResponse;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error iniciando inspeccion: {ex.Message}");
-                await RemoveAuthorizationHeaderAsync();
-                return null;
-            }
+            Console.WriteLine($"Error getting preguntas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
         }
+    }
 
-        /// <summary>
-        /// Estado completo de la inspección: cabecera, preguntas con sus respuestas y evidencias.
-        /// Es la única llamada que necesita la pantalla de ejecución para dibujarse.
-        /// </summary>
-        public async Task<ApiResponse<InspeccionEjecucionDto>?> GetInspeccionEjecucionAsync(long id)
-        {
-            try
-            {
-                await AddAuthorizationHeaderAsync();
-                var response = await _httpClient.GetAsync($"api/inspecciones/{id}/ejecucion");
-                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
-                await RemoveAuthorizationHeaderAsync();
-                return apiResponse;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting inspeccion ejecucion: {ex.Message}");
-                await RemoveAuthorizationHeaderAsync();
-                return null;
-            }
-        }
+    // ===================== FASE 3 — EJECUCIÓN DE INSPECCIONES =====================
+    // Contrato acordado entre FE-0 y BE-0 (docs/PLAN_FASE3_TAREAS.md §3.2).
+    // Todos siguen la convención del archivo: token en la cabecera, ApiResponse<T> y null si la
+    // llamada falla; la pantalla siempre debe avisar con Snackbar, nunca dejar un control vacío.
 
-        /// <summary>
-        /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
-        /// para el guardado incremental mientras el técnico avanza.
-        /// Devuelve el estado completo recalculado por el servidor —incluidos los contadores—,
-        /// así que no hace falta volver a pedir la ejecución tras guardar.
-        /// </summary>
-        public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
-            GuardarRespuestasDto guardarDto)
+    /// <summary>Tamaño máximo aceptado al leer una fotografía del dispositivo (5 MB).</summary>
+    public const long MaxEvidenciaBytes = 5 * 1024 * 1024;
+
+    /// <summary>
+    /// Inicia una inspección para un equipo y checklist. Si el técnico ya tiene una inspección
+    /// en curso para ese equipo, el API responde 409 y devuelve la existente en Data: la pantalla
+    /// debe continuarla en vez de mostrar un error.
+    /// </summary>
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> IniciarInspeccionAsync(IniciarInspeccionDto iniciarDto)
+    {
+        try
         {
-            try
-            {
-                await AddAuthorizationHeaderAsync();
-                var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
-                var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
-                await RemoveAuthorizationHeaderAsync();
-                return apiResponse;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error guardando respuestas: {ex.Message}");
-                await RemoveAuthorizationHeaderAsync();
-                return null;
-            }
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync("api/inspecciones/iniciar", iniciarDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error iniciando inspeccion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Estado completo de la inspección: cabecera, preguntas con sus respuestas y evidencias.
+    /// Es la única llamada que necesita la pantalla de ejecución para dibujarse.
+    /// </summary>
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> GetInspeccionEjecucionAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.GetAsync($"api/inspecciones/{id}/ejecucion");
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting inspeccion ejecucion: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
+    /// para el guardado incremental mientras el técnico avanza.
+    /// Devuelve el estado completo recalculado por el servidor —incluidos los contadores—,
+    /// así que no hace falta volver a pedir la ejecución tras guardar.
+    /// </summary>
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
+        GuardarRespuestasDto guardarDto)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error guardando respuestas: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
 
     public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GetRespuestasInspeccionAsync(long idInspeccion)
     {
