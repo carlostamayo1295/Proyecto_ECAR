@@ -10,11 +10,14 @@
         <MudForm @ref="form">
             @if (IsEditMode)
             {
-                @* El equipo y el inspector no se pueden cambiar: se muestran solo como referencia. *@
+                @* El equipo, el inspector y el checklist no se pueden cambiar: se muestran solo como referencia. *@
                 <MudTextField T="string" Label="Equipo" Value="@Inspeccion!.NombreEquipo"
                     Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
 
                 <MudTextField T="string" Label="Inspector" Value="@Inspeccion!.NombreUsuario"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
+
+                <MudTextField T="string" Label="Checklist" Value="@Inspeccion!.NombreChecklist"
                     Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
             }
             else
@@ -32,6 +35,15 @@
                     MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
                     Clearable="true" Class="mb-3"
                     HelperText="Escriba nombre, correo o usuario AD para filtrar" />
+
+                <MudSelect T="long?" Label="Checklist" @bind-Value="checklistSeleccionado" Variant="Variant.Outlined"
+                    Required="true" RequiredError="El checklist es requerido" Class="mb-3"
+                    HelperText="Solo se listan los checklists activos">
+                    @foreach (var checklist in checklistsActivos)
+                    {
+                        <MudSelectItem T="long?" Value="@((long?)checklist.IdChecklist)">@($"{checklist.Nombre} (v{checklist.Version})")</MudSelectItem>
+                    }
+                </MudSelect>
             }
 
             <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
@@ -72,6 +84,8 @@
 
     private EquipoDto? equipoSeleccionado;
     private UsuarioDto? usuarioSeleccionado;
+    private List<ChecklistDto> checklistsActivos = new();
+    private long? checklistSeleccionado;
 
     private DateTime? fechaInspeccion = DateTime.Today;
     private string? resultado;
@@ -82,7 +96,7 @@
     private bool errorEquiposAvisado;
     private bool errorUsuariosAvisado;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (IsEditMode && Inspeccion != null)
         {
@@ -90,6 +104,29 @@
             resultado = Inspeccion.Resultado;
             observaciones = Inspeccion.Observaciones;
         }
+        else
+        {
+            await CargarChecklistsActivosAsync();
+        }
+    }
+
+    // El API de Checklists no tiene un filtro "solo activos"; se trae una página y se filtra
+    // aquí. pageSize se deja en 100 (el máximo que aceptan los demás controladores) porque
+    // en la práctica el catálogo de checklists es chico, a diferencia de Equipos/Usuarios.
+    private async Task CargarChecklistsActivosAsync()
+    {
+        var respuesta = await HttpClientService.GetChecklistsAsync(1, 100);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los checklists", Severity.Error);
+            checklistsActivos = new List<ChecklistDto>();
+            return;
+        }
+
+        checklistsActivos = (respuesta.Data?.Data ?? new List<ChecklistDto>())
+            .Where(c => c.Activo)
+            .ToList();
     }
 
     // El filtro se resuelve en el API para que la lista funcione con muchos registros.
@@ -179,10 +216,17 @@
                 return;
             }
 
+            if (checklistSeleccionado is null or <= 0)
+            {
+                Snackbar.Add("Debe seleccionar un checklist", Severity.Warning);
+                return;
+            }
+
             var createDto = new CreateInspeccionDto
             {
                 IdEquipo = equipoSeleccionado.IdEquipo,
                 IdUsuario = usuarioSeleccionado.IdUsuario,
+                IdChecklist = checklistSeleccionado.Value,
                 FechaInspeccion = fechaInspeccion ?? DateTime.Today,
                 Resultado = resultado,
                 Observaciones = observaciones,

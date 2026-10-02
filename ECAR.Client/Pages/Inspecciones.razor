@@ -2,6 +2,7 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NavigationManager NavigationManager
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
@@ -18,22 +19,34 @@
         </MudCardHeader>
 
         <MudCardContent>
-            <MudTextField T="string" Label="Buscar por equipo, inspector o resultado" @bind-Value="searchText" Variant="Variant.Outlined"
-                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                OnKeyUp="OnSearchKeyUp" Class="mb-4" />
+            <MudGrid Class="mb-2">
+                <MudItem xs="12" sm="8">
+                    <MudTextField T="string" Label="Buscar por equipo, inspector o resultado" @bind-Value="searchText" Variant="Variant.Outlined"
+                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                        OnKeyUp="OnSearchKeyUp" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined" Clearable="true"
+                        ValueChanged="OnEstadoChanged">
+                        <MudSelectItem T="string" Value="@InspeccionEstados.EnCurso">En curso</MudSelectItem>
+                        <MudSelectItem T="string" Value="@InspeccionEstados.Cerrada">Cerrada</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
 
             @if (isLoading)
             {
                 <MudProgressLinear Indeterminate="true" Class="my-4" />
             }
-            else if (inspecciones != null && inspecciones.Any())
+            else if (inspeccionesFiltradas.Any())
             {
-                <MudTable Items="inspecciones" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="inspeccionesFiltradas" Hover="true" Striped="true" Elevation="0">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Equipo</MudTh>
                         <MudTh>Inspector</MudTh>
                         <MudTh>Fecha</MudTh>
+                        <MudTh>Estado</MudTh>
                         <MudTh>Resultado</MudTh>
                         <MudTh>Firma</MudTh>
                         <MudTh>Evid. / Hall.</MudTh>
@@ -46,6 +59,11 @@
                         <MudTd>@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                Color="@(context.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
+                                Text="@(context.Estado == InspeccionEstados.EnCurso ? "En curso" : "Cerrada")" />
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                 Color="@ResultadoColor(context.Resultado)"
                                 Text="@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)" />
                         </MudTd>
@@ -55,6 +73,20 @@
                         </MudTd>
                         <MudTd>@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
                         <MudTd>
+                            @if (context.Estado == InspeccionEstados.EnCurso)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Continuar(context)" Class="action-button">
+                                    Continuar
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Assignment" OnClick="() => VerResultado(context)" Class="action-button">
+                                    Ver resultado
+                                </MudButton>
+                            }
                             <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
                                 Ver
@@ -87,10 +119,17 @@
 @code {
     private List<InspeccionDto>? inspecciones;
     private string searchText = string.Empty;
+    private string? estadoFiltro;
     private int currentPage = 1;
     private int pageSize = 10;
     private int totalPages = 1;
     private bool isLoading = false;
+
+    // El API de Inspecciones (a diferencia de Hallazgos) todavía no acepta un filtro
+    // "estado" por query string, así que el filtro se aplica sobre la página ya cargada.
+    private IEnumerable<InspeccionDto> inspeccionesFiltradas =>
+        (inspecciones ?? new List<InspeccionDto>())
+            .Where(i => estadoFiltro == null || i.Estado == estadoFiltro);
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,6 +180,27 @@
     {
         currentPage = newPage;
         await LoadInspeccionesAsync();
+    }
+
+    private void OnEstadoChanged(string? value)
+    {
+        estadoFiltro = value;
+    }
+
+    /// <summary>Retoma una inspección EnCurso en el flujo de ejecución (FE-0).</summary>
+    private void Continuar(InspeccionDto inspeccion)
+    {
+        NavigationManager.NavigateTo($"/inspecciones/ejecutar/{inspeccion.IdInspeccion}");
+    }
+
+    /// <summary>
+    /// Ruta definitiva de FE-3 (docs/PLAN_FASE3_TAREAS.md §3.5 y §5): todavía no existe la
+    /// página ResultadoInspeccion.razor en develop, así que hasta que FE-3 la publique esto
+    /// navega a una ruta que aún no resuelve nada.
+    /// </summary>
+    private void VerResultado(InspeccionDto inspeccion)
+    {
+        NavigationManager.NavigateTo($"/inspecciones/{inspeccion.IdInspeccion}/resultado");
     }
 
     private async Task OpenCreateDialog()
