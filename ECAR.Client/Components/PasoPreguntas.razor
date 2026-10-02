@@ -1,26 +1,14 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
-
 @* PASO 1 — Preguntas y respuestas.  Dueño: FE-1 (Erica).
 
-   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-1):
-   1. Recorrer Inspeccion.Preguntas en orden y pintar cada una con RespuestaPreguntaInput
-      (ya existe: SiNo = dos casillas, Texto = campo de texto).
-   2. Marcar visualmente las obligatorias y mostrar el campo Observación; hacerlo obligatorio
-      cuando la pregunta sea Sí/No respondida con "No" (regla 4 del SRS).
-   3. Guardado incremental: llamar a GuardarAsync con debounce de 500 ms al cambiar una
-      respuesta, y mostrar el indicador "Guardando / Guardado / Error al guardar".
+   Pinta cada pregunta de Inspeccion.Preguntas con RespuestaPreguntaInput y persiste cada
+   cambio con debounce por pregunta (ver ProgramarGuardado): tanto la respuesta como la
+   Observación (obligatoria cuando la pregunta es Sí/No y quedó en "No", regla 4 del SRS)
+   se guardan solas, sin esperar a que el técnico toque otro campo.
 
-   Lo que ya está resuelto aquí: el contrato con la página contenedora, la llamada al API y
-   el indicador de guardado. No hace falta tocar EjecutarInspeccion.razor.
-
-   IMPORTANTE al pintar el campo Observación: hay que persistirlo igual que la respuesta.
-   Una novedad sin observación no deja cerrar la inspección (regla 4 del SRS), así que el
-   campo debe llamar a GuardarAsync al cambiar, no solo enlazar con @@bind-Value. *@
-
-<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-    Paso pendiente de implementar (FE-1). El contrato con el API ya está disponible.
-</MudAlert>
+   El indicador Estado (cabecera) muestra Guardando/Guardado/Error; el Snackbar queda
+   reservado solo para errores, para no saturar la pantalla en preguntas de texto. *@
 
 @* Indicador de guardado. La guía §5 pide los tres estados, no solo "Guardando…". *@
 @if (Estado != EstadoGuardado.Inactivo)
@@ -38,9 +26,23 @@
 }
 else
 {
-    <MudText Typo="Typo.body2" Class="mud-text-secondary">
-        @Inspeccion.Preguntas.Count pregunta(s) · @Inspeccion.TotalObligatorias obligatoria(s)
-    </MudText>
+    @foreach (var pregunta in Inspeccion.Preguntas)
+    {
+        <RespuestaPreguntaInput Label="@(pregunta.Obligatoria ? pregunta.Pregunta + " *" : pregunta.Pregunta)"
+                                 TipoRespuesta="@pregunta.TipoRespuesta"
+                                 Valor="@pregunta.Respuesta"
+                                 ValorChanged="(nuevoValor) => OnRespuestaCambiada(pregunta, nuevoValor)" />
+
+        @if (pregunta.EsNovedad)
+        {
+            <MudTextField T="string" Label="Observación" @bind-Value="pregunta.Observacion"
+                          @bind-Value:after="() => ProgramarGuardado(pregunta)"
+                          Variant="Variant.Outlined" Lines="2" Required="true"
+                          Immediate="true" DebounceInterval="500"
+                          Error="@(pregunta.EsNovedad && string.IsNullOrWhiteSpace(pregunta.Observacion))"
+                          ErrorText="La observación es obligatoria cuando hay novedad" />
+        }
+    }
 }
 
 @code {
@@ -74,6 +76,51 @@ else
         EstadoGuardado.Guardado => Color.Success,
         _ => Color.Default
     };
+
+    private readonly Dictionary<long, CancellationTokenSource> _debounces = new();
+
+    private void ProgramarGuardado(PreguntaEjecucionDto pregunta)
+    {
+        if (_debounces.TryGetValue(pregunta.IdPregunta, out var anterior))
+        {
+            anterior.Cancel();
+            anterior.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        _debounces[pregunta.IdPregunta] = cts;
+        _ = EsperarYGuardarAsync(pregunta, cts.Token);
+    }
+
+    private void OnRespuestaCambiada(PreguntaEjecucionDto pregunta, string nuevoValor)
+    {
+        pregunta.Respuesta = nuevoValor;
+        ProgramarGuardado(pregunta);
+    }
+
+    private async Task EsperarYGuardarAsync(PreguntaEjecucionDto pregunta, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(500, token);
+
+            await GuardarAsync(new List<RespuestaEjecucionDto>
+            {
+                new RespuestaEjecucionDto
+                {
+                    IdPregunta = pregunta.IdPregunta,
+                    Respuesta = pregunta.Respuesta ?? string.Empty,
+                    Observacion = pregunta.Observacion
+                }
+            });
+
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+            // el usuario siguió escribiendo antes de los 500ms; no pasa nada
+        }
+    }
 
     /// <summary>
     /// Envía un lote de respuestas y refleja lo guardado en la copia en memoria.
