@@ -1,12 +1,12 @@
 ﻿@page "/inspecciones/{IdInspeccion:long}/resultado"
-@attribute [Authorize(Roles = "Administrador,Técnico,Auditor")]
-@using Microsoft.AspNetCore.Authorization
 @inject HttpClientService Http
 @inject NavigationManager Navigation
 @inject IJSRuntime jsRuntime
 @inject ISnackbar Snackbar
 @inject AuthorizationService AuthorizationService
 
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
+                MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden ver el resultado de una inspección.">
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-4">
     @if (_cargando)
     {
@@ -145,6 +145,7 @@
         </MudPaper>
     }
 </MudContainer>
+</RolRouteGuard>
 
 @code {
     [Parameter]
