@@ -9,9 +9,9 @@
 @if (!Inspeccion.EstaCerrada)
 {
     <MudFileUpload T="IBrowserFile" @ref="fileUpload" Accept="image/*" capture="environment"
-        Disabled="subiendo" FilesChanged="OnArchivoSeleccionadoAsync">
+        Disabled="Subiendo" FilesChanged="OnArchivoSeleccionadoAsync">
         <CustomContent Context="fileUploadContext">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="subiendo"
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="Subiendo"
                 StartIcon="@Icons.Material.Filled.AddAPhoto" OnClick="@fileUploadContext.OpenFilePickerAsync">
                 Agregar fotografía
             </MudButton>
@@ -19,9 +19,12 @@
         <SelectedTemplate Context="_"></SelectedTemplate>
     </MudFileUpload>
 
-    @if (subiendo)
+    @if (Subiendo)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-2" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            Subiendo @_subidasEnCurso fotografía(s)…
+        </MudText>
     }
 }
 
@@ -71,11 +74,18 @@
     [Parameter]
     public EventCallback OnEvidenciasCambiadas { get; set; }
 
-    private bool subiendo;
     private MudFileUpload<IBrowserFile>? fileUpload;
 
     /// <summary>Caché de miniaturas ya descargadas, por IdEvidencia, para no repetir la llamada al API en cada render.</summary>
     private readonly Dictionary<long, string?> miniaturas = new();
+
+    // Nº de fotografías subiéndose ahora mismo. Se usa para el indicador de progreso, nunca
+    // para descartar una subida: tirar una foto en silencio perdería evidencia de la
+    // inspección sin que el técnico se entere.
+    private int _subidasEnCurso;
+
+    /// <summary>true mientras haya alguna fotografía subiéndose. Úsalo para la barra de progreso.</summary>
+    protected bool Subiendo => _subidasEnCurso > 0;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -85,7 +95,7 @@
     /// <summary>Comprime la fotografía tomada/elegida y la sube; limpia el control para el siguiente disparo.</summary>
     private async Task OnArchivoSeleccionadoAsync(IBrowserFile archivo)
     {
-        if (archivo == null || subiendo)
+        if (archivo == null)
         {
             return;
         }
@@ -114,20 +124,19 @@
     /// <summary>Sube una fotografía y la añade a la lista en memoria.</summary>
     protected async Task SubirAsync(IBrowserFile archivo)
     {
-        if (subiendo)
-        {
-            return;
-        }
-
         if (archivo.Size > HttpClientService.MaxEvidenciaBytes)
         {
             Snackbar.Add("La fotografía supera el máximo de 5 MB", Severity.Warning);
             return;
         }
 
-        subiendo = true;
+        _subidasEnCurso++;
+        await InvokeAsync(StateHasChanged);
+
         var result = await HttpClientService.UploadEvidenciaAsync(Inspeccion.IdInspeccion, archivo);
-        subiendo = false;
+
+        _subidasEnCurso--;
+        await InvokeAsync(StateHasChanged);
 
         if (result == null || !result.Success || result.Data == null)
         {
