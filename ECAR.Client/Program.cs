@@ -9,15 +9,21 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configurar el HttpClient del API
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://localhost:7296") });
+// Sesión: SesionService decide cuándo terminó la sesión y manda al login conservando la página.
+builder.Services.AddScoped<SesionService>();
+
+// Configurar el HttpClient del API. Pasa por SesionExpiradaHandler: si el API responde 401 a una
+// petición que llevaba token, la sesión venció y se vuelve al login.
+builder.Services.AddScoped(sp => new HttpClient(
+    new SesionExpiradaHandler(sp.GetRequiredService<SesionService>()) { InnerHandler = new HttpClientHandler() })
+{
+    BaseAddress = new Uri("https://localhost:7296")
+});
 
 // Registrar los servicios
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<HttpClientService>();
 builder.Services.AddScoped<AuthorizationService>();
-// Mock temporal para pantallas de Fase 2/3 aún sin backend (PreguntasChecklist, RespuestasInspeccion).
-builder.Services.AddScoped<MockDataService>();
 
 // Configurar MudBlazor con el tema corporativo de ECAR
 builder.Services.AddMudServices();

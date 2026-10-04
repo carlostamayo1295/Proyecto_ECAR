@@ -72,7 +72,7 @@
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage" 
-                    SelectedPageChanged="HandlePageChange" />
+                    SelectedChanged="HandlePageChange" />
             }
             else
             {
@@ -155,7 +155,7 @@
         var dialog = await DialogService.ShowAsync<UserModal>("Crear Nuevo Usuario", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadDataAsync();
         }
@@ -171,7 +171,7 @@
         var dialog = await DialogService.ShowAsync<UserModal>("Editar Usuario", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadDataAsync();
         }
@@ -184,21 +184,25 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             isLoading = true;
             try
             {
-                var deleteResult = await HttpClientService.DeleteUsuarioAsync(usuario.IdUsuario);
-                
-                if (deleteResult != null && deleteResult.Success)
+                // DELETE es el borrado lógico y siempre desactiva: activar tiene su propio
+                // endpoint. Antes los dos botones llamaban a DELETE y "Activar" no hacía nada.
+                var resultado = usuario.Activo
+                    ? await HttpClientService.DeleteUsuarioAsync(usuario.IdUsuario)
+                    : await HttpClientService.ActivarUsuarioAsync(usuario.IdUsuario);
+
+                if (resultado != null && resultado.Success)
                 {
-                    Snackbar.Add($"Usuario {action} exitosamente", Severity.Success);
+                    Snackbar.Add(resultado.Message ?? "Usuario actualizado", Severity.Success);
                     await LoadDataAsync();
                 }
                 else
                 {
-                    Snackbar.Add(deleteResult?.Message ?? $"Error al {action} usuario", Severity.Error);
+                    Snackbar.Add(resultado?.Message ?? $"Error al {action} el usuario", Severity.Error);
                 }
             }
             catch (Exception ex)

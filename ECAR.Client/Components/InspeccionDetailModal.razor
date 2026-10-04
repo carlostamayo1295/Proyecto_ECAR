@@ -24,9 +24,10 @@
                         Color="@ResultadoColor(Inspeccion.Resultado)" Text="@(string.IsNullOrEmpty(Inspeccion.Resultado) ? "Sin registrar" : Inspeccion.Resultado)" />
                 </MudItem>
                 <MudItem xs="6" sm="4">
-                    <MudText Typo="Typo.caption">Firma digital</MudText>
-                    <MudIcon Icon="@(Inspeccion.TieneFirma ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
-                        Color="@(Inspeccion.TieneFirma ? Color.Success : Color.Default)" />
+                    <MudText Typo="Typo.caption">Estado</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                        Color="@(Inspeccion.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
+                        Text="@(Inspeccion.Estado == InspeccionEstados.Cerrada ? "Cerrada" : "En curso")" />
                 </MudItem>
                 <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Evidencias</MudText>
@@ -42,6 +43,18 @@
             <MudPaper Elevation="0" Class="value-box pa-3">
                 <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@(string.IsNullOrEmpty(Inspeccion.Observaciones) ? "-" : Inspeccion.Observaciones)</MudText>
             </MudPaper>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Firma digital</MudText>
+            @if (Inspeccion.TieneFirma)
+            {
+                <VistaFirmaInspeccion IdInspeccion="@Inspeccion.IdInspeccion" />
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Pendiente de firma: el inspector firma al cerrar la inspección.
+                </MudText>
+            }
         }
     </DialogContent>
     <DialogActions>
@@ -62,8 +75,9 @@
 
     private static Color ResultadoColor(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
     {
-        "satisfactoria" => Color.Success,
-        "con novedad" => Color.Warning,
+        // Conforme / ConNovedad los calcula el servidor al firmar; los otros dos son de la Fase 1-2.
+        "conforme" or "satisfactoria" => Color.Success,
+        "connovedad" or "con novedad" => Color.Warning,
         _ => Color.Default
     };
 }

@@ -16,6 +16,13 @@
 
         <MudDivider Class="my-4" />
 
+        @if (SesionExpirada)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+                Su sesión expiró. Inicie sesión de nuevo para volver a la página en la que estaba.
+            </MudAlert>
+        }
+
         <MudForm @ref="form" Class="login-form">
             <MudTextField T="string" Label="Correo o Usuario AD" @bind-Value="loginDto.CorreoOrUsuarioAD" Variant="Variant.Outlined" Required="false" RequiredError="El correo o usuario AD es requerido" Class="mb-3" AdornmentIcon="@Icons.Material.Filled.Email" Adornment="Adornment.Start" />
             <MudTextField T="string" Label="Password" @bind-Value="loginDto.Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="false" RequiredError="El password es requerido" Class="mb-4" AdornmentIcon="@Icons.Material.Filled.Lock" Adornment="Adornment.Start" />
@@ -135,6 +142,51 @@
     private bool isLoading = false;
     private string errorMessage = string.Empty;
 
+    // Página a la que volver tras iniciar sesión. La usan las pantallas protegidas
+    // (p. ej. ejecutar una inspección abierta desde el QR en el teléfono).
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    [Parameter]
+    public string? ReturnUrl { get; set; }
+
+    // La pone SesionService cuando manda aquí porque el token venció.
+    [SupplyParameterFromQuery(Name = "expirada")]
+    [Parameter]
+    public string? Expirada { get; set; }
+
+    private bool SesionExpirada => Expirada == "1";
+
+    /// <summary>
+    /// Destino tras iniciar sesión. Solo se acepta una ruta de esta misma aplicación: si se
+    /// aceptara cualquier URL, un enlace como /login?returnUrl=https://sitio-falso pondría al
+    /// usuario, recién autenticado, en una web ajena (redirección abierta).
+    /// </summary>
+    private const char BarraInvertida = (char)92;
+
+    private string DestinoSeguro()
+    {
+        var destino = ReturnUrl?.Trim();
+
+        // Rechaza URL absolutas ("https://…"), las relativas al protocolo ("//sitio") y las que
+        // empiezan por barra invertida, que los navegadores tratan igual que "/".
+        if (string.IsNullOrEmpty(destino)
+            || destino.Contains("://")
+            || destino.StartsWith(BarraInvertida)
+            || (destino.Length > 1 && destino[0] == '/' && (destino[1] == '/' || destino[1] == BarraInvertida))
+            || !Uri.TryCreate(destino, UriKind.Relative, out _))
+        {
+            return "/";
+        }
+
+        // Volver al propio login dejaría al usuario en un bucle.
+        var ruta = destino.TrimStart('/');
+        if (ruta.StartsWith("login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/";
+        }
+
+        return "/" + ruta;
+    }
+
     private async Task HandleLogin()
     {
         if (string.IsNullOrWhiteSpace(loginDto.CorreoOrUsuarioAD) || string.IsNullOrWhiteSpace(loginDto.Password))
@@ -152,8 +204,9 @@
             
             if (result != null)
             {
-                // Login exitoso, redirigir a home (forceLoad para recargar el layout y reflejar roles/menú)
-                NavigationManager.NavigateTo("/", forceLoad: true);
+                // Login exitoso. forceLoad recarga el layout para reflejar roles y menú.
+                // Si se llegó aquí desde una página protegida, se vuelve a ella.
+                NavigationManager.NavigateTo(DestinoSeguro(), forceLoad: true);
             }
             else
             {

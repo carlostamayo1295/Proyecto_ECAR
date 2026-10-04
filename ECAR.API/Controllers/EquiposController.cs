@@ -298,6 +298,24 @@ public class EquiposController : ControllerBase
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Equipo desactivado exitosamente"));
     }
 
+    /// <summary>Reactiva un equipo desactivado. Contraparte explícita del borrado lógico.</summary>
+    [HttpPut("{id}/activar")]
+    [Authorize(Roles = "Administrador")]
+    public async Task<ActionResult<ApiResponse<bool>>> ActivarEquipo(long id)
+    {
+        var equipo = await _context.Equipos.FindAsync(id);
+
+        if (equipo == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Equipo no encontrado"));
+        }
+
+        equipo.Activo = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<bool>.SuccessResponse(true, "Equipo activado exitosamente"));
+    }
+
     [HttpGet("categorias")]
     public async Task<ActionResult<ApiResponse<List<LookupDto>>>> GetCategorias()
     {

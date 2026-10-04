@@ -1,7 +1,6 @@
 ﻿@page "/inspecciones/respuestas"
-@inject MockDataService MockDataService
+@inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
@@ -10,17 +9,24 @@
                 <MudText Typo="Typo.h5">Respuestas de Inspección</MudText>
                 <MudText Typo="Typo.body2">Respuestas registradas durante una inspección</MudText>
             </CardHeaderContent>
-            <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nueva Respuesta
-                </MudButton>
-            </CardHeaderActions>
         </MudCardHeader>
 
         <MudCardContent>
-            <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                Class="mb-4" />
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                                  DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudAutocomplete T="InspeccionDto" Label="Filtrar por inspección" @bind-Value="inspeccionSeleccionada"
+                                     @bind-Value:after="OnInspeccionChanged"
+                                     SearchFunc="BuscarInspeccionesAsync" ToStringFunc="@(i => i == null ? string.Empty : $"#{i.IdInspeccion} - {i.NombreEquipo}")"
+                                     Variant="Variant.Outlined"
+                                     MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
+                                     Clearable="true" />
+                </MudItem>
+            </MudGrid>
 
             @if (isLoading)
             {
@@ -35,13 +41,12 @@
                         <MudTh>Pregunta</MudTh>
                         <MudTh>Respuesta</MudTh>
                         <MudTh>Observación</MudTh>
-                        <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>@context.IdRespuesta.ToString()</MudTd>
                         <MudTd>@context.IdInspeccion.ToString()</MudTd>
                         <MudTd>@context.IdPregunta.ToString()</MudTd>
-                        <MudTd>@context.Respuesta</MudTd>
+                        <MudTd>@FormatoRespuesta.Mostrar(context.Respuesta)</MudTd>
                         <MudTd>
                             @if (!string.IsNullOrWhiteSpace(context.Observacion))
                             {
@@ -52,21 +57,11 @@
                                 <MudChip T="string" Color="Color.Default" Size="Size.Small">Sin novedad</MudChip>
                             }
                         </MudTd>
-                        <MudTd>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteRespuesta(context)" Class="action-button">
-                                Eliminar
-                            </MudButton>
-                        </MudTd>
                     </RowTemplate>
                 </MudTable>
 
                 <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedPageChanged="HandlePageChange" />
+                    SelectedChanged="HandlePageChange" />
             }
             else
             {
@@ -86,6 +81,13 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
+    // El API rechaza pageSize mayor que 100; además el desplegable solo muestra los primeros resultados.
+    private const int MaxResultadosBusqueda = 20;
+
+    private InspeccionDto? inspeccionSeleccionada;
+
+    // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
+    private bool errorInspeccionesAvisado;
     protected override async Task OnInitializedAsync()
     {
         await LoadRespuestasAsync();
@@ -97,7 +99,8 @@
 
         try
         {
-            var result = await MockDataService.GetRespuestasInspeccionAsync(currentPage, pageSize, searchText);
+            var result = await HttpClientService.GetRespuestasInspeccionAsync(
+                currentPage, pageSize, searchText, inspeccionSeleccionada?.IdInspeccion);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -122,69 +125,45 @@
         }
     }
 
+    private async Task OnSearchChanged()
+    {
+        currentPage = 1;
+        await LoadRespuestasAsync();
+    }
+
+    // El filtro se resuelve en el API para que la lista funcione con muchas inspecciones.
+    private async Task<IEnumerable<InspeccionDto>> BuscarInspeccionesAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetInspeccionesAsync(1, MaxResultadosBusqueda, valor);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            if (!errorInspeccionesAvisado)
+            {
+                errorInspeccionesAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar las inspecciones", Severity.Error);
+            }
+
+            return Array.Empty<InspeccionDto>();
+        }
+
+        errorInspeccionesAvisado = false;
+        return respuesta.Data?.Data ?? new List<InspeccionDto>();
+    }
+
+    private async Task OnInspeccionChanged()
+    {
+        currentPage = 1;
+        await LoadRespuestasAsync();
+    }
+
     private async Task HandlePageChange(int newPage)
     {
         currentPage = newPage;
         await LoadRespuestasAsync();
     }
-
-    private async Task OpenCreateDialog()
-    {
-        var dialog = await DialogService.ShowAsync<RespuestaInspeccionModal>("Crear Nueva Respuesta");
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
-        {
-            await LoadRespuestasAsync();
-        }
-    }
-
-    private async Task OpenEditDialog(RespuestaInspeccionDto respuesta)
-    {
-        var parameters = new DialogParameters { ["Respuesta"] = respuesta };
-        var dialog = await DialogService.ShowAsync<RespuestaInspeccionModal>("Editar Respuesta", parameters);
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
-        {
-            await LoadRespuestasAsync();
-        }
-    }
-
-    private async Task DeleteRespuesta(RespuestaInspeccionDto respuesta)
-    {
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la respuesta #{respuesta.IdRespuesta}?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
-        {
-            isLoading = true;
-            try
-            {
-                var deleteResult = await MockDataService.DeleteRespuestaInspeccionAsync(respuesta.IdRespuesta);
-
-                if (deleteResult != null && deleteResult.Success)
-                {
-                    Snackbar.Add("Respuesta eliminada exitosamente", Severity.Success);
-                    await LoadRespuestasAsync();
-                }
-                else
-                {
-                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar respuesta", Severity.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-            }
-            finally
-            {
-                isLoading = false;
-            }
-        }
-    }
 }
+
 
 <style>
 .action-button {

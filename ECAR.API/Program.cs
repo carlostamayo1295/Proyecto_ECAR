@@ -92,6 +92,24 @@ builder.Services.AddOptions<ActiveDirectoryOptions>()
     .ValidateOnStart();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IInspeccionService, InspeccionService>();
+
+// Configurar almacenamiento de evidencias
+builder.Services.Configure<ECAR.API.Configuration.EvidenciasOptions>(builder.Configuration.GetSection("Evidencias"));
+// Una RutaBase relativa ("EvidenciasStorageLocal") se resuelve contra la carpeta del API y no
+// contra el directorio de trabajo del proceso: con Path.GetFullPath a secas, las fotos acababan
+// donde se hubiera lanzado "dotnet run", y en IIS dependía de cómo arrancara el proceso.
+// En producción conviene una ruta absoluta fuera de la carpeta de la aplicación.
+builder.Services.PostConfigure<ECAR.API.Configuration.EvidenciasOptions>(opciones =>
+{
+    if (!string.IsNullOrWhiteSpace(opciones.RutaBase) && !Path.IsPathRooted(opciones.RutaBase))
+    {
+        opciones.RutaBase = Path.Combine(builder.Environment.ContentRootPath, opciones.RutaBase);
+    }
+});
+builder.Services.AddScoped<ECAR.API.Services.IEvidenciaStorage, ECAR.API.Services.EvidenciaStorageDisco>();
 
 // Configurar CORS
 builder.Services.AddCors(options =>

@@ -265,11 +265,25 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("IdInspeccion");
 
-                    b.Property<string>("UsuarioCarga")
+                    b.Property<long>("IdUsuarioCarga")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioCarga");
+
+                    b.Property<string>("NombreOriginal")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("NombreOriginal");
+
+                    b.Property<long>("TamanoBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("TamanoBytes");
+
+                    b.Property<string>("TipoContenido")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasColumnName("UsuarioCarga");
+                        .HasColumnName("TipoContenido");
 
                     b.HasKey("IdEvidencia");
 
@@ -277,7 +291,7 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasIndex("IdInspeccion");
 
-                    b.HasIndex("UsuarioCarga");
+                    b.HasIndex("IdUsuarioCarga");
 
                     b.ToTable("Evidencias");
                 });
@@ -336,8 +350,17 @@ namespace ECAR.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("IdInspeccion"));
 
-                    b.Property<long?>("ChecklistIdChecklist")
-                        .HasColumnType("bigint");
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("EnCurso")
+                        .HasColumnName("Estado");
+
+                    b.Property<DateTime?>("FechaCierre")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaCierre");
 
                     b.Property<DateTime>("FechaInspeccion")
                         .HasColumnType("datetime2")
@@ -346,6 +369,15 @@ namespace ECAR.Infrastructure.Migrations
                     b.Property<string>("FirmaDigital")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("FirmaDigital");
+
+                    b.Property<string>("FirmaHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("FirmaHash");
+
+                    b.Property<long>("IdChecklist")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdChecklist");
 
                     b.Property<long>("IdEquipo")
                         .HasColumnType("bigint")
@@ -366,15 +398,19 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasKey("IdInspeccion");
 
-                    b.HasIndex("ChecklistIdChecklist");
+                    b.HasIndex("Estado");
 
                     b.HasIndex("FechaInspeccion");
+
+                    b.HasIndex("IdChecklist");
 
                     b.HasIndex("IdEquipo");
 
                     b.HasIndex("IdUsuario");
 
                     b.HasIndex("Resultado");
+
+                    b.HasIndex("IdUsuario", "Estado");
 
                     b.ToTable("Inspecciones");
                 });
@@ -612,7 +648,15 @@ namespace ECAR.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCargaDetalle")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioCarga")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Inspeccion");
+
+                    b.Navigation("UsuarioCargaDetalle");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Hallazgo", b =>
@@ -628,9 +672,11 @@ namespace ECAR.Infrastructure.Migrations
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Inspeccion", b =>
                 {
-                    b.HasOne("ECAR.Infrastructure.Entities.Checklist", null)
+                    b.HasOne("ECAR.Infrastructure.Entities.Checklist", "Checklist")
                         .WithMany("Inspecciones")
-                        .HasForeignKey("ChecklistIdChecklist");
+                        .HasForeignKey("IdChecklist")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Equipo", "Equipo")
                         .WithMany("Inspecciones")
@@ -643,6 +689,8 @@ namespace ECAR.Infrastructure.Migrations
                         .HasForeignKey("IdUsuario")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Checklist");
 
                     b.Navigation("Equipo");
 

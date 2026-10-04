@@ -7,11 +7,25 @@ public class EvidenciaDto
     public long IdEvidencia { get; set; }
     public long IdInspeccion { get; set; }
     public string? NombreEquipo { get; set; }
+    /// <summary>Ruta relativa en el almacenamiento; no se muestra en pantalla.</summary>
     public string Archivo { get; set; } = string.Empty;
+
+    public string NombreOriginal { get; set; } = string.Empty;   // foto_balanza.jpg
+    public string TipoContenido { get; set; } = string.Empty;    // image/jpeg
+    public long TamanoBytes { get; set; }
     public DateTime FechaCarga { get; set; }
+    public long IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Estado de la inspección a la que pertenece esta evidencia ("EnCurso" o "Cerrada").
+    /// </summary>
+    public string EstadoInspeccion { get; set; } = string.Empty;
+
 }
 
+// Contrato temporal para que el cliente anterior a FE-2 siga compilando mientras
+// la carga real de fotografías usa multipart en /api/inspecciones/{id}/evidencias.
 public class CreateEvidenciaDto
 {
     [Required(ErrorMessage = "La inspección es requerida")]
@@ -20,7 +34,6 @@ public class CreateEvidenciaDto
     [Required(ErrorMessage = "El archivo es requerido")]
     public string Archivo { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "El usuario que carga la evidencia es requerido")]
-    [MaxLength(100, ErrorMessage = "El usuario no puede exceder 100 caracteres")]
-    public string UsuarioCarga { get; set; } = string.Empty;
+    public string? UsuarioCarga { get; set; }
 }
+

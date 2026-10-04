@@ -324,6 +324,28 @@ public class UsuariosController : ControllerBase
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Usuario desactivado exitosamente"));
     }
 
+    /// <summary>
+    /// Reactiva un usuario desactivado. DELETE es el borrado lógico y siempre desactiva;
+    /// hasta ahora el botón "Activar" del cliente llamaba también a DELETE, así que no hacía
+    /// nada y avisaba de un éxito falso.
+    /// </summary>
+    [HttpPut("{id}/activar")]
+    [Authorize(Roles = "Administrador")]
+    public async Task<ActionResult<ApiResponse<bool>>> ActivarUsuario(long id)
+    {
+        var usuario = await _context.Usuarios.FindAsync(id);
+
+        if (usuario == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Usuario no encontrado"));
+        }
+
+        usuario.Activo = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<bool>.SuccessResponse(true, "Usuario activado exitosamente"));
+    }
+
     private Task<bool> HasAnotherActiveAdministrator(long excludedUserId) =>
         _context.UsuarioRoles.AnyAsync(ur =>
             ur.IdUsuario != excludedUserId &&

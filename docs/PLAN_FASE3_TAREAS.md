@@ -102,8 +102,13 @@ Propuesta (a confirmar con ECAR el 21/09; si no responden, se implementa así):
 
 Propuesta (a confirmar con ECAR): firma manuscrita capturada en canvas (PNG) + usuario
 autenticado + `FechaCierre` UTC + `FirmaHash = SHA-256` del JSON canónico
-`{ idInspeccion, idEquipo, idChecklist, idUsuario, fechaCierre, respuestas[ordenadas por idPregunta], evidencias[ids ordenados] }`.
+`{ idInspeccion, idEquipo, idChecklist, idUsuario, fechaCierre, respuestas[ordenadas por idPregunta], evidencias[ids ordenados], firma }`.
 Cerrar y firmar son **la misma acción**: no existe inspección cerrada sin firma.
+
+> Ajuste al implementar (BE-3, 29/09): el PNG de la firma se incluye en el contenido canónico,
+> para que sustituir la imagen de la firma también invalide el hash. El texto canónico exacto
+> vive en `ECAR.API/Services/FirmaInspeccion.cs`, de modo que una auditoría pueda recalcularlo
+> sin pasar por HTTP.
 
 ### 3.5 Flujo en el cliente
 
@@ -180,6 +185,9 @@ horizontal.
 
 | # | Tarea | Entregable | Cuándo |
 |---|---|---|---|
+> **Estado al 22/09/2026:** las tareas 2, 3, 4, 5, 6 y 8 están hechas y verificadas.
+> Ver [`GUIA_FRONTEND_FASE3.md`](GUIA_FRONTEND_FASE3.md) §7.
+
 | 1 | Sesión de diseño con BE-0 (§3); confirmar el criterio visual móvil | §3 firmado | Lun 21/09 |
 | 2 | DTOs de Fase 3 en `ECAR.Shared/DTOs` (§3.2) | PR pequeño, primero del frontend | Mar 22/09 |
 | 3 | Métodos en `HttpClientService` para los 12 endpoints (mismo patrón: `AddAuthorizationHeaderAsync`, `ApiResponse<T>`, `null` en error). Para el upload: `PostMultipartAsync(IBrowserFile)` con `MultipartFormDataContent`; para la imagen: `GetEvidenciaImageDataUrlAsync(id)` como se hizo con el QR | `HttpClientService` | Mar 22 – Mié 23/09 |
