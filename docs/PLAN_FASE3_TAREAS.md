@@ -102,8 +102,13 @@ Propuesta (a confirmar con ECAR el 21/09; si no responden, se implementa así):
 
 Propuesta (a confirmar con ECAR): firma manuscrita capturada en canvas (PNG) + usuario
 autenticado + `FechaCierre` UTC + `FirmaHash = SHA-256` del JSON canónico
-`{ idInspeccion, idEquipo, idChecklist, idUsuario, fechaCierre, respuestas[ordenadas por idPregunta], evidencias[ids ordenados] }`.
+`{ idInspeccion, idEquipo, idChecklist, idUsuario, fechaCierre, respuestas[ordenadas por idPregunta], evidencias[ids ordenados], firma }`.
 Cerrar y firmar son **la misma acción**: no existe inspección cerrada sin firma.
+
+> Ajuste al implementar (BE-3, 29/09): el PNG de la firma se incluye en el contenido canónico,
+> para que sustituir la imagen de la firma también invalide el hash. El texto canónico exacto
+> vive en `ECAR.API/Services/FirmaInspeccion.cs`, de modo que una auditoría pueda recalcularlo
+> sin pasar por HTTP.
 
 ### 3.5 Flujo en el cliente
 

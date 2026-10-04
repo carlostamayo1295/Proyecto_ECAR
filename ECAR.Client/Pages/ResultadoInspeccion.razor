@@ -1,0 +1,229 @@
+﻿@page "/inspecciones/{IdInspeccion:long}/resultado"
+@inject HttpClientService Http
+@inject NavigationManager Navigation
+@inject IJSRuntime jsRuntime
+@inject ISnackbar Snackbar
+@inject AuthorizationService AuthorizationService
+
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
+                MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden ver el resultado de una inspección.">
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-4">
+    @if (_cargando)
+    {
+        <MudProgressLinear Indeterminate="true" Class="my-4" />
+    }
+    else if (_error != null || resultado == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">
+            @(_error ?? "No se pudo cargar el resultado de la inspección.")
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="VolverListado" Class="ml-2">
+                Volver al listado
+            </MudButton>
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="pa-6 resultado-print-area">
+
+            <!-- Encabezado del Resultado -->
+            <div class="d-flex justify-space-between align-center mb-4">
+                <div>
+                    <MudText Typo="Typo.h5" Class="font-weight-bold">Resultado de Inspección</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Estado: Cerrada e Inmutable</MudText>
+                </div>
+                <MudChip T="string" Color="@ObtenerColorResultado(resultado.Resultado)">
+                    @resultado.Resultado
+                </MudChip>
+            </div>
+
+            <MudDivider Class="mb-4" />
+
+            <!-- Resumen de Datos -->
+            <MudGrid Spacing="3" Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.body2"><b>Equipo:</b> @resultado.NombreEquipo (@resultado.CodigoInterno)</MudText>
+                    <MudText Typo="Typo.body2"><b>Ubicación:</b> @resultado.UbicacionNombre</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.body2"><b>Fecha de Cierre:</b> @resultado.FechaCierre?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                    <MudText Typo="Typo.body2"><b>Técnico Responsable:</b> @resultado.NombreUsuario</MudText>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Bloque de Auditoría y Hash (SHA-256) - Visible solo para Auditor/Administrador -->
+            @if (_puedeVerHash)
+            {
+                <MudPaper Elevation="2" Class="pa-4 mb-4">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1 text-primary"><b>Auditoría Criptográfica</b></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                        Este hash SHA-256 garantiza la inmutabilidad de la inspección en el servidor.
+                    </MudText>
+                    <MudPaper Elevation="0" Outlined="true" Class="pa-2">
+                        <code style="word-break: break-all;">@resultado.FirmaHash</code>
+                    </MudPaper>
+                </MudPaper>
+            }
+
+            <!-- Tabla de Respuestas de la Checklist -->
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2"><b>Respuestas de la Checklist</b></MudText>
+            <MudSimpleTable Dense="true" Striped="true" Elevation="0" Class="mb-4">
+                <tbody>
+                    @foreach (var pregunta in resultado.Preguntas.OrderBy(p => p.Orden))
+                    {
+                        <tr>
+                            <td style="width: 40px">@pregunta.Orden</td>
+                            <td>
+                                @pregunta.Pregunta
+                                @if (!string.IsNullOrWhiteSpace(pregunta.Observacion))
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                                        Obs: @pregunta.Observacion
+                                    </MudText>
+                                }
+                            </td>
+                            <td style="width: 120px">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                         Color="@(pregunta.EsNovedad ? Color.Warning : Color.Default)"
+                                         Text="@FormatoRespuesta.Mostrar(pregunta.Respuesta)" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            <!-- Galería de Evidencias Fotográficas -->
+            <div class="mb-4">
+                <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Evidencias Fotográficas</b></MudText>
+                @if (resultado.Evidencias.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Esta inspección no tiene evidencias adjuntas.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudGrid Spacing="2">
+                        @foreach (var evidencia in resultado.Evidencias)
+                        {
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudPaper Class="pa-2" Outlined="true">
+                                    @if (_miniaturas.TryGetValue(evidencia.IdEvidencia, out var dataUrl) && dataUrl != null)
+                                    {
+                                        <MudImage Src="@dataUrl" Alt="Evidencia" ObjectFit="ObjectFit.Cover"
+                                            Width="150" Height="150" Class="rounded" />
+                                    }
+                                    else
+                                    {
+                                        <MudSkeleton Width="150px" Height="150px" />
+                                    }
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </div>
+
+            <!-- Visualización de la Firma Capturada -->
+            <div class="mb-4 text-center">
+                <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del Técnico</b></MudText>
+                @if (!string.IsNullOrEmpty(resultado.FirmaPngBase64))
+                {
+                    <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; max-width: 300px; background: white;" />
+                }
+            </div>
+
+            <!-- Botones de Acción (Ocultos al imprimir) -->
+            <div class="d-flex justify-end gap-3 mt-6 print-hidden">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="VolverListado">
+                    Volver al Listado
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImprimirReporte">
+                    <MudIcon Icon="@Icons.Material.Filled.Print" Class="mr-2" /> Imprimir / PDF
+                </MudButton>
+            </div>
+
+        </MudPaper>
+    }
+</MudContainer>
+</RolRouteGuard>
+
+@code {
+    [Parameter]
+    public long IdInspeccion { get; set; }
+
+    private InspeccionResultadoDto? resultado;
+    private bool _cargando = true;
+    private string? _error;
+    private bool _puedeVerHash;
+    private Dictionary<long, string?> _miniaturas = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarResultadoInspeccion();
+    }
+
+    private async Task CargarResultadoInspeccion()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var response = await Http.GetInspeccionResultadoAsync(IdInspeccion);
+
+            if (response != null && response.Success && response.Data != null)
+            {
+                resultado = response.Data;
+
+                var roles = await AuthorizationService.GetUserRolesAsync();
+                _puedeVerHash = roles.Contains("Auditor") || roles.Contains("Administrador");
+
+                await CargarMiniaturasAsync();
+            }
+            else
+            {
+                _error = response?.Message ?? "No se pudo cargar el resultado de la inspección.";
+            }
+        }
+        catch (Exception)
+        {
+            _error = "Error de conexión al cargar el resultado de la inspección.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CargarMiniaturasAsync()
+    {
+        if (resultado?.Evidencias == null) return;
+
+        foreach (var evidencia in resultado.Evidencias)
+        {
+            var dataUrl = await Http.GetEvidenciaImageDataUrlAsync(
+                evidencia.IdEvidencia, evidencia.TipoContenido);
+            _miniaturas[evidencia.IdEvidencia] = dataUrl;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Color ObtenerColorResultado(string? estado)
+    {
+        return estado switch
+        {
+            "Conforme" => Color.Success,
+            "ConNovedad" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private void VolverListado()
+    {
+        Navigation.NavigateTo("/inspecciones");
+    }
+
+    private async Task ImprimirReporte()
+    {
+        await jsRuntime.InvokeVoidAsync("window.print");
+    }
+}

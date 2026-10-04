@@ -16,12 +16,16 @@ public class EvidenciaDto
     public DateTime FechaCarga { get; set; }
     public long IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Estado de la inspección a la que pertenece esta evidencia ("EnCurso" o "Cerrada").
+    /// </summary>
+    public string EstadoInspeccion { get; set; } = string.Empty;
+
 }
 
-// Contrato de transición: la carga real de fotografías es multipart
-// (POST /api/inspecciones/{id}/evidencias, BE-2) y no usa este DTO.
-// Se conserva mientras la pantalla de Evidencias siga registrando una referencia de texto;
-// se elimina cuando FE-2 migre `EvidenciaModal` al componente de cámara.
+// Contrato temporal para que el cliente anterior a FE-2 siga compilando mientras
+// la carga real de fotografías usa multipart en /api/inspecciones/{id}/evidencias.
 public class CreateEvidenciaDto
 {
     [Required(ErrorMessage = "La inspección es requerida")]
@@ -30,7 +34,6 @@ public class CreateEvidenciaDto
     [Required(ErrorMessage = "El archivo es requerido")]
     public string Archivo { get; set; } = string.Empty;
 
-    // El API toma el usuario del JWT; se acepta por compatibilidad y se ignora.
     public string? UsuarioCarga { get; set; }
 }
 

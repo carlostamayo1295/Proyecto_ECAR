@@ -111,3 +111,6 @@ appsettings.Staging.json
 # User Secrets
 secret.json
 .env
+
+# Fotografías de evidencias subidas en local (Evidencias:RutaBase). Nunca se versionan.
+EvidenciasStorageLocal/

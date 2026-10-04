@@ -1,0 +1,88 @@
+@inject HttpClientService HttpClientService
+@inject AuthorizationService AuthorizationService
+
+@* Firma registrada de una inspección cerrada: la imagen manuscrita, quién y cuándo firmó y, para
+   Administrador y Auditor, la huella SHA-256. El listado solo trae TieneFirma; la imagen viaja
+   en GET /api/inspecciones/{id}/resultado, que es el que aplica los permisos de lectura. *@
+@if (cargando)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="300px" Height="120px" />
+}
+else if (resultado == null || string.IsNullOrWhiteSpace(resultado.FirmaPngBase64))
+{
+    <MudAlert Severity="Severity.Warning" Dense="true">@(error ?? "No se pudo cargar la firma de la inspección")</MudAlert>
+}
+else
+{
+    @if (EsPng(resultado.FirmaPngBase64))
+    {
+        <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma digital de la inspección" class="firma-registrada" />
+    }
+    else
+    {
+        @* Inspecciones de la Fase 1-2: la firma era un texto libre (identificador o hash), no un dibujo. *@
+        <MudTextField T="string" Label="Firma registrada (formato anterior)" Value="@resultado.FirmaPngBase64"
+            Variant="Variant.Outlined" ReadOnly="true" />
+    }
+
+    <MudText Typo="Typo.caption" Class="d-block mt-1">@Firmante(resultado)</MudText>
+
+    @if (puedeVerHash && !string.IsNullOrEmpty(resultado.FirmaHash))
+    {
+        <MudText Typo="Typo.caption" Class="d-block mud-text-secondary" Style="word-break: break-all;">
+            Huella SHA-256: <code>@resultado.FirmaHash</code>
+        </MudText>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public long IdInspeccion { get; set; }
+
+    private InspeccionResultadoDto? resultado;
+    private bool cargando = true;
+    private string? error;
+    private bool puedeVerHash;
+    private long idCargado;
+
+    // Cabecera de un PNG (89 50 4E 47 0D 0A 1A 0A) codificada en base64.
+    private const string CabeceraPngBase64 = "iVBORw0KGgo";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IdInspeccion == idCargado)
+        {
+            return;
+        }
+
+        idCargado = IdInspeccion;
+        cargando = true;
+
+        var respuesta = await HttpClientService.GetInspeccionResultadoAsync(IdInspeccion);
+        resultado = respuesta is { Success: true } ? respuesta.Data : null;
+        error = respuesta is { Success: false } ? respuesta.Message : null;
+
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        puedeVerHash = roles.Contains("Administrador") || roles.Contains("Auditor");
+
+        cargando = false;
+    }
+
+    private static bool EsPng(string firma) => firma.StartsWith(CabeceraPngBase64, StringComparison.Ordinal);
+
+    // FechaCierre se guarda en UTC.
+    private static string Firmante(InspeccionResultadoDto r) => r.FechaCierre is { } cierre
+        ? $"Firmada por {r.NombreUsuario} el {cierre.ToLocalTime():dd/MM/yyyy HH:mm}"
+        : $"Firmada por {r.NombreUsuario}";
+}
+
+<style>
+.firma-registrada {
+    display: block;
+    max-width: 100%;
+    width: 300px;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 4px;
+    background: white;
+}
+</style>

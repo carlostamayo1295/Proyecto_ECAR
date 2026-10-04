@@ -1,0 +1,86 @@
+@implements IDisposable
+@inject SesionService Sesion
+@inject NavigationManager NavigationManager
+
+@* Vigila la caducidad del token y manda al login en el momento exacto en que vence, aunque el
+   usuario esté quieto en la pantalla. Sin esto, la sesión vencida solo se notaba al siguiente
+   clic, como un error de "no se pudo cargar".
+
+   Solo actúa si hay un token: a quien entra sin sesión lo resuelven las guardas de ruta, y en
+   el login y en la consulta pública del QR no hace nada (SesionService.EsPaginaPublica).
+   Se monta una vez, en MainLayout. *@
+
+@code {
+    private CancellationTokenSource? _temporizador;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NavigationManager.LocationChanged += AlCambiarDePagina;
+        await ProgramarAsync();
+    }
+
+    // Al navegar se vuelve a comprobar: cubre el caso de un temporizador retrasado por el
+    // navegador (las pestañas en segundo plano ralentizan los temporizadores).
+    private async void AlCambiarDePagina(object? sender, LocationChangedEventArgs e)
+    {
+        try
+        {
+            await ProgramarAsync();
+        }
+        catch
+        {
+            // Un fallo aquí no puede tumbar la navegación; el manejador de 401 sigue cubriendo.
+        }
+    }
+
+    private async Task ProgramarAsync()
+    {
+        _temporizador?.Cancel();
+        _temporizador?.Dispose();
+        _temporizador = null;
+
+        if (!await Sesion.HayTokenAsync())
+        {
+            return;
+        }
+
+        var expiracion = await Sesion.ObtenerExpiracionAsync();
+        var restante = (expiracion ?? DateTimeOffset.MinValue) - DateTimeOffset.UtcNow;
+
+        if (restante <= TimeSpan.Zero)
+        {
+            await Sesion.IrAlLoginAsync(expirada: true);
+            return;
+        }
+
+        // Task.Delay no admite más de ~24,8 días; los tokens duran horas, pero por si acaso.
+        if (restante > TimeSpan.FromDays(24))
+        {
+            restante = TimeSpan.FromDays(24);
+        }
+
+        var cts = new CancellationTokenSource();
+        _temporizador = cts;
+        _ = EsperarYCerrarAsync(restante, cts.Token);
+    }
+
+    private async Task EsperarYCerrarAsync(TimeSpan espera, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(espera, token);
+            await InvokeAsync(() => Sesion.IrAlLoginAsync(expirada: true));
+        }
+        catch (TaskCanceledException)
+        {
+            // Se reprogramó o se desmontó el layout.
+        }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= AlCambiarDePagina;
+        _temporizador?.Cancel();
+        _temporizador?.Dispose();
+    }
+}

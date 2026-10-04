@@ -1,6 +1,7 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador,Auditor")]
 public class AuditoriaController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -20,6 +22,9 @@ public class AuditoriaController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<AuditoriaDto>>>> GetAuditoria([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Auditoria.AsQueryable();
 
         // Aplicar el filtro de búsqueda

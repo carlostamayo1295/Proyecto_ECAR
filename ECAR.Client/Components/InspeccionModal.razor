@@ -1,6 +1,8 @@
 @inject HttpClientService HttpClientService
+@inject AuthorizationService AuthorizationService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NavigationManager NavigationManager
 
 <MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true }">
     <TitleContent>
@@ -10,11 +12,14 @@
         <MudForm @ref="form">
             @if (IsEditMode)
             {
-                @* El equipo y el inspector no se pueden cambiar: se muestran solo como referencia. *@
+                @* El equipo, el inspector y el checklist no se pueden cambiar: se muestran solo como referencia. *@
                 <MudTextField T="string" Label="Equipo" Value="@Inspeccion!.NombreEquipo"
                     Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
 
                 <MudTextField T="string" Label="Inspector" Value="@Inspeccion!.NombreUsuario"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
+
+                <MudTextField T="string" Label="Checklist" Value="@Inspeccion!.NombreChecklist"
                     Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
             }
             else
@@ -26,35 +31,110 @@
                     Clearable="true" Class="mb-3"
                     HelperText="Escriba código, nombre, marca o serial para filtrar" />
 
-                <MudAutocomplete T="UsuarioDto" Label="Inspector" @bind-Value="usuarioSeleccionado"
-                    SearchFunc="BuscarUsuariosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
-                    Variant="Variant.Outlined" Required="true" RequiredError="El inspector es requerido"
-                    MinCharacters="0" MaxItems="@MaxResultadosBusqueda" ResetValueOnEmptyText="true"
-                    Clearable="true" Class="mb-3"
-                    HelperText="Escriba nombre, correo o usuario AD para filtrar" />
+                @* El inspector es siempre quien inició sesión (regla 2 del SRS): el API toma el usuario
+                   del token e ignora cualquier otro. Antes había un buscador para elegir a cualquiera,
+                   y lo elegido se descartaba en silencio al guardar. *@
+                <MudTextField T="string" Label="Inspector" Value="@nombreInspector"
+                    Variant="Variant.Outlined" ReadOnly="true" Class="mb-3"
+                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Person"
+                    HelperText="La inspección queda a nombre del usuario que inició sesión" />
+
+                <MudSelect T="long?" Label="Checklist" @bind-Value="checklistSeleccionado" Variant="Variant.Outlined"
+                    Required="true" RequiredError="El checklist es requerido" Class="mb-3"
+                    HelperText="Solo se listan los checklists activos">
+                    @foreach (var checklist in checklistsActivos)
+                    {
+                        <MudSelectItem T="long?" Value="@((long?)checklist.IdChecklist)">@($"{checklist.Nombre} (v{checklist.Version})")</MudSelectItem>
+                    }
+                </MudSelect>
             }
 
             <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
                 Editable="true" Disabled="IsEditMode" Class="mb-3" />
 
-            <MudSelect T="string" Label="Resultado" @bind-Value="resultado" Variant="Variant.Outlined"
-                Clearable="true" Class="mb-3">
-                <MudSelectItem T="string" Value="@("Satisfactoria")">Satisfactoria</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Con novedad")">Con novedad</MudSelectItem>
-                <MudSelectItem T="string" Value="@("Pendiente")">Pendiente</MudSelectItem>
-            </MudSelect>
-
+            @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
-                Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3"
-                HelperText="Obligatorias si el resultado tiene novedad" />
+                Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3" ReadOnly="EstaCerrada"
+                HelperText="@(EstaCerrada ? "Inspección cerrada: no admite cambios" : "Observaciones generales. El resultado lo calcula el sistema al firmar")" />
 
-            <MudTextField T="string" Label="Firma digital (identificador o hash)" @bind-Value="firmaDigital"
-                Variant="Variant.Outlined" Immediate="true" />
+            @* Firma digital. Firmar y cerrar son la misma acción (POST firmar): el servidor exige las
+               obligatorias respondidas y cada novedad con observación, y después la inspección queda
+               inmutable. Por eso una inspección nueva no se puede firmar al registrarla. *@
+            @if (!IsEditMode)
+            {
+                <MudTextField T="string" Label="Firma digital" Value="@("Pendiente de firma")"
+                    Variant="Variant.Outlined" ReadOnly="true"
+                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Draw"
+                    HelperText="Se firma al cerrar la inspección, con el checklist ya respondido: desde «Editar» en este listado o en el paso 3 de la ejecución" />
+            }
+            else if (EstaCerrada)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Firma digital</MudText>
+                <VistaFirmaInspeccion IdInspeccion="@Inspeccion!.IdInspeccion" />
+            }
+            else if (!datosFirmaListos)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-2" />
+            }
+            else if (esElInspector)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Firma digital</MudText>
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@PasoFirma.TextoLegal</MudAlert>
+
+                <div class="d-flex justify-center mb-2">
+                    <FirmaCanvas OnFirmaConfirmada="RecibirFirma" />
+                </div>
+
+                @if (faltantes.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-3">
+                        <b>La inspección todavía no se puede cerrar:</b>
+                        <ul class="mb-2 ml-4">
+                            @foreach (var faltante in faltantes)
+                            {
+                                <li>@faltante</li>
+                            }
+                        </ul>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                            StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="ContinuarEjecucion">
+                            Continuar la inspección
+                        </MudButton>
+                    </MudAlert>
+                }
+                else if (!string.IsNullOrWhiteSpace(firmaCapturada))
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                        Firma capturada. Pulse "Firmar y cerrar la inspección" para terminar.
+                    </MudAlert>
+                }
+
+                <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
+                    StartIcon="@Icons.Material.Filled.Lock"
+                    Disabled="@(firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
+                    OnClick="FirmarYCerrarAsync">
+                    @(firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")
+                </MudButton>
+            }
+            else
+            {
+                @* El servidor solo deja firmar al inspector de la inspección, aunque quien llame sea Administrador. *@
+                <MudTextField T="string" Label="Firma digital" Value="@("Pendiente de firma")"
+                    Variant="Variant.Outlined" ReadOnly="true"
+                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Draw"
+                    HelperText="@($"Solo {Inspeccion!.NombreUsuario}, el inspector, puede firmarla al cerrarla")" />
+            }
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+        @if (EstaCerrada)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MudDialog.Cancel())" Class="dialog-button">Cerrar</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -71,31 +151,70 @@
     private const int MaxResultadosBusqueda = 20;
 
     private EquipoDto? equipoSeleccionado;
-    private UsuarioDto? usuarioSeleccionado;
+    private string nombreInspector = string.Empty;
+    private List<ChecklistDto> checklistsActivos = new();
+    private long? checklistSeleccionado;
 
     private DateTime? fechaInspeccion = DateTime.Today;
-    private string? resultado;
     private string? observaciones;
-    private string? firmaDigital;
 
     // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
     private bool errorEquiposAvisado;
-    private bool errorUsuariosAvisado;
 
-    protected override void OnInitialized()
+    private bool EstaCerrada => Inspeccion?.Estado == InspeccionEstados.Cerrada;
+
+    // Firma digital (solo al editar una inspección en curso)
+    private bool datosFirmaListos;
+    private bool esElInspector;
+    private string? firmaCapturada;
+    private bool firmando;
+    private List<string> faltantes = new();
+
+    protected override async Task OnInitializedAsync()
     {
         if (IsEditMode && Inspeccion != null)
         {
             fechaInspeccion = Inspeccion.FechaInspeccion;
-            resultado = Inspeccion.Resultado;
             observaciones = Inspeccion.Observaciones;
+
+            if (!EstaCerrada)
+            {
+                var idUsuario = await AuthorizationService.GetUserIdAsync();
+                esElInspector = idUsuario == Inspeccion.IdUsuario.ToString();
+                datosFirmaListos = true;
+            }
         }
+        else
+        {
+            nombreInspector = await AuthorizationService.GetUserNameAsync() ?? "Usuario de la sesión";
+            await CargarChecklistsActivosAsync();
+        }
+    }
+
+    // El API de Checklists no tiene un filtro "solo activos"; se trae una página y se filtra
+    // aquí. pageSize se deja en 100 (el máximo que aceptan los demás controladores) porque
+    // en la práctica el catálogo de checklists es chico, a diferencia de Equipos/Usuarios.
+    private async Task CargarChecklistsActivosAsync()
+    {
+        var respuesta = await HttpClientService.GetChecklistsAsync(1, 100);
+
+        if (respuesta == null || !respuesta.Success)
+        {
+            Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los checklists", Severity.Error);
+            checklistsActivos = new List<ChecklistDto>();
+            return;
+        }
+
+        checklistsActivos = (respuesta.Data?.Data ?? new List<ChecklistDto>())
+            .Where(c => c.Activo)
+            .ToList();
     }
 
     // El filtro se resuelve en el API para que la lista funcione con muchos registros.
     private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)
     {
-        var respuesta = await HttpClientService.GetEquiposAsync(1, MaxResultadosBusqueda, valor);
+        // Solo equipos activos: el API rechaza registrar una inspección sobre uno desactivado.
+        var respuesta = await HttpClientService.GetEquiposAsync(1, MaxResultadosBusqueda, valor, activo: true);
 
         if (respuesta == null || !respuesta.Success)
         {
@@ -112,25 +231,6 @@
         return respuesta.Data?.Data ?? new List<EquipoDto>();
     }
 
-    private async Task<IEnumerable<UsuarioDto>> BuscarUsuariosAsync(string valor, CancellationToken token)
-    {
-        var respuesta = await HttpClientService.GetUsuariosAsync(1, MaxResultadosBusqueda, valor);
-
-        if (respuesta == null || !respuesta.Success)
-        {
-            if (!errorUsuariosAvisado)
-            {
-                errorUsuariosAvisado = true;
-                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los inspectores", Severity.Error);
-            }
-
-            return Array.Empty<UsuarioDto>();
-        }
-
-        errorUsuariosAvisado = false;
-        return respuesta.Data?.Data ?? new List<UsuarioDto>();
-    }
-
     private async Task HandleSubmit()
     {
         if (form != null)
@@ -142,22 +242,9 @@
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(resultado)
-            && resultado.Contains("novedad", StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrWhiteSpace(observaciones))
-        {
-            Snackbar.Add("Si la inspección tiene novedad, las observaciones son obligatorias", Severity.Warning);
-            return;
-        }
-
         if (IsEditMode && Inspeccion != null)
         {
-            var updateDto = new UpdateInspeccionDto
-            {
-                Resultado = resultado,
-                Observaciones = observaciones,
-                FirmaDigital = string.IsNullOrWhiteSpace(firmaDigital) ? null : firmaDigital
-            };
+            var updateDto = new UpdateInspeccionDto { Observaciones = observaciones };
 
             var result = await HttpClientService.UpdateInspeccionAsync(Inspeccion.IdInspeccion, updateDto);
 
@@ -173,20 +260,25 @@
         }
         else
         {
-            if (equipoSeleccionado == null || usuarioSeleccionado == null)
+            if (equipoSeleccionado == null)
             {
-                Snackbar.Add("Debe seleccionar equipo e inspector", Severity.Warning);
+                Snackbar.Add("Debe seleccionar un equipo", Severity.Warning);
+                return;
+            }
+
+            if (checklistSeleccionado is null or <= 0)
+            {
+                Snackbar.Add("Debe seleccionar un checklist", Severity.Warning);
                 return;
             }
 
             var createDto = new CreateInspeccionDto
             {
+                // IdUsuario no se envía: el API lo toma del token.
                 IdEquipo = equipoSeleccionado.IdEquipo,
-                IdUsuario = usuarioSeleccionado.IdUsuario,
+                IdChecklist = checklistSeleccionado.Value,
                 FechaInspeccion = fechaInspeccion ?? DateTime.Today,
-                Resultado = resultado,
-                Observaciones = observaciones,
-                FirmaDigital = string.IsNullOrWhiteSpace(firmaDigital) ? null : firmaDigital
+                Observaciones = observaciones
             };
 
             var result = await HttpClientService.CreateInspeccionAsync(createDto);
@@ -201,6 +293,51 @@
                 Snackbar.Add(result?.Message ?? "Error al registrar inspección", Severity.Error);
             }
         }
+    }
+
+    // El canvas entrega el PNG al pulsar "Usar esta firma"; todavía no se cierra nada.
+    private void RecibirFirma(string firmaBase64)
+    {
+        firmaCapturada = firmaBase64;
+        faltantes.Clear();
+    }
+
+    private async Task FirmarYCerrarAsync()
+    {
+        if (firmando || Inspeccion == null || string.IsNullOrWhiteSpace(firmaCapturada))
+        {
+            return;
+        }
+
+        firmando = true;
+        faltantes.Clear();
+
+        // El API acepta el PNG con o sin el prefijo "data:image/png;base64,". Las observaciones
+        // del modal viajan con la firma, así no hace falta "Guardar" antes de firmar.
+        var result = await HttpClientService.FirmarInspeccionAsync(Inspeccion.IdInspeccion, new FirmarInspeccionDto
+        {
+            FirmaPngBase64 = firmaCapturada,
+            Observaciones = observaciones
+        });
+
+        firmando = false;
+
+        if (result is { Success: true, Data: not null })
+        {
+            Snackbar.Add(result.Message ?? "Inspección firmada y cerrada", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+            return;
+        }
+
+        // 400 con la lista de obligatorias sin responder o novedades sin observación (reglas 3 y 4).
+        faltantes = result?.Errors?.ToList() ?? new List<string>();
+        Snackbar.Add(result?.Message ?? "No se pudo firmar la inspección", Severity.Error);
+    }
+
+    private void ContinuarEjecucion()
+    {
+        MudDialog.Cancel();
+        NavigationManager.NavigateTo($"/inspecciones/ejecutar/{Inspeccion!.IdInspeccion}");
     }
 
     private async Task Cancel()

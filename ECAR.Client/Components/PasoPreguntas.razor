@@ -1,22 +1,26 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
-
 @* PASO 1 — Preguntas y respuestas.  Dueño: FE-1 (Erica).
 
-   Qué falta implementar (docs/PLAN_FASE3_TAREAS.md §5, FE-1):
-   1. Recorrer Inspeccion.Preguntas en orden y pintar cada una con RespuestaPreguntaInput
-      (ya existe: SiNo = dos casillas, Texto = campo de texto).
-   2. Marcar visualmente las obligatorias y mostrar el campo Observación; hacerlo obligatorio
-      cuando la pregunta sea Sí/No respondida con "No" (regla 4 del SRS).
-   3. Guardado incremental: llamar a GuardarAsync con debounce de 500 ms al cambiar una
-      respuesta, y mostrar el indicador "Guardando / Guardado / Error al guardar".
+   Pinta cada pregunta de Inspeccion.Preguntas con RespuestaPreguntaInput y persiste cada
+   cambio con debounce por pregunta (ver ProgramarGuardado): tanto la respuesta como la
+   Observación se guardan solas, sin esperar a que el técnico toque otro campo.
 
-   Lo que ya está resuelto aquí: el contrato con la página contenedora y la llamada al API.
-   No hace falta tocar EjecutarInspeccion.razor. *@
+   La Observación está siempre visible y solo es obligatoria cuando la pregunta es Sí/No y
+   quedó en "No" (regla 4 del SRS). Si se mostrara solo en novedad, al corregir "No" -> "Sí"
+   el campo desaparecería pero el texto seguiría guardado y reenviándose: una observación en
+   una respuesta conforme que el técnico ya no podría ver ni borrar.
 
-<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-    Paso pendiente de implementar (FE-1). El contrato con el API ya está disponible.
-</MudAlert>
+   El indicador Estado (cabecera) muestra Guardando/Guardado/Error; el Snackbar queda
+   reservado solo para errores, para no saturar la pantalla en preguntas de texto. *@
+
+@* Indicador de guardado. La guía §5 pide los tres estados, no solo "Guardando…". *@
+@if (Estado != EstadoGuardado.Inactivo)
+{
+    <MudText Typo="Typo.caption" Class="d-block mb-2" Color="@ColorEstado">
+        @TextoEstado
+    </MudText>
+}
 
 @if (Inspeccion.Preguntas.Count == 0)
 {
@@ -26,9 +30,22 @@
 }
 else
 {
-    <MudText Typo="Typo.body2" Class="mud-text-secondary">
-        @Inspeccion.Preguntas.Count pregunta(s) · @Inspeccion.TotalObligatorias obligatoria(s)
-    </MudText>
+    @foreach (var pregunta in Inspeccion.Preguntas)
+    {
+        <RespuestaPreguntaInput Label="@(pregunta.Obligatoria ? pregunta.Pregunta + " *" : pregunta.Pregunta)"
+                                 TipoRespuesta="@pregunta.TipoRespuesta"
+                                 Valor="@pregunta.Respuesta"
+                                 ValorChanged="(nuevoValor) => OnRespuestaCambiada(pregunta, nuevoValor)" />
+
+        <MudTextField T="string" @bind-Value="pregunta.Observacion"
+                      @bind-Value:after="() => ProgramarGuardado(pregunta)"
+                      Label="@(pregunta.EsNovedad ? "Observación (obligatoria)" : "Observación (opcional)")"
+                      Variant="Variant.Outlined" Lines="2" Class="mb-4"
+                      Required="@pregunta.EsNovedad"
+                      Immediate="true" DebounceInterval="500"
+                      Error="@(pregunta.EsNovedad && string.IsNullOrWhiteSpace(pregunta.Observacion))"
+                      ErrorText="La observación es obligatoria cuando hay novedad" />
+    }
 }
 
 @code {
@@ -39,41 +56,153 @@ else
     [Parameter]
     public EventCallback OnRespuestasGuardadas { get; set; }
 
-    private bool guardando;
+    protected enum EstadoGuardado { Inactivo, Guardando, Guardado, Error }
+
+    /// <summary>Estado del último guardado; lo pinta el indicador de la cabecera.</summary>
+    protected EstadoGuardado Estado { get; private set; } = EstadoGuardado.Inactivo;
+
+    // Contador de peticiones en vuelo. No se usa para descartar guardados: solo para saber
+    // si queda alguno pendiente antes de mostrar "Guardado".
+    private int _guardadosEnCurso;
+
+    private string TextoEstado => Estado switch
+    {
+        EstadoGuardado.Guardando => "Guardando…",
+        EstadoGuardado.Guardado => "Guardado",
+        EstadoGuardado.Error => "Error al guardar",
+        _ => string.Empty
+    };
+
+    private Color ColorEstado => Estado switch
+    {
+        EstadoGuardado.Error => Color.Error,
+        EstadoGuardado.Guardado => Color.Success,
+        _ => Color.Default
+    };
+
+    // Un debounce por pregunta. A propósito NO se cancelan al desmontar el componente: si el
+    // técnico pulsa "Siguiente" dentro de los 500 ms de su última respuesta, MudStepper desmonta
+    // este paso, y es esa tarea pendiente la que termina de guardar. Cancelarla perdería la
+    // última respuesta sin avisar.
+    private readonly Dictionary<long, CancellationTokenSource> _debounces = new();
+
+    private void ProgramarGuardado(PreguntaEjecucionDto pregunta)
+    {
+        if (_debounces.TryGetValue(pregunta.IdPregunta, out var anterior))
+        {
+            anterior.Cancel();
+            anterior.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        _debounces[pregunta.IdPregunta] = cts;
+        _ = EsperarYGuardarAsync(pregunta, cts.Token);
+    }
+
+    private void OnRespuestaCambiada(PreguntaEjecucionDto pregunta, string nuevoValor)
+    {
+        pregunta.Respuesta = nuevoValor;
+        ProgramarGuardado(pregunta);
+    }
+
+    private async Task EsperarYGuardarAsync(PreguntaEjecucionDto pregunta, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(500, token);
+
+            await GuardarAsync(new List<RespuestaEjecucionDto>
+            {
+                new RespuestaEjecucionDto
+                {
+                    IdPregunta = pregunta.IdPregunta,
+                    Respuesta = pregunta.Respuesta ?? string.Empty,
+                    Observacion = pregunta.Observacion
+                }
+            });
+            // Sin StateHasChanged aquí: GuardarAsync ya repinta con InvokeAsync al cambiar el
+            // estado, y esta tarea corre fuera del ciclo de render.
+        }
+        catch (TaskCanceledException)
+        {
+            // el usuario siguió escribiendo antes de los 500ms; no pasa nada
+        }
+    }
 
     /// <summary>
     /// Envía un lote de respuestas y refleja lo guardado en la copia en memoria.
     /// Se puede llamar con una sola respuesta (guardado incremental) o con todas.
+    /// Se invoca desde tareas lanzadas fuera del ciclo de render (debounce), por eso el
+    /// repintado va siempre por InvokeAsync.
     /// </summary>
     protected async Task GuardarAsync(IEnumerable<RespuestaEjecucionDto> respuestas)
     {
         var lote = respuestas.ToList();
-        if (lote.Count == 0 || guardando)
+        if (lote.Count == 0)
         {
             return;
         }
 
-        guardando = true;
+        // Nunca se descarta un guardado porque haya otro en vuelo: el upsert del API es
+        // idempotente por (IdInspeccion, IdPregunta), así que dos envíos no se pisan, y
+        // tirar uno en silencio perdería la respuesta del técnico sin avisar.
+        _guardadosEnCurso++;
+        await CambiarEstadoAsync(EstadoGuardado.Guardando);
+
         var result = await HttpClientService.GuardarRespuestasAsync(
             Inspeccion.IdInspeccion, new GuardarRespuestasDto { Respuestas = lote });
-        guardando = false;
 
-        if (result == null || !result.Success)
+        _guardadosEnCurso--;
+
+        if (result == null || !result.Success || result.Data == null)
         {
+            await CambiarEstadoAsync(EstadoGuardado.Error);
             Snackbar.Add(result?.Message ?? "Error al guardar las respuestas", Severity.Error);
             return;
         }
 
+        // Actualización en sitio: no se reemplaza la colección para no pisar lo que el
+        // técnico esté escribiendo en otra pregunta.
+        //
+        // Del eco del servidor solo se toma IdRespuesta, que es lo único que no teníamos: el
+        // id de la fila recién insertada. Respuesta y Observacion NO se copian de vuelta, y es
+        // a propósito. El API guarda literalmente lo que le mandamos (no recorta, no normaliza,
+        // no calcula nada), así que el eco no aporta información nueva; lo único que puede
+        // hacer es pisar lo que el técnico haya escrito durante el viaje de ida y vuelta.
+        // Caso real: en una pregunta de texto se escribe, se hace una pausa de medio segundo
+        // (salta el debounce y se envía), se sigue escribiendo, y al volver la respuesta el
+        // campo revertía a la frase a medias que se había enviado.
         foreach (var guardada in lote)
         {
             var pregunta = Inspeccion.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
-            if (pregunta != null)
+            var confirmada = result.Data.Preguntas.FirstOrDefault(p => p.IdPregunta == guardada.IdPregunta);
+            if (pregunta != null && confirmada != null)
             {
-                pregunta.Respuesta = guardada.Respuesta;
-                pregunta.Observacion = guardada.Observacion;
+                pregunta.IdRespuesta = confirmada.IdRespuesta;
             }
         }
 
+        // Los contadores sí son escalares: la fuente de verdad es el servidor.
+        Inspeccion.TotalObligatorias = result.Data.TotalObligatorias;
+        Inspeccion.ObligatoriasRespondidas = result.Data.ObligatoriasRespondidas;
+        Inspeccion.TotalNovedades = result.Data.TotalNovedades;
+
+        // Solo se anuncia "Guardado" cuando no queda ningún envío pendiente.
+        if (_guardadosEnCurso == 0)
+        {
+            await CambiarEstadoAsync(EstadoGuardado.Guardado);
+        }
+
         await OnRespuestasGuardadas.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Cambia el estado y repinta. Va por InvokeAsync porque GuardarAsync se llama desde
+    /// tareas lanzadas fuera del ciclo de render: sin esto el indicador no se actualiza.
+    /// </summary>
+    private async Task CambiarEstadoAsync(EstadoGuardado nuevo)
+    {
+        Estado = nuevo;
+        await InvokeAsync(StateHasChanged);
     }
 }

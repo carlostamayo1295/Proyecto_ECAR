@@ -132,6 +132,25 @@ public class HttpClientService
         }
     }
 
+    /// <summary>Reactiva un usuario desactivado (PUT api/usuarios/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarUsuarioAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/usuarios/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando usuario: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     // Métodos del API de Roles
     public async Task<ApiResponse<PagedResultDto<RolDto>>?> GetRolesAsync(int page = 1, int pageSize = 10,
         string? search = null)
@@ -434,6 +453,25 @@ public class HttpClientService
         }
     }
 
+    /// <summary>Reactiva un checklist desactivado (PUT api/checklists/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/checklists/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     public async Task<ApiResponse<ChecklistDto>?> CreateChecklistVersionAsync(long id, CreateChecklistVersionDto createDto)
     {
         try
@@ -603,7 +641,7 @@ public class HttpClientService
 
     // Métodos del API de Equipos
     public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100,
-        string? search = null, string? criticidad = null)
+        string? search = null, string? criticidad = null, bool? activo = null, string? planta = null, string? area = null)
     {
         try
         {
@@ -618,6 +656,21 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(criticidad))
             {
                 query += $"&criticidad={Uri.EscapeDataString(criticidad)}";
+            }
+
+            if (activo.HasValue)
+            {
+                query += $"&activo={activo.Value.ToString().ToLowerInvariant()}";
+            }
+
+            if (!string.IsNullOrEmpty(planta))
+            {
+                query += $"&planta={Uri.EscapeDataString(planta)}";
+            }
+
+            if (!string.IsNullOrEmpty(area))
+            {
+                query += $"&area={Uri.EscapeDataString(area)}";
             }
 
             var response = await _httpClient.GetAsync(query);
@@ -701,6 +754,25 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error deleting equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Reactiva un equipo desactivado (PUT api/equipos/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarEquipoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/equipos/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando equipo: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }
@@ -1027,7 +1099,7 @@ public class HttpClientService
 
     // Métodos del API de Inspecciones
     public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10,
-        string? search = null)
+        string? search = null, string? estado = null, long? idEquipo = null)
     {
         try
         {
@@ -1037,6 +1109,16 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(search))
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            if (!string.IsNullOrEmpty(estado))
+            {
+                query += $"&estado={Uri.EscapeDataString(estado)}";
+            }
+
+            if (idEquipo.HasValue)
+            {
+                query += $"&idEquipo={idEquipo.Value}";
             }
 
             var response = await _httpClient.GetAsync(query);
@@ -1171,24 +1253,6 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting evidencia: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
-    public async Task<ApiResponse<EvidenciaDto>?> CreateEvidenciaAsync(CreateEvidenciaDto createDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync("api/evidencias", createDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EvidenciaDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error creating evidencia: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }
@@ -1397,15 +1461,17 @@ public class HttpClientService
     /// <summary>
     /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
     /// para el guardado incremental mientras el técnico avanza.
+    /// Devuelve el estado completo recalculado por el servidor —incluidos los contadores—,
+    /// así que no hace falta volver a pedir la ejecución tras guardar.
     /// </summary>
-    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GuardarRespuestasAsync(long idInspeccion,
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
         GuardarRespuestasDto guardarDto)
     {
         try
         {
             await AddAuthorizationHeaderAsync();
             var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
             await RemoveAuthorizationHeaderAsync();
             return apiResponse;
         }

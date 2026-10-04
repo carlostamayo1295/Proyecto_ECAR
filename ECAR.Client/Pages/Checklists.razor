@@ -2,6 +2,7 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
@@ -11,9 +12,14 @@
                 <MudText Typo="Typo.body2">Administrar los checklists de inspección del sistema</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nuevo Checklist
-                </MudButton>
+                @* Crear, editar, versionar y desactivar son solo del Administrador (el API responde 403 a
+                   los demás); Técnico y Auditor consultan. *@
+                @if (esAdmin)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                        Nuevo Checklist
+                    </MudButton>
+                }
             </CardHeaderActions>
         </MudCardHeader>
 
@@ -53,22 +59,28 @@
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
                                 Ver
                             </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
+                            @if (esAdmin)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                    Editar
+                                </MudButton>
+                            }
                             <MudButton Size="Size.Small" Color="Color.Tertiary" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.History" OnClick="() => OpenVersionesDialog(context)" Class="action-button">
                                 Versiones
                             </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenNuevaVersionDialog(context)" Class="action-button">
-                                Nueva versión
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteChecklist(context)" Class="action-button">
-                                @(context.Activo ? "Desactivar" : "Activar")
-                            </MudButton>
+                            @if (esAdmin)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenNuevaVersionDialog(context)" Class="action-button">
+                                    Nueva versión
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteChecklist(context)" Class="action-button">
+                                    @(context.Activo ? "Desactivar" : "Activar")
+                                </MudButton>
+                            }
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -94,8 +106,11 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
+    private bool esAdmin;
+
     protected override async Task OnInitializedAsync()
     {
+        esAdmin = await AuthorizationService.IsAdminAsync();
         await LoadChecklistsAsync();
     }
 
@@ -199,16 +214,21 @@
             isLoading = true;
             try
             {
-                var deleteResult = await HttpClientService.DeleteChecklistAsync(checklist.IdChecklist);
+                // DELETE es el borrado lógico y siempre desactiva: activar tiene su propio
+                // endpoint. Al activar, el servidor desactiva las otras versiones activas del
+                // mismo checklist y lo dice en el mensaje.
+                var resultado = checklist.Activo
+                    ? await HttpClientService.DeleteChecklistAsync(checklist.IdChecklist)
+                    : await HttpClientService.ActivarChecklistAsync(checklist.IdChecklist);
 
-                if (deleteResult != null && deleteResult.Success)
+                if (resultado != null && resultado.Success)
                 {
-                    Snackbar.Add($"Checklist {action} exitosamente", Severity.Success);
+                    Snackbar.Add(resultado.Message ?? "Checklist actualizado", Severity.Success);
                     await LoadChecklistsAsync();
                 }
                 else
                 {
-                    Snackbar.Add(deleteResult?.Message ?? $"Error al {action} checklist", Severity.Error);
+                    Snackbar.Add(resultado?.Message ?? $"Error al {action} el checklist", Severity.Error);
                 }
             }
             catch (Exception ex)
