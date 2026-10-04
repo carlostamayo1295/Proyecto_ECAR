@@ -27,6 +27,10 @@ public class RespuestasInspeccionController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] long? idInspeccion = null)
     {
+        // Máximo 100 por página, como en el resto de listados: sin límite, pageSize=100000 devolvía la tabla entera.
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var usuarioId = _currentUser.IdUsuario;
         var esAdmin = _currentUser.IsInRole("Administrador");
         var esAuditor = _currentUser.IsInRole("Auditor");

@@ -26,6 +26,10 @@ public class HallazgosController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<HallazgoDto>>>> GetHallazgos([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, [FromQuery] long? idInspeccion = null, [FromQuery] string? estado = null)
     {
+        // Máximo 100 por página, como en el resto de listados: sin límite, pageSize=100000 devolvía la tabla entera.
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Hallazgos
             .Include(h => h.Inspeccion)
                 .ThenInclude(i => i.Equipo)
