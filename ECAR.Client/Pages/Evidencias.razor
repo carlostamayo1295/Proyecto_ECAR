@@ -57,13 +57,19 @@
                                         <MudText Typo="Typo.caption">
                                             Inspección #@evidencia.IdInspeccion · @evidencia.UsuarioCarga · @evidencia.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy")
                                         </MudText>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="mt-1 ml-0"
+                                            Color="@(EsDeInspeccionCerrada(evidencia) ? Color.Success : Color.Warning)"
+                                            Text="@(EsDeInspeccionCerrada(evidencia) ? "Inspección cerrada" : "Inspección en curso")" />
                                     </MudCardContent>
-                                    <MudCardActions>
-                                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
-                                            StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(evidencia)">
-                                            Eliminar
-                                        </MudButton>
-                                    </MudCardActions>
+                                    @if (!EsDeInspeccionCerrada(evidencia))
+                                    {
+                                        <MudCardActions>
+                                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
+                                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(evidencia)">
+                                                Eliminar
+                                            </MudButton>
+                                        </MudCardActions>
+                                    }
                                 </MudCard>
                             </MudItem>
                         }
@@ -107,10 +113,17 @@
                             <MudTd DataLabel="Subido por">@context.UsuarioCarga</MudTd>
                             <MudTd DataLabel="Fecha de carga">@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
                             <MudTd DataLabel="Acciones">
-                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(context)" Class="action-button">
-                                    Eliminar
-                                </MudButton>
+                                @if (EsDeInspeccionCerrada(context))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Text="Inspección cerrada" />
+                                }
+                                else
+                                {
+                                    <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                        StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(context)" Class="action-button">
+                                        Eliminar
+                                    </MudButton>
+                                }
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
@@ -190,6 +203,11 @@
             miniaturas[evidencia.IdEvidencia] = await HttpClientService.GetEvidenciaImageDataUrlAsync(evidencia.IdEvidencia, evidencia.TipoContenido);
         }
     }
+
+    // Regla 6 del SRS: la evidencia de una inspección cerrada no se borra. El servidor ya
+    // responde 409; la pantalla no ofrece lo que el servidor va a rechazar.
+    private static bool EsDeInspeccionCerrada(EvidenciaDto evidencia) =>
+        evidencia.EstadoInspeccion == InspeccionEstados.Cerrada;
 
     private static string FormatearTamano(long bytes)
     {
