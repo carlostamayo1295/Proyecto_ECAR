@@ -84,7 +84,7 @@
                             <td style="width: 120px">
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                          Color="@(pregunta.EsNovedad ? Color.Warning : Color.Default)"
-                                         Text="@(pregunta.Respuesta ?? "Sin responder")" />
+                                         Text="@FormatoRespuesta.Mostrar(pregunta.Respuesta)" />
                             </td>
                         </tr>
                     }

@@ -46,7 +46,7 @@
                         <MudTd>@context.IdRespuesta.ToString()</MudTd>
                         <MudTd>@context.IdInspeccion.ToString()</MudTd>
                         <MudTd>@context.IdPregunta.ToString()</MudTd>
-                        <MudTd>@context.Respuesta</MudTd>
+                        <MudTd>@FormatoRespuesta.Mostrar(context.Respuesta)</MudTd>
                         <MudTd>
                             @if (!string.IsNullOrWhiteSpace(context.Observacion))
                             {
