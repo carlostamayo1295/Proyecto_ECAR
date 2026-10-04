@@ -1,0 +1,94 @@
+﻿@page "/inspecciones/iniciar"
+@inject HttpClientService HttpClientService
+@inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+
+@* Inicio de una inspección desde el QR del equipo (FE-3).
+
+   Sin sesión, la guarda manda al login conservando esta URL y el técnico vuelve solo. Por eso
+   dentro de la página cualquier respuesta sin Data es un error real y se muestra: no hay que
+   adivinar si "no vino nada" significa "no hay sesión". Antes se adivinaba, y un 400 legítimo
+   (equipo dado de baja, checklist inactivo) o la falta de red mandaban al login; con un equipo
+   inactivo el técnico entraba en bucle: login, vuelve, 400, login.
+
+   No usa EmptyLayout aunque ConsultaQr sí: EmptyLayout no monta MudSnackbarProvider ni
+   MudPopoverProvider, y el aviso de "no autorizado" de la guarda no se vería. *@
+
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico" })"
+               MensajeNoAutorizado="Solo técnicos y administradores pueden iniciar inspecciones.">
+<div class="d-flex justify-center align-center" style="height: 80vh;">
+    <MudCard Elevation="2" Class="pa-6 text-center" Style="max-width: 400px; width: 100%;">
+        @if (_cargando)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" Class="mb-4" />
+            <MudText Typo="Typo.h6">Iniciando inspección...</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                Por favor espere mientras se prepara la inspección del equipo.
+            </MudText>
+        }
+        else if (_error != null)
+        {
+            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-2" />
+            <MudText Typo="Typo.h6" Color="Color.Error">No se pudo iniciar</MudText>
+            <MudText Typo="Typo.body2" Class="my-3">@_error</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="VolverAlInicio">
+                Volver al inicio
+            </MudButton>
+        }
+    </MudCard>
+</div>
+</RolRouteGuard>
+
+@code {
+
+    [SupplyParameterFromQuery(Name = "equipo")]
+    public long? IdEquipo { get; set; }
+
+    [SupplyParameterFromQuery(Name = "checklist")]
+    public long? IdChecklist { get; set; }
+
+    private bool _cargando = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // La guarda corre en paralelo a esta página y no detiene su ciclo de vida. Sin sesión
+        // no se llama al API: la guarda ya está redirigiendo al login.
+        if (string.IsNullOrEmpty(await AuthorizationService.GetTokenAsync()))
+        {
+            return;
+        }
+
+        if (!IdEquipo.HasValue || !IdChecklist.HasValue)
+        {
+            _error = "Los parámetros del equipo o checklist son inválidos.";
+            _cargando = false;
+            return;
+        }
+
+        var result = await HttpClientService.IniciarInspeccionAsync(new IniciarInspeccionDto
+        {
+            IdEquipo = IdEquipo.Value,
+            IdChecklist = IdChecklist.Value
+        });
+
+        // Creada (201) o ya existente (409, que trae en Data la que estaba en curso): se continúa igual.
+        if (result?.Data != null)
+        {
+            NavigationManager.NavigateTo($"/inspecciones/ejecutar/{result.Data.IdInspeccion}", replace: true);
+            return;
+        }
+
+        // Con sesión, cualquier otra cosa es un error real. IniciarInspeccionAsync ya atrapa las
+        // excepciones de red y devuelve null, así que null aquí significa "no hubo respuesta".
+        _error = result?.Message
+            ?? "No se pudo conectar con el servidor. Compruebe la conexión e intente de nuevo.";
+        _cargando = false;
+    }
+
+    // La página no conoce el token del QR, así que no puede volver a él: el botón dice adónde va.
+    private void VolverAlInicio()
+    {
+        NavigationManager.NavigateTo("/", replace: true);
+    }
+}

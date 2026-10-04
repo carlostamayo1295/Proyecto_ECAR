@@ -18,7 +18,7 @@ Referencias: [`PLAN_FASE3_TAREAS.md`](PLAN_FASE3_TAREAS.md) (tareas y fechas),
 |---|---|---|---|
 | `IniciarInspeccionAsync(dto)` | `POST /api/inspecciones/iniciar` | `ApiResponse<InspeccionEjecucionDto>` | FE-3 |
 | `GetInspeccionEjecucionAsync(id)` | `GET /api/inspecciones/{id}/ejecucion` | `ApiResponse<InspeccionEjecucionDto>` | FE-0 (esqueleto) |
-| `GuardarRespuestasAsync(id, dto)` | `PUT /api/inspecciones/{id}/respuestas` | `ApiResponse<List<RespuestaInspeccionDto>>` | FE-1 |
+| `GuardarRespuestasAsync(id, dto)` | `PUT /api/inspecciones/{id}/respuestas` | `ApiResponse<InspeccionEjecucionDto>` | FE-1 |
 | `GetRespuestasInspeccionAsync(id)` | `GET /api/inspecciones/{id}/respuestas` | `ApiResponse<List<RespuestaInspeccionDto>>` | FE-1 |
 | `GetRespuestasInspeccionAsync(page, pageSize, search, idInspeccion)` | `GET /api/respuestasinspeccion` | `ApiResponse<PagedResultDto<RespuestaInspeccionDto>>` | FE-1 (pantalla admin) |
 | `GetMisInspeccionesAsync(estado)` | `GET /api/inspecciones/mias` | `ApiResponse<List<InspeccionDto>>` | FE-2 |
@@ -95,19 +95,80 @@ falta es la interfaz. Los métodos listos para usar:
 ```csharp
 // PasoPreguntas  (FE-1)
 await GuardarAsync(respuestas);          // lote o una sola respuesta; refresca contadores
+Estado                                    // Inactivo | Guardando | Guardado | Error, ya renderizado
 
 // PasoEvidencias (FE-2)
 await SubirAsync(archivo);               // valida tamaño, sube y añade a la lista
 await EliminarAsync(evidencia);
 await CargarMiniaturaAsync(evidencia);   // devuelve el data URI para MudImage
+Subiendo                                  // true mientras haya subidas en curso, para la barra
 
 // PasoFirma      (FE-3)
 await FirmarAsync(firmaPng, observaciones);   // acepta el PNG con o sin prefijo data:
+Firmando                                       // enlázalo al Disabled del botón de firmar
 TextoLegal                                     // texto ya redactado, mostrarlo antes de firmar
 ```
 
 Los parámetros de entrada y salida de cada componente ya están declarados; no hace falta
 añadir ninguno para las tareas de la fase.
+
+### Qué se persiste y cuándo
+
+Esto no estaba en la primera versión de la guía y costó un defecto en ECAR-205, así que queda
+explícito: **todo dato que el técnico escriba tiene que llegar al servidor por sí solo.**
+
+| Dato | Cuándo se guarda | Quién lo dispara |
+|---|---|---|
+| Respuesta a una pregunta | Al cambiar el control, con debounce de 500 ms | FE-1 |
+| **Observación de una novedad** | **Al cambiar el campo, con su propio debounce** | FE-1 |
+| Fotografía | Al seleccionarla o tomarla | FE-2 |
+| Firma | Solo al pulsar el botón de cierre | FE-3 |
+
+Enlazar con `@bind-Value` **no guarda nada**: solo actualiza el objeto en memoria. Una
+novedad sin observación en la base de datos hace que el cierre falle (regla 4 del SRS) aunque
+el técnico la vea escrita en su pantalla.
+
+Dos reglas que se aplican a los tres pasos:
+
+- **Nunca descartes un envío porque haya otro en vuelo.** Los upserts del API son
+  idempotentes, así que dos envíos no se pisan; tirar uno en silencio pierde el dato sin que
+  nadie se entere. La única excepción legítima es la firma, donde el guard evita cerrar dos
+  veces. Usa un contador, no un booleano.
+- **Repinta con `InvokeAsync(StateHasChanged)`**, no con `StateHasChanged()` a secas: el
+  guardado se lanza desde tareas fuera del ciclo de render y de otro modo el indicador no se
+  actualiza. Los tres componentes ya lo hacen así.
+
+### No reemplaces la colección que el usuario está editando
+
+Cuando el API devuelva el estado completo, actualiza **en sitio** las preguntas que
+confirmaste y toma solo los contadores tal cual. Si haces
+`Inspeccion.Preguntas = respuesta.Preguntas`, borras lo que el técnico esté escribiendo en
+cualquier otra pregunta en ese momento. `GuardarAsync` ya lo hace correctamente; no lo
+cambies.
+
+### Tampoco copies de vuelta lo que el usuario acaba de escribir
+
+La versión anterior de `GuardarAsync` actualizaba en sitio, sí, pero copiaba del eco del
+servidor los tres campos:
+
+```csharp
+pregunta.IdRespuesta = confirmada.IdRespuesta;
+pregunta.Respuesta   = confirmada.Respuesta;    // ← mal
+pregunta.Observacion = confirmada.Observacion;  // ← mal
+```
+
+Actualizar "en sitio" no basta: el problema no era la colección, era el campo. Entre que sale
+la petición y vuelve la respuesta pasan cientos de milisegundos, y en una pregunta de texto el
+técnico sigue escribiendo. Al llegar el eco, el campo revertía a la frase a medias que se había
+enviado. Se reproduce así: escribir, parar medio segundo (salta el debounce y se envía), seguir
+escribiendo sin levantar las manos.
+
+**Del eco toma solo lo que no tenías**, que es `IdRespuesta` (el id de la fila recién
+insertada). `Respuesta` y `Observacion` ya las tienes, y más frescas que el servidor: el API las
+guarda literalmente como se las mandas, sin recortar ni normalizar, así que el eco no aporta
+nada. Lo mismo vale para cualquier otro campo que el usuario pueda estar editando en ese
+momento. Los contadores (`TotalObligatorias`, `ObligatoriasRespondidas`, `TotalNovedades`) sí se
+toman del servidor: esos los calcula él y el cliente no los puede deducir.
 
 ### Decisión de diseño: el resultado es una página, no un paso
 
@@ -150,6 +211,54 @@ botón "Iniciar inspección" de la página pública del QR:
 NavigationManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(destino)}");
 ```
 
+### Roles mixtos: `RolRouteGuard`
+
+Cuando la lista de roles no es la de las otras dos guardas, usa `Components/RolRouteGuard.razor`,
+que recibe los roles como parámetro y se comporta como `TecnicoRouteGuard` sin sesión:
+
+```razor
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
+               MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden ver esto.">
+    ... contenido de la pantalla ...
+</RolRouteGuard>
+```
+
+### No uses `@attribute [Authorize]`
+
+**En este proyecto no hace nada.** No falla ni redirige: simplemente nadie lo lee.
+`App.razor` monta un `<RouteView>` normal, no un `<AuthorizeRouteView>`, que es el único
+componente que evalúa ese atributo, y `Program.cs` no registra `AddAuthorizationCore()` ni
+ningún `AuthenticationStateProvider`. Por eso existen las guardas. Le pasó a la página del
+resultado y fue por una instrucción mía.
+
+Por la misma razón, `<AuthorizeView>` tampoco sirve. Para mostrar u ocultar algo según el rol
+dentro de una página, usa `AuthorizationService.GetUserRolesAsync()`, como hace el bloque del
+hash en `ResultadoInspeccion.razor`.
+
+### La guarda no detiene la página
+
+La guarda es un componente hijo: la página que la contiene **sigue ejecutando su
+`OnInitializedAsync`** aunque no haya sesión. Si la página llama al API ahí, esa llamada sale sin
+token mientras la guarda redirige, y el error se puede colar en pantalla. Comprueba el token
+antes de llamar:
+
+```csharp
+if (string.IsNullOrEmpty(await AuthorizationService.GetTokenAsync()))
+{
+    return;   // la guarda ya está mandando al login
+}
+```
+
+`EjecutarInspeccion` e `IniciarInspeccion` lo hacen así.
+
+### `EmptyLayout` no tiene proveedores de MudBlazor
+
+`Layout/EmptyLayout.razor` es solo `@Body`: no monta `MudThemeProvider`, `MudSnackbarProvider`,
+`MudDialogProvider` ni `MudPopoverProvider`. En una página con ese layout **no se ven los
+`Snackbar`, no abren los diálogos ni los desplegables** (`MudSelect`, `MudMenu`). La consulta
+pública del QR lo usa porque no necesita nada de eso; no lo copies a otras pantallas sin
+comprobarlo.
+
 ---
 
 ## 5. Criterio visual de la fase
@@ -189,7 +298,10 @@ Siguen las de Fase 2, con dos añadidos:
 - **Sin `TODO` dirigidos a otra persona.** Si falta algo de backend, el método devuelve `null`
   y la pantalla lo avisa; eso es suficiente.
 - Las pantallas de administración van dentro de `<AdminRouteGuard>`; las de ejecución, dentro
-  de `<TecnicoRouteGuard>`.
+  de `<TecnicoRouteGuard>`; las de roles mixtos, dentro de `<RolRouteGuard>`. Nunca
+  `@attribute [Authorize]` (§4).
+- En las tablas, cada `MudTd` lleva `DataLabel`. Por debajo de 600 px `MudTable` se apila en
+  tarjetas y sin etiqueta los valores salen sueltos.
 - Los comentarios del código, en español.
 
 ---

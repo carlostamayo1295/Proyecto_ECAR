@@ -8,13 +8,8 @@
         <MudCardHeader>
             <CardHeaderContent>
                 <MudText Typo="Typo.h5">Evidencias</MudText>
-                <MudText Typo="Typo.body2">Evidencias fotográficas y documentales cargadas en inspecciones</MudText>
+                <MudText Typo="Typo.body2">Fotografías cargadas durante la ejecución de inspecciones</MudText>
             </CardHeaderContent>
-            <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Cargar Evidencia
-                </MudButton>
-            </CardHeaderActions>
         </MudCardHeader>
 
         <MudCardContent>
@@ -45,9 +40,20 @@
                         {
                             <MudItem xs="12" sm="6" md="4">
                                 <MudCard Outlined="true">
-                                    <MudCardMedia Image="@evidencia.Archivo" Height="180" />
+                                    @if (miniaturas.TryGetValue(evidencia.IdEvidencia, out var src) && src != null)
+                                    {
+                                        <MudImage Src="@src" Height="180" ObjectFit="ObjectFit.Cover" Class="mud-width-full" />
+                                    }
+                                    else
+                                    {
+                                        <MudSkeleton Height="180px" />
+                                    }
                                     <MudCardContent>
                                         <MudText Typo="Typo.subtitle2">@evidencia.NombreEquipo</MudText>
+                                        <MudText Typo="Typo.body2">@evidencia.NombreOriginal</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @FormatearTamano(evidencia.TamanoBytes) · @evidencia.TipoContenido
+                                        </MudText>
                                         <MudText Typo="Typo.caption">
                                             Inspección #@evidencia.IdInspeccion · @evidencia.UsuarioCarga · @evidencia.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy")
                                         </MudText>
@@ -69,6 +75,7 @@
                         <HeaderContent>
                             <MudTh>ID</MudTh>
                             <MudTh>Vista previa</MudTh>
+                            <MudTh>Archivo</MudTh>
                             <MudTh>Equipo</MudTh>
                             <MudTh>Inspección</MudTh>
                             <MudTh>Subido por</MudTh>
@@ -76,17 +83,30 @@
                             <MudTh>Acciones</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>@context.IdEvidencia</MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="ID">@context.IdEvidencia</MudTd>
+                            <MudTd DataLabel="Vista previa">
                                 <MudAvatar Square="true" Size="Size.Medium">
-                                    <MudImage Src="@context.Archivo" />
+                                    @if (miniaturas.TryGetValue(context.IdEvidencia, out var src) && src != null)
+                                    {
+                                        <MudImage Src="@src" ObjectFit="ObjectFit.Cover" />
+                                    }
+                                    else
+                                    {
+                                        <MudSkeleton />
+                                    }
                                 </MudAvatar>
                             </MudTd>
-                            <MudTd>@context.NombreEquipo</MudTd>
-                            <MudTd>#@context.IdInspeccion</MudTd>
-                            <MudTd>@context.UsuarioCarga</MudTd>
-                            <MudTd>@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="Archivo">
+                                <MudText Typo="Typo.body2">@context.NombreOriginal</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @FormatearTamano(context.TamanoBytes) · @context.TipoContenido
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Equipo">@context.NombreEquipo</MudTd>
+                            <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
+                            <MudTd DataLabel="Subido por">@context.UsuarioCarga</MudTd>
+                            <MudTd DataLabel="Fecha de carga">@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                            <MudTd DataLabel="Acciones">
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(context)" Class="action-button">
                                     Eliminar
@@ -117,6 +137,9 @@
     private int pageSize = 12;
     private int totalPages = 1;
     private bool isLoading = false;
+
+    /// <summary>Caché de miniaturas ya descargadas, por IdEvidencia, para no repetir la llamada al API en cada render.</summary>
+    private readonly Dictionary<long, string?> miniaturas = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -152,6 +175,35 @@
         {
             isLoading = false;
         }
+
+        await CargarMiniaturasFaltantesAsync();
+    }
+
+    private async Task CargarMiniaturasFaltantesAsync()
+    {
+        var faltantes = (evidencias ?? new List<EvidenciaDto>())
+            .Where(e => !miniaturas.ContainsKey(e.IdEvidencia))
+            .ToList();
+
+        foreach (var evidencia in faltantes)
+        {
+            miniaturas[evidencia.IdEvidencia] = await HttpClientService.GetEvidenciaImageDataUrlAsync(evidencia.IdEvidencia, evidencia.TipoContenido);
+        }
+    }
+
+    private static string FormatearTamano(long bytes)
+    {
+        if (bytes >= 1024 * 1024)
+        {
+            return $"{bytes / (1024.0 * 1024.0):0.0} MB";
+        }
+
+        if (bytes >= 1024)
+        {
+            return $"{bytes / 1024.0:0} KB";
+        }
+
+        return $"{bytes} B";
     }
 
     private async Task OnSearchKeyUp(KeyboardEventArgs args)
@@ -167,17 +219,6 @@
     {
         currentPage = newPage;
         await LoadEvidenciasAsync();
-    }
-
-    private async Task OpenCreateDialog()
-    {
-        var dialog = await DialogService.ShowAsync<EvidenciaModal>("Cargar Evidencia");
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
-        {
-            await LoadEvidenciasAsync();
-        }
     }
 
     private async Task DeleteEvidencia(EvidenciaDto evidencia)
@@ -196,6 +237,7 @@
                 if (deleteResult != null && deleteResult.Success)
                 {
                     Snackbar.Add("Evidencia eliminada exitosamente", Severity.Success);
+                    miniaturas.Remove(evidencia.IdEvidencia);
                     await LoadEvidenciasAsync();
                 }
                 else

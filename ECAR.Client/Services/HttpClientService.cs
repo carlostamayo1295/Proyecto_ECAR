@@ -1176,24 +1176,6 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<EvidenciaDto>?> CreateEvidenciaAsync(CreateEvidenciaDto createDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync("api/evidencias", createDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EvidenciaDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error creating evidencia: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
     public async Task<ApiResponse<bool>?> DeleteEvidenciaAsync(long id)
     {
         try
@@ -1397,15 +1379,17 @@ public class HttpClientService
     /// <summary>
     /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
     /// para el guardado incremental mientras el técnico avanza.
+    /// Devuelve el estado completo recalculado por el servidor —incluidos los contadores—,
+    /// así que no hace falta volver a pedir la ejecución tras guardar.
     /// </summary>
-    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GuardarRespuestasAsync(long idInspeccion,
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
         GuardarRespuestasDto guardarDto)
     {
         try
         {
             await AddAuthorizationHeaderAsync();
             var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
             await RemoveAuthorizationHeaderAsync();
             return apiResponse;
         }

@@ -1,0 +1,68 @@
+@inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+@* Guarda de ruta por rol, parametrizable.
+
+   Este proyecto NO usa el pipeline de autorización de Blazor: App.razor monta un
+   <RouteView> normal, no un <AuthorizeRouteView>, y Program.cs no registra
+   AddAuthorizationCore() ni ningún AuthenticationStateProvider. Por eso un
+   @attribute [Authorize] en una página es metadata que nadie lee: no falla, no
+   redirige, simplemente no hace nada. La protección real son estas guardas.
+
+   AdminRouteGuard y TecnicoRouteGuard hacen lo mismo con la lista de roles fija.
+   Se pueden replantear sobre esta guarda cuando toque; no se hace ahora para no
+   mezclar un refactor con la integración. *@
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Roles que pueden ver el contenido. Uno de ellos basta.</summary>
+    [Parameter, EditorRequired]
+    public string[] Roles { get; set; } = [];
+
+    /// <summary>Mensaje cuando hay sesión pero el rol no alcanza.</summary>
+    [Parameter]
+    public string MensajeNoAutorizado { get; set; } = "Acceso no autorizado.";
+
+    private bool isAuthorized;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await AuthorizationService.GetTokenAsync();
+
+        // Sin sesión se conserva el destino: a estas pantallas se llega escaneando
+        // un QR desde el teléfono, así que el técnico tiene que volver a donde iba.
+        if (string.IsNullOrEmpty(token))
+        {
+            var returnUrl = Uri.EscapeDataString(
+                NavigationManager.ToBaseRelativePath(NavigationManager.Uri));
+            NavigationManager.NavigateTo($"/login?returnUrl={returnUrl}");
+            return;
+        }
+
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        isAuthorized = Roles.Any(roles.Contains);
+
+        if (!isAuthorized)
+        {
+            Snackbar.Add(MensajeNoAutorizado, Severity.Error);
+            NavigationManager.NavigateTo("/");
+        }
+
+        isLoading = false;
+    }
+}
+
+@if (isLoading)
+{
+    <MudContainer Class="d-flex justify-center align-center" Style="min-height: 100vh;">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    </MudContainer>
+}
+else if (isAuthorized)
+{
+    @ChildContent
+}

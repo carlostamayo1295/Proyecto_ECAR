@@ -89,25 +89,36 @@ ECAR lo pide, es una tabla puente nueva (fase posterior).
 | Roles de usuario (admin) | `/admin/usuarios-roles` | API real |
 | Checklists + versiones + nueva versión | `/checklists` | API real ✅ |
 | Preguntas de checklist (admin) | `/checklists/preguntas` | API real ✅ |
-| Inspecciones | `/inspecciones` | API real (CRUD básico, sin flujo de ejecución) |
-| **Ejecutar inspección** | `/inspecciones/ejecutar/{id}` | 🔵 **Esqueleto (FE-0)** — stepper y contratos listos; los tres pasos los implementan FE-1/2/3 |
-| Respuestas de inspección (admin) | `/inspecciones/respuestas` | **Mock** (`MockDataService`) — Fase 3 |
-| Evidencias | `/evidencias` | API real (solo texto; sin archivo) — Fase 3 |
+| Inspecciones | `/inspecciones` | API real · columna Estado, botones **Continuar** / **Ver resultado**, alta con checklist activo. Filtro de estado solo sobre la página visible (falta `estado` en el API, BE-0) |
+| **Iniciar inspección** | `/inspecciones/iniciar?equipo=…&checklist=…` | 🟡 Front listo (FE-3), se llega desde el QR · `POST iniciar` ya en `develop` |
+| **Ejecutar inspección** | `/inspecciones/ejecutar/{id}` | 🟡 Front listo: preguntas (FE-1), evidencias con cámara (FE-2) y firma (FE-3) · faltan en `develop` `PUT respuestas` (BE-1), subida de fotos (BE-2) y `firmar` (BE-3) |
+| **Resultado de inspección** | `/inspecciones/{id}/resultado` | 🟡 Front listo (FE-3): respuestas, miniaturas, firma, hash para Auditor, imprimible · falta `GET resultado` (BE-3) |
+| Respuestas de inspección (admin) | `/inspecciones/respuestas` | 🟡 Front listo (FE-1): solo consulta, filtro por inspección · falta `GET /api/respuestasinspeccion` (BE-1) |
+| Evidencias | `/evidencias` | 🟡 Front listo (FE-2): galería y tabla con miniaturas · faltan la descarga de la imagen y el estado de la inspección (BE-2) |
 | Hallazgos | `/hallazgos` | API real (CRUD) |
 | Auditoría | `/auditoria` | API real (solo lectura) |
 
-`MockDataService` queda reducido a *Respuestas de inspección* y al lookup de preguntas que
-usa `RespuestaInspeccionModal`. Desaparece con la Fase 3.
+`MockDataService` y `RespuestaInspeccionModal` **se retiraron** el 02/10 (tarea 7 de FE-0): el
+cliente ya no tiene datos simulados.
+
+🟡 = el frontend está terminado y mergeado en `integracion_fronEnd`, pero el endpoint del que
+depende todavía no está en `develop`. Nadie ha ejecutado aún una inspección completa.
 
 ### Guardas de ruta
 
 | Guarda | Deja pasar | Si no hay sesión |
 |---|---|---|
 | `AdminRouteGuard` | Administrador | Envía al inicio |
-| `TecnicoRouteGuard` *(nuevo)* | Administrador y Técnico | Envía a `/login?returnUrl=…` y vuelve al destino |
+| `TecnicoRouteGuard` | Administrador y Técnico | Envía a `/login?returnUrl=…` y vuelve al destino |
+| `RolRouteGuard` *(nuevo, 02/10)* | Los roles que se le pasen | Igual que la anterior |
 
-La segunda es necesaria porque a la ejecución de inspecciones se llega escaneando un QR desde
-el teléfono, sin sesión previa.
+La segunda y la tercera son necesarias porque a la ejecución de inspecciones se llega
+escaneando un QR desde el teléfono, sin sesión previa. `RolRouteGuard` cubre las pantallas con
+roles mixtos: el resultado (Administrador, Técnico, Auditor) y el inicio desde QR.
+
+**`@attribute [Authorize]` no funciona en este proyecto.** `App.razor` monta un `<RouteView>`,
+no un `<AuthorizeRouteView>`, y `Program.cs` no registra `AddAuthorizationCore()`: el atributo
+es metadata que nadie lee. La protección real son estas guardas.
 
 ---
 
