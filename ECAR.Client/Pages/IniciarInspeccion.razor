@@ -1,6 +1,6 @@
 ﻿@page "/inspecciones/iniciar"
 @inject HttpClientService HttpClientService
-@inject AuthorizationService AuthorizationService
+@inject SesionService Sesion
 @inject NavigationManager NavigationManager
 
 @* Inicio de una inspección desde el QR del equipo (FE-3).
@@ -54,7 +54,7 @@
     {
         // La guarda corre en paralelo a esta página y no detiene su ciclo de vida. Sin sesión
         // no se llama al API: la guarda ya está redirigiendo al login.
-        if (string.IsNullOrEmpty(await AuthorizationService.GetTokenAsync()))
+        if (!await Sesion.TieneSesionVigenteAsync())
         {
             return;
         }

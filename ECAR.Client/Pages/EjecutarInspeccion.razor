@@ -1,6 +1,6 @@
 @page "/inspecciones/ejecutar/{IdInspeccion:long}"
 @inject HttpClientService HttpClientService
-@inject AuthorizationService AuthorizationService
+@inject SesionService Sesion
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
@@ -118,7 +118,7 @@
         // TecnicoRouteGuard corre en paralelo a esta página y no detiene su ciclo de vida. Sin
         // sesión no se llama al API: la guarda ya está mandando al login, y la petición solo
         // servía para que un "Error al cargar la inspección" se colara durante la redirección.
-        if (string.IsNullOrEmpty(await AuthorizationService.GetTokenAsync()))
+        if (!await Sesion.TieneSesionVigenteAsync())
         {
             return;
         }
