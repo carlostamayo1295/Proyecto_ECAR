@@ -2,6 +2,7 @@
 @inject AuthorizationService AuthorizationService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NavigationManager NavigationManager
 
 <MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true }">
     <TitleContent>
@@ -51,17 +52,89 @@
             <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
                 Editable="true" Disabled="IsEditMode" Class="mb-3" />
 
-            @* Sin campos de Resultado ni de Firma: en la Fase 3 el resultado lo calcula el servidor
-               al firmar y la firma se dibuja en el paso 3 de la ejecución. Al registrar, el API los
-               descartaba en silencio; al editar, respondía 400 si venían rellenos. *@
+            @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
-                Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3"
-                HelperText="Observaciones generales. El resultado y la firma se registran al ejecutar la inspección" />
+                Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3" ReadOnly="EstaCerrada"
+                HelperText="@(EstaCerrada ? "Inspección cerrada: no admite cambios" : "Observaciones generales. El resultado lo calcula el sistema al firmar")" />
+
+            @* Firma digital. Firmar y cerrar son la misma acción (POST firmar): el servidor exige las
+               obligatorias respondidas y cada novedad con observación, y después la inspección queda
+               inmutable. Por eso una inspección nueva no se puede firmar al registrarla. *@
+            @if (!IsEditMode)
+            {
+                <MudTextField T="string" Label="Firma digital" Value="@("Pendiente de firma")"
+                    Variant="Variant.Outlined" ReadOnly="true"
+                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Draw"
+                    HelperText="Se firma al cerrar la inspección, con el checklist ya respondido: desde «Editar» en este listado o en el paso 3 de la ejecución" />
+            }
+            else if (EstaCerrada)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Firma digital</MudText>
+                <VistaFirmaInspeccion IdInspeccion="@Inspeccion!.IdInspeccion" />
+            }
+            else if (!datosFirmaListos)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-2" />
+            }
+            else if (esElInspector)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Firma digital</MudText>
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@PasoFirma.TextoLegal</MudAlert>
+
+                <div class="d-flex justify-center mb-2">
+                    <FirmaCanvas OnFirmaConfirmada="RecibirFirma" />
+                </div>
+
+                @if (faltantes.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-3">
+                        <b>La inspección todavía no se puede cerrar:</b>
+                        <ul class="mb-2 ml-4">
+                            @foreach (var faltante in faltantes)
+                            {
+                                <li>@faltante</li>
+                            }
+                        </ul>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                            StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="ContinuarEjecucion">
+                            Continuar la inspección
+                        </MudButton>
+                    </MudAlert>
+                }
+                else if (!string.IsNullOrWhiteSpace(firmaCapturada))
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                        Firma capturada. Pulse "Firmar y cerrar la inspección" para terminar.
+                    </MudAlert>
+                }
+
+                <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
+                    StartIcon="@Icons.Material.Filled.Lock"
+                    Disabled="@(firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
+                    OnClick="FirmarYCerrarAsync">
+                    @(firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")
+                </MudButton>
+            }
+            else
+            {
+                @* El servidor solo deja firmar al inspector de la inspección, aunque quien llame sea Administrador. *@
+                <MudTextField T="string" Label="Firma digital" Value="@("Pendiente de firma")"
+                    Variant="Variant.Outlined" ReadOnly="true"
+                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Draw"
+                    HelperText="@($"Solo {Inspeccion!.NombreUsuario}, el inspector, puede firmarla al cerrarla")" />
+            }
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+        @if (EstaCerrada)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MudDialog.Cancel())" Class="dialog-button">Cerrar</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -88,12 +161,28 @@
     // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
     private bool errorEquiposAvisado;
 
+    private bool EstaCerrada => Inspeccion?.Estado == InspeccionEstados.Cerrada;
+
+    // Firma digital (solo al editar una inspección en curso)
+    private bool datosFirmaListos;
+    private bool esElInspector;
+    private string? firmaCapturada;
+    private bool firmando;
+    private List<string> faltantes = new();
+
     protected override async Task OnInitializedAsync()
     {
         if (IsEditMode && Inspeccion != null)
         {
             fechaInspeccion = Inspeccion.FechaInspeccion;
             observaciones = Inspeccion.Observaciones;
+
+            if (!EstaCerrada)
+            {
+                var idUsuario = await AuthorizationService.GetUserIdAsync();
+                esElInspector = idUsuario == Inspeccion.IdUsuario.ToString();
+                datosFirmaListos = true;
+            }
         }
         else
         {
@@ -203,6 +292,51 @@
                 Snackbar.Add(result?.Message ?? "Error al registrar inspección", Severity.Error);
             }
         }
+    }
+
+    // El canvas entrega el PNG al pulsar "Usar esta firma"; todavía no se cierra nada.
+    private void RecibirFirma(string firmaBase64)
+    {
+        firmaCapturada = firmaBase64;
+        faltantes.Clear();
+    }
+
+    private async Task FirmarYCerrarAsync()
+    {
+        if (firmando || Inspeccion == null || string.IsNullOrWhiteSpace(firmaCapturada))
+        {
+            return;
+        }
+
+        firmando = true;
+        faltantes.Clear();
+
+        // El API acepta el PNG con o sin el prefijo "data:image/png;base64,". Las observaciones
+        // del modal viajan con la firma, así no hace falta "Guardar" antes de firmar.
+        var result = await HttpClientService.FirmarInspeccionAsync(Inspeccion.IdInspeccion, new FirmarInspeccionDto
+        {
+            FirmaPngBase64 = firmaCapturada,
+            Observaciones = observaciones
+        });
+
+        firmando = false;
+
+        if (result is { Success: true, Data: not null })
+        {
+            Snackbar.Add(result.Message ?? "Inspección firmada y cerrada", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+            return;
+        }
+
+        // 400 con la lista de obligatorias sin responder o novedades sin observación (reglas 3 y 4).
+        faltantes = result?.Errors?.ToList() ?? new List<string>();
+        Snackbar.Add(result?.Message ?? "No se pudo firmar la inspección", Severity.Error);
+    }
+
+    private void ContinuarEjecucion()
+    {
+        MudDialog.Cancel();
+        NavigationManager.NavigateTo($"/inspecciones/ejecutar/{Inspeccion!.IdInspeccion}");
     }
 
     private async Task Cancel()

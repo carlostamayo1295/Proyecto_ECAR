@@ -45,7 +45,7 @@
                     <MudText Typo="Typo.body2"><b>Ubicación:</b> @resultado.UbicacionNombre</MudText>
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.body2"><b>Fecha de Cierre:</b> @resultado.FechaCierre?.ToString("yyyy-MM-dd HH:mm")</MudText>
+                    <MudText Typo="Typo.body2"><b>Fecha de Cierre:</b> @resultado.FechaCierre?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
                     <MudText Typo="Typo.body2"><b>Técnico Responsable:</b> @resultado.NombreUsuario</MudText>
                 </MudItem>
             </MudGrid>
