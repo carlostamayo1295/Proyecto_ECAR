@@ -17,15 +17,18 @@
         <MudSpacer />
         <img src="images/logo-ecar.png" alt="ECAR Logo" class="app-bar-logo" />
         <MudSpacer />
-        <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="https://localhost:7296/scalar/v1" Target="_blank">
+        @* En el teléfono los botones quedan solo con el icono: con el texto, la barra medía más
+           de 375 px y ensanchaba todas las páginas. *@
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="https://localhost:7296/scalar/v1" Target="_blank"
+            title="API Scalar">
             <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
-            API Scalar
+            <span class="texto-barra">API Scalar</span>
         </MudButton>
         @if (isAuthenticated)
         {
-            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="HandleLogout">
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="HandleLogout" title="Cerrar sesión">
                 <MudIcon Icon="@Icons.Material.Filled.Logout" Class="mr-2" />
-                Logout
+                <span class="texto-barra">Logout</span>
             </MudButton>
         }
     </MudAppBar>
@@ -34,16 +37,21 @@
         <MudList T="string">
             <MudListItem T="string" Text="Home" Icon="@Icons.Material.Filled.Home" Href="/" Class="nav-item" />
             <MudListItem T="string" Text="Inspecciones" Icon="@Icons.Material.Filled.Assignment" Href="/inspecciones" Class="nav-item" />
+            @* Consulta de equipos para los tres roles (SRS §4); crear y editar sigue siendo del Administrador. *@
+            <MudListItem T="string" Text="Equipos" Icon="@Icons.Material.Filled.Devices" Href="/equipos" Class="nav-item" />
             <MudListItem T="string" Text="Evidencias" Icon="@Icons.Material.Filled.PhotoLibrary" Href="/evidencias" Class="nav-item" />
             <MudListItem T="string" Text="Hallazgos" Icon="@Icons.Material.Filled.ReportProblem" Href="/hallazgos" Class="nav-item" />
             <MudListItem T="string" Text="Checklists" Icon="@Icons.Material.Filled.PlaylistAddCheck" Href="/checklists" Class="nav-item" />
             <MudListItem T="string" Text="Categoría de Equipos" Icon="@Icons.Material.Filled.Category" Href="/categorias-equipo" Class="nav-item" />
-            <MudListItem T="string" Text="Auditoría" Icon="@Icons.Material.Filled.History" Href="/auditoria" Class="nav-item" />
+            @* El API de auditoría es solo para Administrador y Auditor (SRS §4). *@
+            @if (isAdmin || isAuditor)
+            {
+                <MudListItem T="string" Text="Auditoría" Icon="@Icons.Material.Filled.History" Href="/auditoria" Class="nav-item" />
+            }
 
             @if (isAdmin)
             {
                 <MudListItem T="string" Text="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" Class="nav-item admin-section" />
-                <MudListItem T="string" Text="Equipos" Icon="@Icons.Material.Filled.Devices" Href="/admin/equipos" Class="nav-item admin-item" />
                 <MudListItem T="string" Text="Ubicaciones" Icon="@Icons.Material.Filled.Place" Href="/ubicaciones" Class="nav-item admin-item" />
                 <MudListItem T="string" Text="Usuarios" Icon="@Icons.Material.Filled.People" Href="/admin/users" Class="nav-item admin-item" />
                 <MudListItem T="string" Text="Roles" Icon="@Icons.Material.Filled.AssignmentInd" Href="/admin/roles" Class="nav-item admin-item" />
@@ -115,11 +123,36 @@
     background-color: rgba(255, 255, 255, 0.15) !important;
     transform: translateX(4px) !important;
 }
+
+/* Teléfono (por debajo de 600 px, donde MudBlazor apila las tablas). */
+@@media (max-width: 599.98px) {
+    .texto-barra {
+        display: none;
+    }
+
+    .app-bar .mr-2 {
+        margin-right: 0 !important;
+    }
+
+    .content {
+        padding: 1rem 0.5rem;
+    }
+
+    /* El botón "Nuevo …" de la cabecera de cada tarjeta baja de línea en vez de salirse. */
+    .mud-card-header {
+        flex-wrap: wrap;
+    }
+
+    .mud-card-header .mud-card-header-actions {
+        margin-top: 0.5rem;
+    }
+}
 </style>
 
 @code {
     private bool drawerOpen = true;
     private bool isAdmin = false;
+    private bool isAuditor = false;
     private bool isAuthenticated = false;
 
     protected override async Task OnInitializedAsync()
@@ -128,6 +161,7 @@
         if (isAuthenticated)
         {
             isAdmin = await AuthorizationService.IsAdminAsync();
+            isAuditor = await AuthorizationService.HasRoleAsync("Auditor");
         }
     }
 
