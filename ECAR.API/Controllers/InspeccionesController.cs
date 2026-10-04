@@ -33,7 +33,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<PagedResultDto<InspeccionDto>>>> GetInspecciones([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, [FromQuery] string? estado = null)
+    public async Task<ActionResult<ApiResponse<PagedResultDto<InspeccionDto>>>> GetInspecciones([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, [FromQuery] string? estado = null, [FromQuery] long? idEquipo = null)
     {
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -64,6 +64,13 @@ public class InspeccionesController : ControllerBase
         if (!string.IsNullOrWhiteSpace(estado))
         {
             query = query.Where(i => i.Estado == estado);
+        }
+
+        // Consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Un Técnico sigue
+        // viendo solo las suyas: el filtro de arriba ya se aplicó.
+        if (idEquipo.HasValue)
+        {
+            query = query.Where(i => i.IdEquipo == idEquipo.Value);
         }
 
         var totalCount = await query.CountAsync();

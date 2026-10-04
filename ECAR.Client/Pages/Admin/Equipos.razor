@@ -1,30 +1,59 @@
+@page "/equipos"
 @page "/admin/equipos"
 @inject HttpClientService HttpClientService
+@inject AuthorizationService AuthorizationService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-<AdminRouteGuard>
+@* Inventario de equipos. El SRS (§4) da "consulta de equipos" al Auditor y el Técnico necesita la
+   ficha para inspeccionar, así que la pantalla es de lectura para los tres roles; crear, editar,
+   generar QR y desactivar siguen siendo solo del Administrador (regla 8), en el API y aquí.
+   /admin/equipos se conserva para no romper enlaces guardados. *@
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
+               MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden consultar los equipos.">
     <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
-                <MudText Typo="Typo.h5">Gestión de Equipos</MudText>
-                <MudText Typo="Typo.body2">Administrar el inventario de equipos del sistema</MudText>
+                <MudText Typo="Typo.h5">@(esAdmin ? "Gestión de Equipos" : "Equipos")</MudText>
+                <MudText Typo="Typo.body2">@(esAdmin ? "Administrar el inventario de equipos del sistema" : "Consulta del inventario, ficha técnica e historial de inspecciones")</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nuevo Equipo
-                </MudButton>
+                @if (esAdmin)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                        Nuevo Equipo
+                    </MudButton>
+                }
             </CardHeaderActions>
         </MudCardHeader>
 
         <MudCardContent>
+            @* Filtros del SRS §6: planta, área y criticidad (más la búsqueda libre). *@
             <MudGrid Class="mb-2">
-                <MudItem xs="12" sm="6">
+                <MudItem xs="12" lg="4">
                     <MudTextField T="string" Label="Buscar" @bind-Value="searchText" Variant="Variant.Outlined"
-                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" />
+                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                        OnKeyUp="OnSearchKeyUp" />
                 </MudItem>
-                <MudItem xs="12" sm="4">
+                <MudItem xs="12" sm="4" lg="2">
+                    <MudSelect T="string" Label="Planta" Value="plantaFilter" ValueChanged="OnPlantaChanged"
+                        Variant="Variant.Outlined" Clearable="true">
+                        @foreach (var planta in Plantas)
+                        {
+                            <MudSelectItem T="string" Value="@planta">@planta</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4" lg="2">
+                    <MudSelect T="string" Label="Área" @bind-Value="areaFilter" Variant="Variant.Outlined" Clearable="true">
+                        @foreach (var area in Areas)
+                        {
+                            <MudSelectItem T="string" Value="@area">@area</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4" lg="2">
                     <MudSelect T="string" Label="Criticidad" @bind-Value="criticidadFilter" Variant="Variant.Outlined"
                         Clearable="true">
                         <MudSelectItem T="string" Value="@("Alta")">Alta</MudSelectItem>
@@ -32,7 +61,7 @@
                         <MudSelectItem T="string" Value="@("Baja")">Baja</MudSelectItem>
                     </MudSelect>
                 </MudItem>
-                <MudItem xs="12" sm="2" Class="d-flex align-center">
+                <MudItem xs="12" lg="2" Class="d-flex align-center">
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                         StartIcon="@Icons.Material.Filled.FilterAlt" OnClick="ApplyFilters">Filtrar</MudButton>
                 </MudItem>
@@ -57,13 +86,13 @@
                         <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdEquipo.ToString()</MudTd>
-                        <MudTd>@context.CodigoInterno</MudTd>
-                        <MudTd>@context.ActivoFijo</MudTd>
-                        <MudTd>@context.NombreEquipo</MudTd>
-                        <MudTd>@(context.CategoriaNombre ?? "-")</MudTd>
-                        <MudTd>@(context.UbicacionNombre ?? "-")</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdEquipo.ToString()</MudTd>
+                        <MudTd DataLabel="Código Interno">@context.CodigoInterno</MudTd>
+                        <MudTd DataLabel="Activo Fijo">@context.ActivoFijo</MudTd>
+                        <MudTd DataLabel="Nombre">@context.NombreEquipo</MudTd>
+                        <MudTd DataLabel="Categoría">@(context.CategoriaNombre ?? "-")</MudTd>
+                        <MudTd DataLabel="Ubicación">@(context.UbicacionNombre ?? "-")</MudTd>
+                        <MudTd DataLabel="Criticidad">
                             @if (!string.IsNullOrEmpty(context.Criticidad))
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
@@ -74,23 +103,30 @@
                                 <MudText Typo="Typo.caption">-</MudText>
                             }
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Estado">
                             <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)"
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
                         </MudTd>
-                        <MudTd>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
+                        <MudTd DataLabel="Acciones" Class="acciones-equipo">
+                            <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                StartIcon="@Icons.Material.Filled.Description" OnClick="() => OpenFichaDialog(context)" Class="action-button">
+                                Ficha
                             </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
-                                       StartIcon="@Icons.Material.Filled.QrCode" OnClick="() => OpenQrDialog(context)" Class="action-button">
-                                QR
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
-                                @(context.Activo ? "Desactivar" : "Activar")
-                            </MudButton>
+                            @if (esAdmin)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                    Editar
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
+                                           StartIcon="@Icons.Material.Filled.QrCode" OnClick="() => OpenQrDialog(context)" Class="action-button">
+                                    QR
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                           StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
+                                    @(context.Activo ? "Desactivar" : "Activar")
+                                </MudButton>
+                            }
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -107,23 +143,59 @@
         </MudCardContent>
     </MudCard>
     </MudContainer>
-</AdminRouteGuard>
+</RolRouteGuard>
 
 @code {
     private List<EquipoDto>? equipos;
     private List<LookupDto>? categorias;
     private List<LookupDto>? ubicaciones;
+    private List<UbicacionDto> ubicacionesFiltro = new();
     private string searchText = string.Empty;
     private string? criticidadFilter;
+    private string? plantaFilter;
+    private string? areaFilter;
+    private bool esAdmin;
     private int currentPage = 1;
     private int pageSize = 10;
     private int totalPages = 1;
     private bool isLoading = false;
 
+    private IEnumerable<string> Plantas => ubicacionesFiltro
+        .Select(u => u.Planta).Distinct().OrderBy(p => p);
+
+    // Las áreas se limitan a la planta elegida, si hay una.
+    private IEnumerable<string> Areas => ubicacionesFiltro
+        .Where(u => plantaFilter == null || u.Planta == plantaFilter)
+        .Select(u => u.Area).Distinct().OrderBy(a => a);
+
     protected override async Task OnInitializedAsync()
     {
+        esAdmin = await AuthorizationService.IsAdminAsync();
         await LoadLookupsAsync();
         await LoadDataAsync();
+    }
+
+    private void OnPlantaChanged(string? planta)
+    {
+        plantaFilter = planta;
+        if (areaFilter != null && !Areas.Contains(areaFilter))
+        {
+            areaFilter = null;
+        }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await ApplyFilters();
+        }
+    }
+
+    private async Task OpenFichaDialog(EquipoDto equipo)
+    {
+        var parameters = new DialogParameters { ["Equipo"] = equipo };
+        await DialogService.ShowAsync<EquipoFichaModal>("Ficha técnica", parameters);
     }
 
     private async Task ApplyFilters()
@@ -141,11 +213,16 @@
 
             var ubResult = await HttpClientService.GetEquipoUbicacionesLookupAsync();
             ubicaciones = ubResult?.Success == true ? ubResult.Data ?? new() : new();
+
+            // Planta y área por separado para los filtros (el lookup las trae unidas en un texto).
+            var ubicacionesResult = await HttpClientService.GetUbicacionesAsync(1, 100);
+            ubicacionesFiltro = ubicacionesResult?.Success == true ? ubicacionesResult.Data?.Data ?? new() : new();
         }
         catch
         {
             categorias = new();
             ubicaciones = new();
+            ubicacionesFiltro = new();
         }
     }
 
@@ -155,7 +232,8 @@
 
         try
         {
-            var result = await HttpClientService.GetEquiposAsync(currentPage, pageSize, searchText, criticidadFilter);
+            var result = await HttpClientService.GetEquiposAsync(currentPage, pageSize, searchText, criticidadFilter,
+                planta: plantaFilter, area: areaFilter);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -301,5 +379,14 @@
 .action-button:hover {
     box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
     transform: translateY(-1px) !important;
+}
+
+/* En el teléfono la tabla se apila: que los botones bajen de línea en vez de ensanchar la página. */
+@@media (max-width: 599.98px) {
+    .acciones-equipo {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+    }
 }
 </style>

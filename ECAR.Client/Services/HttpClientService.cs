@@ -641,7 +641,7 @@ public class HttpClientService
 
     // Métodos del API de Equipos
     public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100,
-        string? search = null, string? criticidad = null, bool? activo = null)
+        string? search = null, string? criticidad = null, bool? activo = null, string? planta = null, string? area = null)
     {
         try
         {
@@ -661,6 +661,16 @@ public class HttpClientService
             if (activo.HasValue)
             {
                 query += $"&activo={activo.Value.ToString().ToLowerInvariant()}";
+            }
+
+            if (!string.IsNullOrEmpty(planta))
+            {
+                query += $"&planta={Uri.EscapeDataString(planta)}";
+            }
+
+            if (!string.IsNullOrEmpty(area))
+            {
+                query += $"&area={Uri.EscapeDataString(area)}";
             }
 
             var response = await _httpClient.GetAsync(query);
@@ -1089,7 +1099,7 @@ public class HttpClientService
 
     // Métodos del API de Inspecciones
     public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10,
-        string? search = null, string? estado = null)
+        string? search = null, string? estado = null, long? idEquipo = null)
     {
         try
         {
@@ -1104,6 +1114,11 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(estado))
             {
                 query += $"&estado={Uri.EscapeDataString(estado)}";
+            }
+
+            if (idEquipo.HasValue)
+            {
+                query += $"&idEquipo={idEquipo.Value}";
             }
 
             var response = await _httpClient.GetAsync(query);
