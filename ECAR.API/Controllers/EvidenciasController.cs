@@ -37,9 +37,8 @@ public class EvidenciasController : ControllerBase
 
     // GET: api/evidencias O api/inspecciones/{idInspeccion}/evidencias
     [HttpGet]
-    [HttpGet("/api/inspecciones/{idInspeccion:long}/evidencias")]
     public async Task<ActionResult<ApiResponse<PagedResultDto<EvidenciaDto>>>> GetEvidencias(
-        [FromRoute] long? idInspeccion,
+        [FromQuery] long? idInspeccion,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null)
@@ -105,6 +104,51 @@ public class EvidenciasController : ControllerBase
     }
 
     // GET: api/evidencias/{id}
+    /// <summary>
+    /// Evidencias de una inspección (endpoint 8 del contrato, PLAN_FASE3_TAREAS §3.2): una lista,
+    /// no una página. Antes esta ruta compartía acción con el listado paginado y devolvía
+    /// PagedResultDto, y el cliente, que deserializa List&lt;EvidenciaDto&gt;, recibía null.
+    /// Un Técnico solo ve las de sus propias inspecciones, como en GET {id}/archivo.
+    /// </summary>
+    [HttpGet("/api/inspecciones/{idInspeccion:long}/evidencias")]
+    public async Task<ActionResult<ApiResponse<List<EvidenciaDto>>>> GetEvidenciasInspeccion(long idInspeccion)
+    {
+        var inspeccion = await _context.Inspecciones
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.IdInspeccion == idInspeccion);
+
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<List<EvidenciaDto>>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (User.IsInRole("Técnico") && inspeccion.IdUsuario != _currentUser.IdUsuario)
+        {
+            return Forbid();
+        }
+
+        var evidencias = await _context.Evidencias
+            .Where(e => e.IdInspeccion == idInspeccion)
+            .OrderBy(e => e.FechaCarga)
+            .Select(e => new EvidenciaDto
+            {
+                IdEvidencia = e.IdEvidencia,
+                IdInspeccion = e.IdInspeccion,
+                NombreEquipo = e.Inspeccion.Equipo.NombreEquipo,
+                Archivo = e.Archivo,
+                NombreOriginal = e.NombreOriginal,
+                TipoContenido = e.TipoContenido,
+                TamanoBytes = e.TamanoBytes,
+                FechaCarga = e.FechaCarga,
+                IdUsuarioCarga = e.IdUsuarioCarga,
+                UsuarioCarga = e.UsuarioCargaDetalle.Nombre,
+                EstadoInspeccion = e.Inspeccion.Estado ?? string.Empty
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<EvidenciaDto>>.SuccessResponse(evidencias));
+    }
+
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ApiResponse<EvidenciaDto>>> GetEvidencia(long id)
     {
