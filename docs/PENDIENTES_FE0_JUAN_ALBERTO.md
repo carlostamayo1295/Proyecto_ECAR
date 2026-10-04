@@ -25,8 +25,8 @@ Todo lo de este documento de la versión anterior está hecho o ya no aplica:
 - Coordinación con backend: Carlos integró las tres ramas y arregló la migración de BE-2 y las
   pruebas de BE-1. El parámetro `estado`, el límite de `pageSize` y el endpoint de evidencias por
   inspección se resolvieron en esta rama.
-- Además, a petición: inspector automático en el alta, vuelta al login al vencer la sesión y
-  botones de activar.
+- Además, a petición: inspector automático en el alta, vuelta al login al vencer la sesión,
+  botones de activar y la firma digital en el modal de Inspecciones (`68f3ebf`).
 
 ---
 
@@ -47,7 +47,14 @@ una de ellas.
 Escanear el QR, iniciar, responder, subir dos fotos seguidas, firmar con el dedo, ver el
 resultado e imprimir, a 375 px. En el escritorio está verificado; en un teléfono, no.
 
-### 4. Opcional
+### 4. Ancho de la barra superior en el teléfono
+
+A 375 px, la barra superior ("API SCALAR" + "LOGOUT") y el botón "Nueva …" de la cabecera
+de las tarjetas miden más que la pantalla y la página queda en 397 px: el navegador la reduce un
+poco y los modales pierden unos 20 px por la derecha. Es del layout común (`MainLayout`), así que
+afecta a todas las pantallas. La tabla de Inspecciones ya no ensancha la página (`68f3ebf`).
+
+### 5. Opcional
 
 - Unificar `AdminRouteGuard`, `TecnicoRouteGuard` y `RolRouteGuard`.
 - `PreguntasChecklistController.cs` y `Entities/PreguntaChecklist.cs` siguen en UTF-16 (git los

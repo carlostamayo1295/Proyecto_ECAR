@@ -20,7 +20,8 @@
 | `CreateEvidenciaAsync` retirado · `DataLabel` en las tablas para móvil · `Width` sobrante | `b1d1c85` |
 | Filtro por estado resuelto en el servidor, con vuelta a la página 1 | `7fdf44c` |
 | `/evidencias` no ofrece "Eliminar" en inspecciones cerradas y muestra el estado | `bbb1e74` |
-| El inspector de una inspección nueva es el usuario de la sesión; fuera "Resultado" y "Firma" del modal | `d995097` |
+| El inspector de una inspección nueva es el usuario de la sesión; fuera "Resultado" del modal | `d995097` |
+| La firma digital sigue en el modal de Inspecciones, conectada al cierre firmado · los botones de acciones bajan de línea a menos de 600 px | `68f3ebf` |
 
 Verificado el 04/10: el filtro devuelve solo las de ese estado y la paginación las cuenta bien;
 las evidencias de inspecciones cerradas no tienen botón; la subida rechaza un PDF renombrado y

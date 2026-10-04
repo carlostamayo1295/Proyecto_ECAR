@@ -99,6 +99,8 @@ advertencias; 68 pruebas automáticas.
 | `[Required]` en `RespuestaEjecucionDto.Respuesta` y rechazo de obligatorias vacías al guardar | Desmarcar una casilla o escribir la observación antes de responder daba 400 y la observación se perdía | `064c2ff`, `6e9dfae` |
 | "Activar" en Usuarios y Checklists llamaba al mismo DELETE que desactiva | No reactivaba nada y avisaba de un éxito falso | `97dcb43` |
 | El modal de alta dejaba elegir inspector, resultado y firma | El API los descartaba en silencio (o daba 400 al editar) | `d995097` |
+| La firma digital del modal de Inspecciones era un texto que el API ignoraba | Vuelve conectada al cierre firmado: se dibuja y firma desde "Editar" (solo el inspector), y "Ver" muestra la imagen y, a Admin y Auditor, la huella SHA-256 | `68f3ebf` |
+| La fecha de cierre del resultado se mostraba en UTC | 17:56 en vez de 12:56 en Colombia | `68f3ebf` |
 | Sesión vencida | Se notaba al siguiente clic como "no se pudo cargar"; ahora se vuelve al login y después a la misma página. `returnUrl` limitado a rutas propias (había redirección abierta) | `f2ec51b` |
 | `GET /inspecciones/{id}/evidencias` devolvía una página, no una lista | El método del cliente recibía null | `e7f7f01` |
 | Cinco listados sin límite de `pageSize` | `pageSize=100000` devolvía la tabla entera | `e59d547` |
