@@ -51,18 +51,19 @@ public class InspeccionService : IInspeccionService
                 throw new ArgumentException($"La pregunta con ID {item.IdPregunta} no pertenece al checklist de esta inspección.");
             }
 
-            // Punto 5: Para preguntas obligatorias, rechazar respuestas vacías
-            if (pregunta.Obligatoria && string.IsNullOrWhiteSpace(item.Respuesta))
-            {
-                throw new ArgumentException($"La pregunta '{pregunta.Pregunta}' es obligatoria y no puede estar vacía.");
-            }
+            // Una respuesta vacía se guarda como pendiente (null), también en las obligatorias.
+            // El guardado es parcial: el técnico puede escribir la observación antes de
+            // responder, desmarcar una casilla o borrar un texto, y en los tres casos el cliente
+            // envía la respuesta vacía junto con la observación. Rechazarlo aquí perdía la
+            // observación. Que las obligatorias estén respondidas se exige al firmar (SRS #3),
+            // que ya trata una respuesta vacía como "sin responder" y devuelve la lista.
+            var valor = string.IsNullOrWhiteSpace(item.Respuesta) ? null : item.Respuesta.Trim();
 
             // Punto 4: Para preguntas SiNo, aceptar únicamente "Si" o "No"
-            if (pregunta.TipoRespuesta == TiposRespuesta.SiNo && !string.IsNullOrWhiteSpace(item.Respuesta))
+            if (pregunta.TipoRespuesta == TiposRespuesta.SiNo && valor != null)
             {
-                var val = item.Respuesta.Trim();
-                if (!string.Equals(val, "Si", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(val, "No", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(valor, "Si", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(valor, "No", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new ArgumentException($"Respuesta inválida para la pregunta Si/No '{pregunta.Pregunta}'. Debe ser 'Si' o 'No'.");
                 }
@@ -72,7 +73,7 @@ public class InspeccionService : IInspeccionService
 
             if (respuestaExistente != null)
             {
-                respuestaExistente.Respuesta = item.Respuesta;
+                respuestaExistente.Respuesta = valor;
                 respuestaExistente.Observacion = item.Observacion;
             }
             else
@@ -81,7 +82,7 @@ public class InspeccionService : IInspeccionService
                 {
                     IdInspeccion = inspeccionId,
                     IdPregunta = item.IdPregunta,
-                    Respuesta = item.Respuesta,
+                    Respuesta = valor,
                     Observacion = item.Observacion
                 });
             }
