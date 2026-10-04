@@ -9,6 +9,7 @@ using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ECAR.API.Tests;
@@ -35,10 +36,22 @@ public class BackendPhaseThreeTests
         return new ECARDbContext(options);
     }
 
+    private sealed class FakeEvidenciaStorage : IEvidenciaStorage
+    {
+        public Task<string> GuardarAsync(Stream stream, string extension, long idInspeccion) =>
+            Task.FromResult($"2026/10/{idInspeccion}/evidencia{extension}");
+
+        public Task<Stream> AbrirAsync(string rutaRelativa) =>
+            Task.FromResult<Stream>(new MemoryStream([0xFF, 0xD8, 0xFF, 0x00]));
+
+        public Task EliminarAsync(string rutaRelativa) => Task.CompletedTask;
+    }
+
     private static InspeccionesController CreateController(
         ECARDbContext context,
         ICurrentUser currentUser) =>
-        new(context, currentUser, new InspeccionService(context));
+        new(context, currentUser, new InspeccionService(context), new FakeEvidenciaStorage(),
+            NullLogger<InspeccionesController>.Instance);
 
     private static async Task<(Usuario Tecnico, Usuario OtroTecnico, Equipo Equipo, Checklist Checklist)>
         SeedEscenarioAsync(ECARDbContext context)

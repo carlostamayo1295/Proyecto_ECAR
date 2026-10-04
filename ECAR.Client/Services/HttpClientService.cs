@@ -641,7 +641,7 @@ public class HttpClientService
 
     // Métodos del API de Equipos
     public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100,
-        string? search = null, string? criticidad = null)
+        string? search = null, string? criticidad = null, bool? activo = null)
     {
         try
         {
@@ -656,6 +656,11 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(criticidad))
             {
                 query += $"&criticidad={Uri.EscapeDataString(criticidad)}";
+            }
+
+            if (activo.HasValue)
+            {
+                query += $"&activo={activo.Value.ToString().ToLowerInvariant()}";
             }
 
             var response = await _httpClient.GetAsync(query);

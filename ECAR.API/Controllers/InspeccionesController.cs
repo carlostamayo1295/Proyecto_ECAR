@@ -19,12 +19,17 @@ public class InspeccionesController : ControllerBase
     private readonly ECARDbContext _context;
     private readonly ICurrentUser _currentUser;
     private readonly IInspeccionService _inspeccionService;
+    private readonly IEvidenciaStorage _storage;
+    private readonly ILogger<InspeccionesController> _logger;
 
-    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser, IInspeccionService inspeccionService)
+    public InspeccionesController(ECARDbContext context, ICurrentUser currentUser, IInspeccionService inspeccionService,
+        IEvidenciaStorage storage, ILogger<InspeccionesController> logger)
     {
         _context = context;
         _currentUser = currentUser;
         _inspeccionService = inspeccionService;
+        _storage = storage;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -242,10 +247,11 @@ public class InspeccionesController : ControllerBase
     [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> CreateInspeccion(CreateInspeccionDto createDto)
     {
+        // Misma regla que iniciar desde el QR: un equipo desactivado no se inspecciona.
         var equipo = await _context.Equipos.FindAsync(createDto.IdEquipo);
-        if (equipo == null)
+        if (equipo == null || !equipo.Activo)
         {
-            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El equipo indicado no existe"));
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El equipo indicado no existe o no está activo"));
         }
 
         var usuario = await _context.Usuarios.FindAsync(_currentUser.IdUsuario);
@@ -384,8 +390,30 @@ public class InspeccionesController : ControllerBase
             return Conflict(ApiResponse<bool>.ErrorResponse(MensajeInspeccionCerrada));
         }
 
+        // Las filas de Evidencias se borran con la inspección (cascada en la base de datos), pero
+        // las fotos están en disco: se toman las rutas antes de borrar para eliminarlas después.
+        var fotos = await _context.Evidencias
+            .Where(e => e.IdInspeccion == id && e.Archivo != "")
+            .Select(e => e.Archivo)
+            .ToListAsync();
+
         _context.Inspecciones.Remove(inspeccion);
         await _context.SaveChangesAsync();
+
+        // Después del SaveChanges, como en DELETE api/evidencias/{id}: si falla el borrado en la
+        // base, las fotos siguen ahí. Una foto que no se pueda borrar no deshace lo anterior;
+        // queda en el log para limpiarla a mano.
+        foreach (var foto in fotos)
+        {
+            try
+            {
+                await _storage.EliminarAsync(foto);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "No se pudo borrar la foto {Archivo} de la inspección {IdInspeccion}", foto, id);
+            }
+        }
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Inspección eliminada exitosamente"));
     }

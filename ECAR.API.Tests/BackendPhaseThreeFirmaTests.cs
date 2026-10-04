@@ -9,6 +9,7 @@ using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -149,7 +150,8 @@ public class BackendPhaseThreeFirmaTests
         Escenario escenario, Usuario usuario, params string[] roles) =>
         new(escenario.Context, new FakeCurrentUser(
             usuario.IdUsuario, usuario.Nombre, roles.Length == 0 ? ["Técnico"] : roles),
-            new InspeccionService(escenario.Context));
+            new InspeccionService(escenario.Context), new FakeEvidenciaStorage(),
+            NullLogger<InspeccionesController>.Instance);
 
     private static EvidenciasController ControladorEvidenciasDe(
         ECARDbContext context,

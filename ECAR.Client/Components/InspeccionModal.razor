@@ -213,7 +213,8 @@
     // El filtro se resuelve en el API para que la lista funcione con muchos registros.
     private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)
     {
-        var respuesta = await HttpClientService.GetEquiposAsync(1, MaxResultadosBusqueda, valor);
+        // Solo equipos activos: el API rechaza registrar una inspección sobre uno desactivado.
+        var respuesta = await HttpClientService.GetEquiposAsync(1, MaxResultadosBusqueda, valor, activo: true);
 
         if (respuesta == null || !respuesta.Success)
         {
