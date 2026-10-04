@@ -25,8 +25,9 @@ Solución .NET 10 de 5 proyectos:
 | `ECAR.Shared` | 39 DTOs, `ApiResponse<T>`, `PagedResultDto<T>`, `TiposRespuesta` |
 | `ECAR.API.Tests` | xUnit — **26 pruebas** (7 reglas Fase 1 + 10 núcleo JWT + 9 reglas Fase 2) |
 
-**Fase actual del cronograma: Fase 2 — Checklists y Gestión QR. Estado: cerrada en código
-(100 %), pendiente de PR, revisión y demostración a ECAR (Entrega 3, semana 6).**
+**Fase actual del cronograma: Fase 3 — Inspecciones y Evidencias. Estado (04/10): completa en
+código y verificada en ejecución en la rama `integracion/fase3-completa`; falta la prueba en un
+teléfono real y el merge a `develop` (Entrega 4, semana 8).**
 
 ---
 
@@ -37,12 +38,12 @@ Solución .NET 10 de 5 proyectos:
 | Fase 0 | Arquitectura, entidades, DbContext, autenticación inicial | ✅ Completa | 100 % |
 | Fase 1 | JWT, usuarios/roles, catálogos, ubicaciones, equipos, ficha técnica | ✅ Completa y verificada | 100 % |
 | **Fase 2** | Checklists, preguntas, versionamiento, QR | ✅ **Completa en código** (falta PR + demo) | **100 %** |
-| Fase 3 | Ejecución de inspecciones, respuestas, evidencias, firma | 🟡 Cimientos (CRUD básico, sin flujo) | ≈ 25 % |
+| **Fase 3** | Ejecución de inspecciones, respuestas, evidencias, firma | ✅ **Completa en código y verificada en ejecución** (falta teléfono real + merge) | **≈ 95 %** |
 | Fase 4 | Hallazgos, auditoría automática, reportes | 🟡 Cimientos (CRUD hallazgos, lectura auditoría) | ≈ 15 % |
 | Fase 5 | Dashboard | ⚪ No iniciada | 0 % |
 | Fase 6 | UAT y producción | ⚪ No iniciada | 0 % |
 
-**Avance global estimado del MVP: ≈ 50 %.**
+**Avance global estimado del MVP: ≈ 60 %** (media de las siete fases; era ≈ 50 % con la Fase 3 al 25 %).
 
 ---
 
@@ -74,6 +75,43 @@ ECAR lo pide, es una tabla puente nueva (fase posterior).
 
 ---
 
+## 3.1. Validación de la Fase 3 (04/10/2026)
+
+Rama `integracion/fase3-completa`: la integración de backend de BE-0 (`integration/backend-fase3`,
+con BE-1, BE-2 y BE-3) más la de frontend de FE-0 (`integracion_fronEnd`, con FE-1, FE-2 y FE-3).
+Las dos entraron sin conflictos.
+
+**Cómo se verificó.** API levantado sobre una base de datos creada desde cero (las cinco
+migraciones se aplicaron limpias) y 60 comprobaciones por HTTP contra el contrato de
+`PLAN_FASE3_TAREAS.md` §3.2-§3.4: los 12 endpoints, la regla de "inspección propia", roles,
+reglas 2, 3, 4 y 6 del SRS, validación de archivos por firma binaria, firma con hash SHA-256,
+inmutabilidad tras el cierre y límites de paginación. **60/60.** Además, en el navegador:
+inicio desde la URL del QR, respuesta "Sí", observación antes de responder, recarga, sesión
+vencida (por temporizador y por 401) con vuelta a la página, modal de alta, activar en las tres
+pantallas, evidencias de inspecciones cerradas y filtro por estado. Compila con 0 errores y 0
+advertencias; 68 pruebas automáticas.
+
+**Defectos encontrados y corregidos al verificar:**
+
+| Defecto | Efecto | Commit |
+|---|---|---|
+| El cliente enviaba "Sí" con tilde y el contrato acepta "Si" | Toda respuesta afirmativa daba 400: **una inspección sin novedades no se podía cerrar** | `07db102` |
+| `[Required]` en `RespuestaEjecucionDto.Respuesta` y rechazo de obligatorias vacías al guardar | Desmarcar una casilla o escribir la observación antes de responder daba 400 y la observación se perdía | `064c2ff`, `6e9dfae` |
+| "Activar" en Usuarios y Checklists llamaba al mismo DELETE que desactiva | No reactivaba nada y avisaba de un éxito falso | `97dcb43` |
+| El modal de alta dejaba elegir inspector, resultado y firma | El API los descartaba en silencio (o daba 400 al editar) | `d995097` |
+| Sesión vencida | Se notaba al siguiente clic como "no se pudo cargar"; ahora se vuelve al login y después a la misma página. `returnUrl` limitado a rutas propias (había redirección abierta) | `f2ec51b` |
+| `GET /inspecciones/{id}/evidencias` devolvía una página, no una lista | El método del cliente recibía null | `e7f7f01` |
+| Cinco listados sin límite de `pageSize` | `pageSize=100000` devolvía la tabla entera | `e59d547` |
+| Filtro de estado sobre la página visible | "No hay inspecciones en curso" habiéndolas en otras páginas | `7fdf44c` |
+| "Eliminar" en evidencias de inspecciones cerradas | La pantalla ofrecía lo que el servidor rechaza (SRS #6) | `bbb1e74` |
+| Parche "NO SUBIR A GIT" en `DataSeeder` (desde la Fase 2) | La contraseña del admin se reseteaba en cada arranque | `5438719` |
+| Carpeta de fotos sin `.gitignore` y relativa al proceso | Fotos de prueba versionadas; ruta distinta según desde dónde se arrancara | `db74131` |
+
+**Pendiente:** la prueba en un teléfono real (cámara trasera, compresión de una foto de verdad,
+firma táctil, 375 px) y el merge a `develop`.
+
+---
+
 ## 4. Pantallas del cliente
 
 | Pantalla | Ruta | Origen de datos |
@@ -89,20 +127,21 @@ ECAR lo pide, es una tabla puente nueva (fase posterior).
 | Roles de usuario (admin) | `/admin/usuarios-roles` | API real |
 | Checklists + versiones + nueva versión | `/checklists` | API real ✅ |
 | Preguntas de checklist (admin) | `/checklists/preguntas` | API real ✅ |
-| Inspecciones | `/inspecciones` | API real · columna Estado, botones **Continuar** / **Ver resultado**, alta con checklist activo. Filtro de estado solo sobre la página visible (falta `estado` en el API, BE-0) |
-| **Iniciar inspección** | `/inspecciones/iniciar?equipo=…&checklist=…` | 🟡 Front listo (FE-3), se llega desde el QR · `POST iniciar` ya en `develop` |
-| **Ejecutar inspección** | `/inspecciones/ejecutar/{id}` | 🟡 Front listo: preguntas (FE-1), evidencias con cámara (FE-2) y firma (FE-3) · faltan en `develop` `PUT respuestas` (BE-1), subida de fotos (BE-2) y `firmar` (BE-3) |
-| **Resultado de inspección** | `/inspecciones/{id}/resultado` | 🟡 Front listo (FE-3): respuestas, miniaturas, firma, hash para Auditor, imprimible · falta `GET resultado` (BE-3) |
-| Respuestas de inspección (admin) | `/inspecciones/respuestas` | 🟡 Front listo (FE-1): solo consulta, filtro por inspección · falta `GET /api/respuestasinspeccion` (BE-1) |
-| Evidencias | `/evidencias` | 🟡 Front listo (FE-2): galería y tabla con miniaturas · faltan la descarga de la imagen y el estado de la inspección (BE-2) |
+| Inspecciones | `/inspecciones` | API real ✅ · columna Estado, **Continuar** / **Ver resultado**, filtro por estado en el servidor; alta manual con checklist activo y el inspector tomado de la sesión |
+| **Iniciar inspección** | `/inspecciones/iniciar?equipo=…&checklist=…` | API real ✅ · se llega desde el QR; los errores del API se muestran (no mandan al login) |
+| **Ejecutar inspección** | `/inspecciones/ejecutar/{id}` | API real ✅ · preguntas (FE-1), evidencias con cámara (FE-2), firma (FE-3) |
+| **Resultado de inspección** | `/inspecciones/{id}/resultado` | API real ✅ · respuestas, miniaturas, firma, hash solo para Auditor/Admin, imprimible |
+| Respuestas de inspección (admin) | `/inspecciones/respuestas` | API real ✅ · solo consulta, filtro por inspección |
+| Evidencias | `/evidencias` | API real ✅ · galería y tabla con miniaturas; sin "Eliminar" en inspecciones cerradas |
 | Hallazgos | `/hallazgos` | API real (CRUD) |
 | Auditoría | `/auditoria` | API real (solo lectura) |
 
 `MockDataService` y `RespuestaInspeccionModal` **se retiraron** el 02/10 (tarea 7 de FE-0): el
 cliente ya no tiene datos simulados.
 
-🟡 = el frontend está terminado y mergeado en `integracion_fronEnd`, pero el endpoint del que
-depende todavía no está en `develop`. Nadie ha ejecutado aún una inspección completa.
+✅ en las filas de la Fase 3 = verificado el 04/10 en ejecución, con el API y el cliente de
+`integracion/fase3-completa` sobre una base de datos creada desde cero (detalle en §3.1). En
+`develop` todavía no: esa rama no se ha mergeado.
 
 ### Guardas de ruta
 
