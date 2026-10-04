@@ -3,7 +3,9 @@
 @inject SesionService Sesion
 @inject NavigationManager NavigationManager
 
-@* Inicio de una inspección desde el QR del equipo (FE-3).
+@* Inicio de una inspección desde el QR del equipo (FE-3) o, sin QR, eligiendo el equipo y el
+   checklist en la propia página ("Selección de Equipo", SRS §6). Con ?equipo=&checklist= inicia
+   directamente; sin ellos muestra el formulario de selección.
 
    Sin sesión, la guarda manda al login conservando esta URL y el técnico vuelve solo. Por eso
    dentro de la página cualquier respuesta sin Data es un error real y se muestra: no hay que
@@ -16,9 +18,36 @@
 
 <RolRouteGuard Roles="@(new[] { "Administrador", "Técnico" })"
                MensajeNoAutorizado="Solo técnicos y administradores pueden iniciar inspecciones.">
-<div class="d-flex justify-center align-center" style="height: 80vh;">
-    <MudCard Elevation="2" Class="pa-6 text-center" Style="max-width: 400px; width: 100%;">
-        @if (_cargando)
+<div class="d-flex justify-center align-center" style="min-height: 80vh;">
+    <MudCard Elevation="2" Class="pa-6 text-center" Style="max-width: 480px; width: 100%;">
+        @if (_seleccionando)
+        {
+            <MudText Typo="Typo.h6" Class="mb-1">Iniciar inspección</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                Elija el equipo y el checklist. Con la etiqueta QR del equipo puede saltarse este paso:
+                escanéela con la cámara del teléfono.
+            </MudText>
+
+            <MudAutocomplete T="EquipoDto" Label="Equipo" @bind-Value="_equipo"
+                SearchFunc="BuscarEquiposAsync" ToStringFunc="@(e => e == null ? string.Empty : $"{e.CodigoInterno} - {e.NombreEquipo}")"
+                Variant="Variant.Outlined" MinCharacters="0" MaxItems="20" ResetValueOnEmptyText="true" Clearable="true"
+                Class="mb-3 text-left" HelperText="Código, nombre, marca o serial. Solo equipos activos" />
+
+            <MudSelect T="long?" Label="Checklist" @bind-Value="_idChecklist" Variant="Variant.Outlined"
+                Class="mb-4 text-left" HelperText="Solo se listan los checklists activos">
+                @foreach (var checklist in _checklists)
+                {
+                    <MudSelectItem T="long?" Value="@((long?)checklist.IdChecklist)">@($"{checklist.Nombre} (v{checklist.Version})")</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                StartIcon="@Icons.Material.Filled.PlayArrow"
+                Disabled="@(_equipo == null || _idChecklist == null)" OnClick="IniciarSeleccionAsync">
+                Iniciar inspección
+            </MudButton>
+        }
+        else if (_cargando)
         {
             <MudProgressCircular Indeterminate="true" Size="Size.Large" Class="mb-4" />
             <MudText Typo="Typo.h6">Iniciando inspección...</MudText>
@@ -50,6 +79,12 @@
     private bool _cargando = true;
     private string? _error;
 
+    // Selección de equipo y checklist cuando se entra sin parámetros (sin QR).
+    private bool _seleccionando;
+    private EquipoDto? _equipo;
+    private long? _idChecklist;
+    private List<ChecklistDto> _checklists = new();
+
     protected override async Task OnInitializedAsync()
     {
         // La guarda corre en paralelo a esta página y no detiene su ciclo de vida. Sin sesión
@@ -61,15 +96,45 @@
 
         if (!IdEquipo.HasValue || !IdChecklist.HasValue)
         {
-            _error = "Los parámetros del equipo o checklist son inválidos.";
-            _cargando = false;
+            await MostrarSeleccionAsync();
             return;
         }
 
+        await IniciarAsync(IdEquipo.Value, IdChecklist.Value);
+    }
+
+    private async Task MostrarSeleccionAsync()
+    {
+        var respuesta = await HttpClientService.GetChecklistsAsync(1, 100);
+        _checklists = (respuesta?.Data?.Data ?? new List<ChecklistDto>()).Where(c => c.Activo).ToList();
+        _seleccionando = true;
+        _cargando = false;
+    }
+
+    private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)
+    {
+        var respuesta = await HttpClientService.GetEquiposAsync(1, 20, valor, activo: true);
+        return respuesta?.Data?.Data ?? new List<EquipoDto>();
+    }
+
+    private async Task IniciarSeleccionAsync()
+    {
+        if (_equipo == null || _idChecklist == null)
+        {
+            return;
+        }
+
+        _seleccionando = false;
+        _cargando = true;
+        await IniciarAsync(_equipo.IdEquipo, _idChecklist.Value);
+    }
+
+    private async Task IniciarAsync(long idEquipo, long idChecklist)
+    {
         var result = await HttpClientService.IniciarInspeccionAsync(new IniciarInspeccionDto
         {
-            IdEquipo = IdEquipo.Value,
-            IdChecklist = IdChecklist.Value
+            IdEquipo = idEquipo,
+            IdChecklist = idChecklist
         });
 
         // Creada (201) o ya existente (409, que trae en Data la que estaba en curso): se continúa igual.

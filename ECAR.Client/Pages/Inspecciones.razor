@@ -3,6 +3,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager NavigationManager
+@inject AuthorizationService AuthorizationService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
@@ -12,9 +13,13 @@
                 <MudText Typo="Typo.body2">Registro y seguimiento de inspecciones de equipos</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nueva Inspección
-                </MudButton>
+                @* El Auditor solo consulta (SRS §4). *@
+                @if (puedeEjecutar)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                        Nueva Inspección
+                    </MudButton>
+                }
             </CardHeaderActions>
         </MudCardHeader>
 
@@ -73,14 +78,14 @@
                         </MudTd>
                         <MudTd DataLabel="Evid. / Hall.">@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
                         <MudTd DataLabel="Acciones" Class="acciones-inspeccion">
-                            @if (context.Estado == InspeccionEstados.EnCurso)
+                            @if (context.Estado == InspeccionEstados.EnCurso && puedeEjecutar)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Continuar(context)" Class="action-button">
                                     Continuar
                                 </MudButton>
                             }
-                            else
+                            else if (context.Estado == InspeccionEstados.Cerrada)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.Assignment" OnClick="() => VerResultado(context)" Class="action-button">
@@ -91,14 +96,21 @@
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
                                 Ver
                             </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteInspeccion(context)" Class="action-button">
-                                Eliminar
-                            </MudButton>
+                            @if (puedeEjecutar)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                    Editar
+                                </MudButton>
+                            }
+                            @* Una inspección cerrada no se borra (regla 6): el API respondería 409. *@
+                            @if (puedeEjecutar && context.Estado == InspeccionEstados.EnCurso)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteInspeccion(context)" Class="action-button">
+                                    Eliminar
+                                </MudButton>
+                            }
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -125,8 +137,15 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
+    // Administrador y Técnico ejecutan y editan; el Auditor solo consulta.
+    private bool esAdmin;
+    private bool puedeEjecutar;
+
     protected override async Task OnInitializedAsync()
     {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        esAdmin = roles.Contains("Administrador");
+        puedeEjecutar = esAdmin || roles.Contains("Técnico");
         await LoadInspeccionesAsync();
     }
 
@@ -203,6 +222,14 @@
 
     private async Task OpenCreateDialog()
     {
+        // El registro manual (POST /api/inspecciones) es solo del Administrador; un Técnico inicia
+        // la inspección eligiendo equipo y checklist, igual que desde el QR.
+        if (!esAdmin)
+        {
+            NavigationManager.NavigateTo("/inspecciones/iniciar");
+            return;
+        }
+
         var dialog = await DialogService.ShowAsync<InspeccionModal>("Registrar Nueva Inspección");
         var result = await dialog.Result;
 
