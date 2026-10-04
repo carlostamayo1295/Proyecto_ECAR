@@ -27,8 +27,7 @@
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined" Clearable="true"
-                        ValueChanged="OnEstadoChanged"
-                        HelperText="Por ahora filtra solo las filas de esta página">
+                        ValueChanged="OnEstadoChanged">
                         <MudSelectItem T="string" Value="@InspeccionEstados.EnCurso">En curso</MudSelectItem>
                         <MudSelectItem T="string" Value="@InspeccionEstados.Cerrada">Cerrada</MudSelectItem>
                     </MudSelect>
@@ -39,9 +38,9 @@
             {
                 <MudProgressLinear Indeterminate="true" Class="my-4" />
             }
-            else if (inspeccionesFiltradas.Any())
+            else if (inspecciones != null && inspecciones.Any())
             {
-                <MudTable Items="inspeccionesFiltradas" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="inspecciones" Hover="true" Striped="true" Elevation="0">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Equipo</MudTh>
@@ -126,12 +125,6 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
-    // El API de Inspecciones (a diferencia de Hallazgos) todavía no acepta un filtro
-    // "estado" por query string, así que el filtro se aplica sobre la página ya cargada.
-    private IEnumerable<InspeccionDto> inspeccionesFiltradas =>
-        (inspecciones ?? new List<InspeccionDto>())
-            .Where(i => estadoFiltro == null || i.Estado == estadoFiltro);
-
     protected override async Task OnInitializedAsync()
     {
         await LoadInspeccionesAsync();
@@ -143,7 +136,7 @@
 
         try
         {
-            var result = await HttpClientService.GetInspeccionesAsync(currentPage, pageSize, searchText);
+            var result = await HttpClientService.GetInspeccionesAsync(currentPage, pageSize, searchText, estadoFiltro);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -183,9 +176,13 @@
         await LoadInspeccionesAsync();
     }
 
-    private void OnEstadoChanged(string? value)
+    // El filtro se aplica en el servidor, antes de paginar, para que el listado y el número de
+    // páginas cuenten solo las inspecciones de ese estado.
+    private async Task OnEstadoChanged(string? value)
     {
         estadoFiltro = value;
+        currentPage = 1;   // sin esto se quedaría en la página 7 de un listado que ahora tiene 2
+        await LoadInspeccionesAsync();
     }
 
     /// <summary>Retoma una inspección EnCurso en el flujo de ejecución (FE-0).</summary>

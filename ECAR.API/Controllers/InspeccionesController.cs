@@ -28,7 +28,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<PagedResultDto<InspeccionDto>>>> GetInspecciones([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
+    public async Task<ActionResult<ApiResponse<PagedResultDto<InspeccionDto>>>> GetInspecciones([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, [FromQuery] string? estado = null)
     {
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -51,6 +51,14 @@ public class InspeccionesController : ControllerBase
                 i.Equipo.NombreEquipo.Contains(search) ||
                 i.Usuario.Nombre.Contains(search) ||
                 (i.Resultado != null && i.Resultado.Contains(search)));
+        }
+
+        // Filtro por estado (EnCurso / Cerrada) antes de paginar. Sin esto el cliente filtraba
+        // sobre la página ya cargada y podía decir "no hay inspecciones en curso" habiéndolas
+        // en otras páginas.
+        if (!string.IsNullOrWhiteSpace(estado))
+        {
+            query = query.Where(i => i.Estado == estado);
         }
 
         var totalCount = await query.CountAsync();

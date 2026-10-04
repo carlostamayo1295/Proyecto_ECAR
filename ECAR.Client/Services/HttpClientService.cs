@@ -1084,7 +1084,7 @@ public class HttpClientService
 
     // Métodos del API de Inspecciones
     public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10,
-        string? search = null)
+        string? search = null, string? estado = null)
     {
         try
         {
@@ -1094,6 +1094,11 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(search))
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            if (!string.IsNullOrEmpty(estado))
+            {
+                query += $"&estado={Uri.EscapeDataString(estado)}";
             }
 
             var response = await _httpClient.GetAsync(query);
