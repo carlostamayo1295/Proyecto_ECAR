@@ -202,6 +202,43 @@ public class ChecklistsController : ControllerBase
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Checklist desactivado exitosamente"));
     }
 
+    /// <summary>
+    /// Reactiva un checklist. Mantiene la misma regla que nueva-version: de cada nombre solo
+    /// hay una versión activa, así que activar una versión desactiva las demás activas con el
+    /// mismo nombre. Sin esto, reactivar una versión antigua dejaba dos versiones activas y la
+    /// consulta por QR ofrecía las dos.
+    /// </summary>
+    [HttpPut("{id}/activar")]
+    [Authorize(Roles = "Administrador")]
+    public async Task<ActionResult<ApiResponse<bool>>> ActivarChecklist(long id)
+    {
+        var checklist = await _context.Checklists.FindAsync(id);
+
+        if (checklist == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Checklist no encontrado"));
+        }
+
+        var otrasActivas = await _context.Checklists
+            .Where(c => c.Nombre == checklist.Nombre && c.Activo && c.IdChecklist != id)
+            .ToListAsync();
+
+        foreach (var otra in otrasActivas)
+        {
+            otra.Activo = false;
+        }
+
+        checklist.Activo = true;
+        await _context.SaveChangesAsync();
+
+        var mensaje = otrasActivas.Count == 0
+            ? "Checklist activado exitosamente"
+            : $"Checklist activado exitosamente. Se desactivó la versión {string.Join(", ", otrasActivas.Select(o => o.Version))}, " +
+              "porque de cada checklist solo puede haber una versión activa";
+
+        return Ok(ApiResponse<bool>.SuccessResponse(true, mensaje));
+    }
+
     // Versionamiento: todas las versiones de un checklist comparten Nombre; solo una está activa
     [HttpGet("{id}/versiones")]
     public async Task<ActionResult<ApiResponse<List<ChecklistVersionDto>>>> GetVersiones(long id)

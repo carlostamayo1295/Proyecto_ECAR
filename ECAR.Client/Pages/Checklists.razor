@@ -199,16 +199,21 @@
             isLoading = true;
             try
             {
-                var deleteResult = await HttpClientService.DeleteChecklistAsync(checklist.IdChecklist);
+                // DELETE es el borrado lógico y siempre desactiva: activar tiene su propio
+                // endpoint. Al activar, el servidor desactiva las otras versiones activas del
+                // mismo checklist y lo dice en el mensaje.
+                var resultado = checklist.Activo
+                    ? await HttpClientService.DeleteChecklistAsync(checklist.IdChecklist)
+                    : await HttpClientService.ActivarChecklistAsync(checklist.IdChecklist);
 
-                if (deleteResult != null && deleteResult.Success)
+                if (resultado != null && resultado.Success)
                 {
-                    Snackbar.Add($"Checklist {action} exitosamente", Severity.Success);
+                    Snackbar.Add(resultado.Message ?? "Checklist actualizado", Severity.Success);
                     await LoadChecklistsAsync();
                 }
                 else
                 {
-                    Snackbar.Add(deleteResult?.Message ?? $"Error al {action} checklist", Severity.Error);
+                    Snackbar.Add(resultado?.Message ?? $"Error al {action} el checklist", Severity.Error);
                 }
             }
             catch (Exception ex)

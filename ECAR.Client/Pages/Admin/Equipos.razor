@@ -266,7 +266,7 @@
                 }
                 else
                 {
-                    var updateResult = await HttpClientService.UpdateEquipoAsync(equipo.IdEquipo, new UpdateEquipoDto { Activo = true });
+                    var updateResult = await HttpClientService.ActivarEquipoAsync(equipo.IdEquipo);
                     if (updateResult != null && updateResult.Success)
                     {
                         Snackbar.Add("Equipo activado exitosamente", Severity.Success);

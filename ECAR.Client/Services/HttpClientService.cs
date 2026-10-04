@@ -132,6 +132,25 @@ public class HttpClientService
         }
     }
 
+    /// <summary>Reactiva un usuario desactivado (PUT api/usuarios/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarUsuarioAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/usuarios/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando usuario: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     // Métodos del API de Roles
     public async Task<ApiResponse<PagedResultDto<RolDto>>?> GetRolesAsync(int page = 1, int pageSize = 10,
         string? search = null)
@@ -434,6 +453,25 @@ public class HttpClientService
         }
     }
 
+    /// <summary>Reactiva un checklist desactivado (PUT api/checklists/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/checklists/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     public async Task<ApiResponse<ChecklistDto>?> CreateChecklistVersionAsync(long id, CreateChecklistVersionDto createDto)
     {
         try
@@ -701,6 +739,25 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error deleting equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Reactiva un equipo desactivado (PUT api/equipos/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarEquipoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/equipos/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando equipo: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }
