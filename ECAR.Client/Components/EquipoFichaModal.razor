@@ -1,5 +1,6 @@
 @inject HttpClientService HttpClientService
 @inject NavigationManager NavigationManager
+@inject AuthorizationService AuthorizationService
 
 @* Ficha técnica y consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Es de solo
    lectura y la pueden abrir Administrador, Técnico y Auditor. El historial sale de
@@ -81,7 +82,7 @@
                     <MudTd DataLabel="">
                         @if (context.Estado == InspeccionEstados.Cerrada)
                         {
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                 StartIcon="@Icons.Material.Filled.Assignment" OnClick="() => VerResultado(context)">
                                 Ver resultado
                             </MudButton>
@@ -94,6 +95,26 @@
             {
                 <MudPagination Class="mt-2" Count="@totalPaginas" Selected="@pagina" SelectedChanged="CambiarPaginaAsync" />
             }
+        }
+
+        @* Fase 4: quién creó el equipo y cada cambio posterior (auditoría). La auditoría solo la
+           leen Administrador y Auditor, igual que el API. *@
+        @if (puedeVerAuditoria)
+        {
+            <div class="mt-4">
+                @if (verCambios)
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Historial de cambios del equipo</MudText>
+                    <HistorialCambiosRegistro Tabla="Equipos" RegistroId="@Equipo.IdEquipo" />
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
+                        OnClick="@(() => verCambios = true)">
+                        Ver historial de cambios del equipo
+                    </MudButton>
+                }
+            </div>
         }
     </DialogContent>
     <DialogActions>
@@ -116,8 +137,13 @@
     private bool cargando = true;
     private string? error;
 
+    private bool puedeVerAuditoria;
+    private bool verCambios;
+
     protected override async Task OnInitializedAsync()
     {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        puedeVerAuditoria = roles.Contains("Administrador") || roles.Contains("Auditor");
         await CargarHistorialAsync();
     }
 
