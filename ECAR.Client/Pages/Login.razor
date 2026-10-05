@@ -1,6 +1,7 @@
 @page "/login"
 @inject NavigationManager NavigationManager
 @inject AuthService AuthService
+@inject IJSRuntime JS
 
 @using ECAR.Shared.DTOs
 @using ECAR.Client.Services
@@ -16,7 +17,13 @@
 
         <MudDivider Class="my-4" />
 
-        @if (SesionExpirada)
+        @if (CerradaPorInactividad)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+                Su sesión se cerró por inactividad. Inicie sesión de nuevo para volver a la página en la que estaba.
+            </MudAlert>
+        }
+        else if (SesionExpirada)
         {
             <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
                 Su sesión expiró. Inicie sesión de nuevo para volver a la página en la que estaba.
@@ -155,6 +162,13 @@
 
     private bool SesionExpirada => Expirada == "1";
 
+    // La pone SesionService cuando cierra la sesión por inactividad (Fase 4, PLAN §3.8).
+    [SupplyParameterFromQuery(Name = "inactividad")]
+    [Parameter]
+    public string? Inactividad { get; set; }
+
+    private bool CerradaPorInactividad => Inactividad == "1";
+
     /// <summary>
     /// Destino tras iniciar sesión. Solo se acepta una ruta de esta misma aplicación: si se
     /// aceptara cualquier URL, un enlace como /login?returnUrl=https://sitio-falso pondría al
@@ -204,6 +218,17 @@
             
             if (result != null)
             {
+                // El reloj de inactividad arranca ahora: si no, la última actividad guardada
+                // podría ser de hace horas y la sesión se cerraría nada más entrar.
+                try
+                {
+                    await JS.InvokeVoidAsync("ecarActividad.reiniciar");
+                }
+                catch (JSException)
+                {
+                    // Sin actividad.js no hay cierre por inactividad; el login sigue.
+                }
+
                 // Login exitoso. forceLoad recarga el layout para reflejar roles y menú.
                 // Si se llegó aquí desde una página protegida, se vuelve a ella.
                 NavigationManager.NavigateTo(DestinoSeguro(), forceLoad: true);

@@ -1,6 +1,8 @@
 @implements IDisposable
 @inject SesionService Sesion
 @inject NavigationManager NavigationManager
+@inject HttpClientService HttpClientService
+@inject IJSRuntime JS
 
 @* Vigila la caducidad del token y manda al login en el momento exacto en que vence, aunque el
    usuario esté quieto en la pantalla. Sin esto, la sesión vencida solo se notaba al siguiente
@@ -8,15 +10,60 @@
 
    Solo actúa si hay un token: a quien entra sin sesión lo resuelven las guardas de ruta, y en
    el login y en la consulta pública del QR no hace nada (SesionService.EsPaginaPublica).
-   Se monta una vez, en MainLayout. *@
+   Se monta una vez, en MainLayout.
+
+   Fase 4 (PLAN §3.8): además cierra la sesión tras N minutos sin actividad. La actividad la
+   registra wwwroot/js/actividad.js en localStorage, compartida entre pestañas; aquí solo se
+   consulta cada 30 s. N viene de GET /api/auth/politica y, mientras el API no lo publique, es
+   el valor del plan (15 min, PoliticaSeguridadDto). *@
 
 @code {
     private CancellationTokenSource? _temporizador;
+    private readonly CancellationTokenSource _vigilanciaInactividad = new();
+    private static readonly TimeSpan IntervaloInactividad = TimeSpan.FromSeconds(30);
 
     protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += AlCambiarDePagina;
         await ProgramarAsync();
+        _ = VigilarInactividadAsync(_vigilanciaInactividad.Token);
+    }
+
+    private async Task VigilarInactividadAsync(CancellationToken token)
+    {
+        var minutos = new PoliticaSeguridadDto().MinutosInactividad;
+        var politica = await HttpClientService.GetPoliticaSeguridadAsync();
+        if (politica.Success && politica.Data is { MinutosInactividad: > 0 } datos)
+        {
+            minutos = datos.MinutosInactividad;
+        }
+
+        using var reloj = new PeriodicTimer(IntervaloInactividad);
+        try
+        {
+            while (await reloj.WaitForNextTickAsync(token))
+            {
+                if (Sesion.EsPaginaPublica() || !await Sesion.HayTokenAsync())
+                {
+                    continue;
+                }
+
+                var segundos = await JS.InvokeAsync<int>("ecarActividad.segundosInactivo");
+                if (segundos >= minutos * 60)
+                {
+                    await InvokeAsync(() => Sesion.IrAlLoginAsync(expirada: false, porInactividad: true));
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Se desmontó el layout.
+        }
+        catch (JSException)
+        {
+            // Sin actividad.js no se puede medir; la caducidad del token sigue cubriendo.
+        }
     }
 
     // Al navegar se vuelve a comprobar: cubre el caso de un temporizador retrasado por el
@@ -79,6 +126,8 @@
 
     public void Dispose()
     {
+        _vigilanciaInactividad.Cancel();
+        _vigilanciaInactividad.Dispose();
         NavigationManager.LocationChanged -= AlCambiarDePagina;
         _temporizador?.Cancel();
         _temporizador?.Dispose();

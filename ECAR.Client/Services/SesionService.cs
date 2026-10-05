@@ -63,9 +63,10 @@ public class SesionService
 
     /// <summary>
     /// Manda al login conservando la página actual. Si <paramref name="expirada"/> es true,
-    /// borra el token y el login avisa de que la sesión expiró.
+    /// borra el token y el login avisa de que la sesión expiró. Con <paramref name="porInactividad"/>
+    /// borra el token y el aviso dice que se cerró por inactividad (Fase 4, PLAN §3.8).
     /// </summary>
-    public async Task IrAlLoginAsync(bool expirada)
+    public async Task IrAlLoginAsync(bool expirada, bool porInactividad = false)
     {
         if (_redirigiendo || EsPaginaPublica())
         {
@@ -74,13 +75,17 @@ public class SesionService
 
         _redirigiendo = true;
 
-        if (expirada)
+        if (expirada || porInactividad)
         {
             await BorrarTokenAsync();
         }
 
         var destino = $"/login?returnUrl={Uri.EscapeDataString(PaginaActual())}";
-        if (expirada)
+        if (porInactividad)
+        {
+            destino += "&inactividad=1";
+        }
+        else if (expirada)
         {
             destino += "&expirada=1";
         }
