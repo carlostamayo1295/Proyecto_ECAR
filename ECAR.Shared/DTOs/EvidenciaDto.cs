@@ -22,6 +22,11 @@ public class EvidenciaDto
     /// </summary>
     public string EstadoInspeccion { get; set; } = string.Empty;
 
+    // --- Fase 4: una foto quitada antes de firmar se marca como retirada y se conserva ---
+    public bool Retirada { get; set; }
+    public DateTime? FechaRetiro { get; set; }
+    public string? MotivoRetiro { get; set; }
+    public string? UsuarioRetiro { get; set; }
 }
 
 // Contrato temporal para que el cliente anterior a FE-2 siga compilando mientras
