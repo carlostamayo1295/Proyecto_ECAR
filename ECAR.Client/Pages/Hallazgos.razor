@@ -71,10 +71,6 @@
                                 StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar
                             </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteHallazgo(context)" Class="action-button">
-                                Eliminar
-                            </MudButton>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -112,7 +108,12 @@
 
         try
         {
-            var result = await HttpClientService.GetHallazgosAsync(currentPage, pageSize, searchText, null, estadoFiltro);
+            var filtro = new HallazgoFiltroDto
+            {
+                Search = string.IsNullOrWhiteSpace(searchText) ? null : searchText.Trim(),
+                Estado = estadoFiltro
+            };
+            var result = await HttpClientService.BuscarHallazgosAsync(filtro, currentPage, pageSize);
 
             if (result != null && result.Success && result.Data != null)
             {
@@ -188,39 +189,7 @@
         await DialogService.ShowAsync<HallazgoDetailModal>("Detalle del Hallazgo", parameters);
     }
 
-    private async Task DeleteHallazgo(HallazgoDto hallazgo)
-    {
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar el hallazgo #{hallazgo.IdHallazgo}?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
-        {
-            isLoading = true;
-            try
-            {
-                var deleteResult = await HttpClientService.DeleteHallazgoAsync(hallazgo.IdHallazgo);
-
-                if (deleteResult != null && deleteResult.Success)
-                {
-                    Snackbar.Add("Hallazgo eliminado exitosamente", Severity.Success);
-                    await LoadHallazgosAsync();
-                }
-                else
-                {
-                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar hallazgo", Severity.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-            }
-            finally
-            {
-                isLoading = false;
-            }
-        }
-    }
+    
 
     private static string Truncar(string texto) =>
         texto.Length > 60 ? texto[..60] + "…" : texto;
