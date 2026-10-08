@@ -29,13 +29,13 @@ public class InspeccionService : IInspeccionService
             throw new KeyNotFoundException($"No se encontró la inspección con ID {inspeccionId}");
         }
 
-        // Punto 7: Solo técnico asignado o Admin
+        // Solo técnico asignado o Admin
         if (!esAdmin && inspeccion.IdUsuario != usuarioId)
         {
             throw new UnauthorizedAccessException("No tienes permiso para modificar esta inspección.");
         }
 
-        // Punto 6: 409 Conflict si la inspección no está 'En curso'
+        // 409 Conflict si la inspección no está 'En curso'
         if (inspeccion.Estado != InspeccionEstados.EnCurso)
         {
             throw new InspeccionCerradaException("La inspección está cerrada y no permite modificaciones.");
@@ -45,19 +45,16 @@ public class InspeccionService : IInspeccionService
 
         foreach (var item in dto.Respuestas)
         {
-            // Punto 3: Validar que pertenezca al checklist de la inspección
             if (!preguntasValidas.TryGetValue(item.IdPregunta, out var pregunta))
             {
                 throw new ArgumentException($"La pregunta con ID {item.IdPregunta} no pertenece al checklist de esta inspección.");
             }
 
-            // Punto 5: Para preguntas obligatorias, rechazar respuestas vacías
             if (pregunta.Obligatoria && string.IsNullOrWhiteSpace(item.Respuesta))
             {
                 throw new ArgumentException($"La pregunta '{pregunta.Pregunta}' es obligatoria y no puede estar vacía.");
             }
 
-            // Punto 4: Para preguntas SiNo, aceptar únicamente "Si" o "No"
             if (pregunta.TipoRespuesta == TiposRespuesta.SiNo && !string.IsNullOrWhiteSpace(item.Respuesta))
             {
                 var val = item.Respuesta.Trim();
@@ -85,12 +82,37 @@ public class InspeccionService : IInspeccionService
                     Observacion = item.Observacion
                 });
             }
+
+            // Generación automática de hallazgo ante respuesta negativa ("No")
+            bool esNegativa = !string.IsNullOrWhiteSpace(item.Respuesta) && 
+                              string.Equals(item.Respuesta.Trim(), "No", StringComparison.OrdinalIgnoreCase);
+
+            if (esNegativa)
+            {
+                var hallazgoExistente = await _context.Hallazgos
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(h => h.IdInspeccion == inspeccionId && h.IdPregunta == item.IdPregunta && !h.IsDeleted);
+
+                if (hallazgoExistente == null)
+                {
+                    var nuevoHallazgo = new Hallazgo
+                    {
+                        IdInspeccion = inspeccionId,
+                        IdPregunta = item.IdPregunta,
+                        Descripcion = $"Hallazgo automático por respuesta negativa en: {pregunta.Pregunta}",
+                        Criticidad = "Media",
+                        Estado = "Abierto",
+                        FechaRegistro = DateTime.UtcNow,
+                        IsDeleted = false
+                    };
+                    _context.Hallazgos.Add(nuevoHallazgo);
+                }
+            }
         }
 
         await _context.SaveChangesAsync();
     }
 
-    // Punto 1 y 7: GET /api/inspecciones/{id}/respuestas con validación de técnico
     public async Task<List<RespuestaInspeccionDto>> ObtenerRespuestasAsync(long inspeccionId, long usuarioId, bool esAdmin, bool esAuditor)
     {
         var inspeccion = await _context.Inspecciones
@@ -121,7 +143,6 @@ public class InspeccionService : IInspeccionService
             .ToListAsync();
     }
 
-    // Punto 2: GET /api/inspecciones/mias?estado=
     public async Task<List<InspeccionDto>> ObtenerMisInspeccionesAsync(long usuarioId, string? estado)
     {
         var query = _context.Inspecciones
@@ -159,11 +180,9 @@ public class InspeccionService : IInspeccionService
             .ToListAsync();
     }
 
-    // Punto 8 y 9: Filtros search, idInspeccion y pageSize máximo 100
     public async Task<PagedResultDto<RespuestaInspeccionDto>> ObtenerRespuestasPaginadasAsync(
         int pageNumber, int pageSize, string? search, long? idInspeccion, long usuarioId, bool esAdmin, bool esAuditor)
     {
-        // Punto 9: Limitar a máximo 100
         int size = Math.Clamp(pageSize, 1, 100);
         int page = pageNumber < 1 ? 1 : pageNumber;
 
@@ -172,19 +191,16 @@ public class InspeccionService : IInspeccionService
             .Include(r => r.Inspeccion)
             .AsQueryable();
 
-        // Punto 7: Restringir consulta por Técnico
         if (!esAdmin && !esAuditor)
         {
             query = query.Where(r => r.Inspeccion.IdUsuario == usuarioId);
         }
 
-        // Punto 8: Filtro idInspeccion
         if (idInspeccion.HasValue)
         {
             query = query.Where(r => r.IdInspeccion == idInspeccion.Value);
         }
 
-        // Punto 8: Filtro search
         if (!string.IsNullOrWhiteSpace(search))
         {
             query = query.Where(r =>

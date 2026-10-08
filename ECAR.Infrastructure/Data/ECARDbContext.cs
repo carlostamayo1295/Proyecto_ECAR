@@ -137,6 +137,9 @@ public class ECARDbContext : DbContext
             entity.HasIndex(e => e.Criticidad);
             entity.HasIndex(e => e.Estado);
             entity.HasIndex(e => e.FechaRegistro);
+            
+            // Filtro global para ignorar registros marcados con borrado lógico
+            entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
         // Configuración de Auditoria

@@ -87,7 +87,6 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<PagedResultDto<InspeccionDto>>.SuccessResponse(pagedResult));
     }
 
-    // Punto 2: GET /api/inspecciones/mias?estado=
     [HttpGet("mias")]
     public async Task<ActionResult<ApiResponse<List<InspeccionDto>>>> GetMisInspecciones([FromQuery] string? estado)
     {
@@ -96,7 +95,6 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<List<InspeccionDto>>.SuccessResponse(result));
     }
 
-    // Punto 1: GET /api/inspecciones/{id}/respuestas
     [HttpGet("{id}/respuestas")]
     public async Task<ActionResult<ApiResponse<List<RespuestaInspeccionDto>>>> GetRespuestas(long id)
     {
@@ -323,7 +321,6 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección actualizada exitosamente"));
     }
 
-    // Punto 6, 3, 4, 5: Guardar respuestas usando el servicio y devolviendo 409 Conflict si está cerrada
     [HttpPut("{id}/respuestas")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> GuardarRespuestas(
@@ -350,25 +347,32 @@ public class InspeccionesController : ControllerBase
         {
             return Forbid();
         }
-        catch (InspeccionCerradaException ex) // Retorna 409 Conflict
+        catch (InspeccionCerradaException ex)
         {
             return Conflict(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
         }
-        catch (ArgumentException ex) // Retorna 400 BadRequest para validaciones
+        catch (ArgumentException ex)
         {
             return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(ex.Message));
         }
     }
 
-    [HttpDelete("{id}")]
+    // ECAR-212: Endpoint de anulación obligatoria (reemplaza el Delete físico y conserva respuestas/evidencias)
+    [HttpPatch("{id}/anular")]
     [Authorize(Roles = "Administrador,Técnico")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteInspeccion(long id)
+    public async Task<ActionResult<ApiResponse<InspeccionDto>>> AnularInspeccion(long id, [FromBody] AnularInspeccionDto dto)
     {
-        var inspeccion = await _context.Inspecciones.FindAsync(id);
+        var inspeccion = await _context.Inspecciones
+            .Include(i => i.Equipo)
+            .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
+            .Include(i => i.Evidencias)
+            .Include(i => i.Hallazgos)
+            .FirstOrDefaultAsync(i => i.IdInspeccion == id);
 
         if (inspeccion == null)
         {
-            return NotFound(ApiResponse<bool>.ErrorResponse("Inspección no encontrada"));
+            return NotFound(ApiResponse<InspeccionDto>.ErrorResponse("Inspección no encontrada"));
         }
 
         if (!PuedeModificar(inspeccion))
@@ -376,10 +380,24 @@ public class InspeccionesController : ControllerBase
             return Forbid();
         }
 
-        _context.Inspecciones.Remove(inspeccion);
+        if (inspeccion.Estado != InspeccionEstados.EnCurso)
+        {
+            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse("Solo se pueden anular inspecciones que se encuentren en curso."));
+        }
+
+        if (dto == null || string.IsNullOrWhiteSpace(dto.MotivoAnulacion))
+        {
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse("El motivo de anulación es obligatorio."));
+        }
+
+        inspeccion.Estado = "Anulada";
+        inspeccion.Observaciones = string.IsNullOrWhiteSpace(inspeccion.Observaciones)
+            ? $"Anulada: {dto.MotivoAnulacion}"
+            : $"{inspeccion.Observaciones} | Anulada: {dto.MotivoAnulacion}";
+
         await _context.SaveChangesAsync();
 
-        return Ok(ApiResponse<bool>.SuccessResponse(true, "Inspección eliminada exitosamente"));
+        return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección anulada exitosamente conservando su información"));
     }
 
     private Task<Inspeccion?> CargarEjecucionAsync(long id) => _context.Inspecciones
