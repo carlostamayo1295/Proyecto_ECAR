@@ -22,17 +22,30 @@ public class EvidenciasController : ControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly IEvidenciaStorage _storage;
     private readonly EvidenciasOptions _options;
+    private readonly IInspeccionService _inspeccionService;
 
     public EvidenciasController(
         ECARDbContext context,
         ICurrentUser currentUser,
         IEvidenciaStorage storage,
         IOptions<EvidenciasOptions> options)
+        : this(context, currentUser, storage, options, null!)
+    {
+    }
+    
+    [ActivatorUtilitiesConstructor]
+    public EvidenciasController(
+        ECARDbContext context,
+        ICurrentUser currentUser,
+        IEvidenciaStorage storage,
+        IOptions<EvidenciasOptions> options,
+        IInspeccionService inspeccionService)
     {
         _context = context;
         _currentUser = currentUser;
         _storage = storage;
         _options = options.Value;
+        _inspeccionService = inspeccionService;
     }
 
     // GET: api/evidencias O api/inspecciones/{idInspeccion}/evidencias
@@ -218,7 +231,7 @@ public class EvidenciasController : ControllerBase
 
     // POST: api/inspecciones/{idInspeccion}/evidencias
     [HttpPost("/api/inspecciones/{idInspeccion:long}/evidencias")]
-    [Authorize(Roles = "Administrador,Técnico")]
+   [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<EvidenciaDto>>> CreateEvidencia(
         long idInspeccion,
         [FromForm] IFormFile archivo)
@@ -322,6 +335,27 @@ public class EvidenciasController : ControllerBase
 
         return CreatedAtAction(nameof(GetEvidencia), new { id = evidencia.IdEvidencia },
             ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto, "Evidencia cargada exitosamente"));
+    }
+    
+    [HttpPost("{id:long}/retirar")]
+    public async Task<IActionResult> RetirarEvidencia(long id, [FromBody] RetirarEvidenciaDto dto)
+    {
+        // Obtener el ID del usuario autenticado desde _currentUser
+        long idUsuario = _currentUser.IdUsuario; 
+
+        try
+        {
+            await _inspeccionService.RetirarEvidenciaAsync(id, dto, idUsuario);
+            return Ok(new { mensaje = "La evidencia fue retirada exitosamente." });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { mensaje = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
     }
 
     // DELETE: api/evidencias/{id}

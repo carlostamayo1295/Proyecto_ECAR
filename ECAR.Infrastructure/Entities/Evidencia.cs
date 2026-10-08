@@ -38,6 +38,19 @@ public class Evidencia
     [Required]
     [Column("IdUsuarioCarga")]
     public long IdUsuarioCarga { get; set; }
+    
+    [Column("Retirada")]
+    public bool Retirada { get; set; } = false;
+
+    [Column("FechaRetiro")]
+    public DateTime? FechaRetiro { get; set; }
+
+    [Column("IdUsuarioRetiro")]
+    public long? IdUsuarioRetiro { get; set; }
+
+    [MaxLength(500)]
+    [Column("MotivoRetiro")]
+    public string? MotivoRetiro { get; set; }
 
     // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
@@ -45,4 +58,7 @@ public class Evidencia
 
     [ForeignKey("IdUsuarioCarga")]
     public virtual Usuario UsuarioCargaDetalle { get; set; } = null!;
+    
+    [ForeignKey("IdUsuarioRetiro")]
+    public virtual Usuario? UsuarioRetiro { get; set; }
 }
