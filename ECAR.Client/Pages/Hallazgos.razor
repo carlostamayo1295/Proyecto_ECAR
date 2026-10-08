@@ -66,20 +66,26 @@
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Equipo</MudTh>
+                        <MudTh>Área</MudTh>
                         <MudTh>Descripción</MudTh>
+                        <MudTh>Origen</MudTh>
                         <MudTh>Criticidad</MudTh>
+                        <MudTh>Responsable</MudTh>
                         <MudTh>Estado</MudTh>
                         <MudTh>Fecha</MudTh>
                         <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>@context.IdHallazgo</MudTd>
-                        <MudTd>@context.NombreEquipo</MudTd>
-                        <MudTd>@Truncar(context.Descripcion)</MudTd>
+                        <MudTd DataLabel="Equipo">@context.NombreEquipo</MudTd>
+                        <MudTd DataLabel="Área">@(context.Area ?? "-")</MudTd>
+                        <MudTd DataLabel="Descripción">@Truncar(context.Descripcion)</MudTd>
+                        <MudTd DataLabel="Origen">@(context.Origen ?? "-")</MudTd>
                         <MudTd>
                             <MudChip T="string" Color="@CriticidadColor(context.Criticidad)"
-                                Size="Size.Small" Variant="Variant.Filled" Text="@(context.Criticidad ?? "-")" />
+                                     Size="Size.Small" Variant="Variant.Filled" Text="@(context.Criticidad ?? "-")" />
                         </MudTd>
+                        <MudTd DataLabel="Responsable">@(context.NombreResponsable ?? "Sin asignar")</MudTd>
                         <MudTd>
                             <MudChip T="string" Color="@EstadoColor(context.Estado)"
                                      Size="Size.Small" Variant="Variant.Outlined" Text="@EtiquetaEstado(context.Estado)" />
