@@ -2,7 +2,9 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
-@using ECAR.Shared
+@inject AuthorizationService AuthorizationService
+
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })">
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
@@ -11,9 +13,12 @@
                 <MudText Typo="Typo.body2">Novedades registradas durante las inspecciones</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nuevo Hallazgo
-                </MudButton>
+                @if (puedeCrear)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                        Nuevo Hallazgo
+                    </MudButton>
+                }
             </CardHeaderActions>
         </MudCardHeader>
 
@@ -89,6 +94,7 @@
         </MudCardContent>
     </MudCard>
 </MudContainer>
+</RolRouteGuard>
 
 @code {
     private List<HallazgoDto>? hallazgos;
@@ -98,12 +104,15 @@
     private int pageSize = 10;
     private int totalPages = 1;
     private bool isLoading = false;
+    private bool puedeCrear;
 
     protected override async Task OnInitializedAsync()
     {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        puedeCrear = roles.Contains("Administrador") || roles.Contains("Técnico");
+
         await LoadHallazgosAsync();
     }
-
     private async Task LoadHallazgosAsync()
     {
         isLoading = true;
