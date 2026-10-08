@@ -2,7 +2,7 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
-
+@using ECAR.Shared
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
@@ -27,8 +27,10 @@
                 <MudItem xs="12" sm="4">
                     <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined"
                         Clearable="true" ValueChanged="OnEstadoChanged">
-                        <MudSelectItem T="string" Value="@("Abierto")">Abierto</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("Cerrado")">Cerrado</MudSelectItem>
+                        @foreach (var estado in HallazgoEstados.Todos)
+                        {
+                            <MudSelectItem T="string" Value="@estado">@EtiquetaEstado(estado)</MudSelectItem>
+                        }
                     </MudSelect>
                 </MudItem>
             </MudGrid>
@@ -58,8 +60,8 @@
                                 Size="Size.Small" Variant="Variant.Filled" Text="@(context.Criticidad ?? "-")" />
                         </MudTd>
                         <MudTd>
-                            <MudChip T="string" Color="@(context.Estado == "Cerrado" ? Color.Success : Color.Warning)"
-                                Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Estado ?? "-")" />
+                            <MudChip T="string" Color="@EstadoColor(context.Estado)"
+                                     Size="Size.Small" Variant="Variant.Outlined" Text="@EtiquetaEstado(context.Estado)" />
                         </MudTd>
                         <MudTd>@context.FechaRegistro.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                         <MudTd>
@@ -191,9 +193,25 @@
 
     
 
-    private static string Truncar(string texto) =>
-        texto.Length > 60 ? texto[..60] + "…" : texto;
+    private static string Truncar(string? texto) =>
+        string.IsNullOrEmpty(texto) ? "-" : texto.Length > 60 ? texto[..60] + "…" : texto;
 
+    // Colores del plan: Abierto = rojo, EnProceso = naranja, Cerrado = verde, Anulado = gris
+    private static Color EstadoColor(string? estado) => estado switch
+    {
+        HallazgoEstados.Abierto => Color.Error,
+        HallazgoEstados.EnProceso => Color.Warning,
+        HallazgoEstados.Cerrado => Color.Success,
+        _ => Color.Default
+    };
+
+    // "EnProceso" se muestra como "En proceso"
+    private static string EtiquetaEstado(string? estado) => estado switch
+    {
+        HallazgoEstados.EnProceso => "En proceso",
+        null or "" => "-",
+        _ => estado
+    };
     private static Color CriticidadColor(string? criticidad) => (criticidad ?? string.Empty).ToLowerInvariant() switch
     {
         "alta" => Color.Error,
