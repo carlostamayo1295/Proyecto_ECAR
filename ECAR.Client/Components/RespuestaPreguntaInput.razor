@@ -6,11 +6,11 @@
     <div class="sino-casillas">
         @foreach (var opcion in Opciones)
         {
-            var seleccionada = string.Equals(Valor, opcion, StringComparison.OrdinalIgnoreCase);
-            <div class="sino-casilla @(seleccionada ? "sino-seleccionada" : "")" @onclick="() => SeleccionarAsync(opcion)">
+            var seleccionada = EsLaMisma(Valor, opcion.Valor);
+            <div class="sino-casilla @(seleccionada ? "sino-seleccionada" : "")" @onclick="() => SeleccionarAsync(opcion.Valor)">
                 <MudIcon Icon="@(seleccionada ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
                     Color="@(seleccionada ? Color.Primary : Color.Default)" />
-                <MudText Typo="Typo.body1">@opcion</MudText>
+                <MudText Typo="Typo.body1">@opcion.Etiqueta</MudText>
             </div>
         }
     </div>
@@ -23,7 +23,11 @@ else
 }
 
 @code {
-    private static readonly string[] Opciones = { "Sí", "No" };
+    // Lo que se envía al API y lo que se ve son cosas distintas. El contrato
+    // (PLAN_FASE3_TAREAS §3.2, endpoint 3) acepta "Si" y "No" SIN tilde; antes se enviaba
+    // "Sí" y el servidor respondía 400 a toda respuesta afirmativa, así que una inspección
+    // sin novedades no se podía cerrar desde la aplicación. La tilde va solo en la etiqueta.
+    private static readonly (string Valor, string Etiqueta)[] Opciones = { ("Si", "Sí"), ("No", "No") };
 
     /// <summary>Tipo de respuesta de la pregunta (ver <see cref="TiposRespuesta" />).</summary>
     [Parameter] public string TipoRespuesta { get; set; } = TiposRespuesta.Texto;
@@ -34,10 +38,24 @@ else
 
     [Parameter] public string Label { get; set; } = "Respuesta";
 
+    // "Sí" con tilde se trata como "Si": así un valor guardado antes de la corrección sigue
+    // apareciendo marcado. Se hace a mano y no con CompareOptions.IgnoreNonSpace porque en
+    // WebAssembly la comparación cultural depende de los datos ICU que se carguen.
+    private static bool EsLaMisma(string? valor, string opcion)
+    {
+        var normalizado = valor?.Trim();
+        if (string.Equals(normalizado, "Sí", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizado = "Si";
+        }
+
+        return string.Equals(normalizado, opcion, StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task SeleccionarAsync(string valor)
     {
         // En Sí/No, volver a pulsar la casilla marcada la desmarca.
-        var nuevo = TipoRespuesta == TiposRespuesta.SiNo && string.Equals(Valor, valor, StringComparison.OrdinalIgnoreCase)
+        var nuevo = TipoRespuesta == TiposRespuesta.SiNo && EsLaMisma(Valor, valor)
             ? string.Empty
             : valor;
 

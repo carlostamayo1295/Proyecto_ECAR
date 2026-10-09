@@ -21,4 +21,11 @@ public class FirmarInspeccionDto
     /// Observación general del cierre. Las observaciones por pregunta viajan en las respuestas.
     /// </summary>
     public string? Observaciones { get; set; }
+
+    /// <summary>
+    /// Fase 4 (Parte 11 §11.200(a)(1)): la contraseña del usuario, que el servidor verifica en
+    /// cada firma. No lleva [Required] para no romper el flujo actual mientras BE-3 no la exige;
+    /// cuando la exija, una contraseña errónea responde 400 (no 401) y una cuenta bloqueada, 423.
+    /// </summary>
+    public string? Password { get; set; }
 }

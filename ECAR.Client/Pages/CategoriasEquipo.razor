@@ -2,6 +2,7 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
@@ -11,9 +12,13 @@
                 <MudText Typo="Typo.body2">Administrar las categorías de equipos del sistema</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-                    Nueva Categoría
-                </MudButton>
+                @* Crear, editar y eliminar son solo del Administrador (el API responde 403 a los demás). *@
+                @if (esAdmin)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                        Nueva Categoría
+                    </MudButton>
+                }
             </CardHeaderActions>
         </MudCardHeader>
 
@@ -40,14 +45,17 @@
                         <MudTd>@context.Nombre</MudTd>
                         <MudTd>@(context.Descripcion ?? "-")</MudTd>
                         <MudTd>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteCategoria(context)" Class="action-button">
-                                Eliminar
-                            </MudButton>
+                            @if (esAdmin)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                    Editar
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteCategoria(context)" Class="action-button">
+                                    Eliminar
+                                </MudButton>
+                            }
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -73,8 +81,11 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
+    private bool esAdmin;
+
     protected override async Task OnInitializedAsync()
     {
+        esAdmin = await AuthorizationService.IsAdminAsync();
         await LoadCategoriasAsync();
     }
 

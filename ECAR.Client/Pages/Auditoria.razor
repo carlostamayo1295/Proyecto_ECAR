@@ -1,142 +1,278 @@
 @page "/auditoria"
 @inject HttpClientService HttpClientService
+@inject AuthorizationService AuthorizationService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
+@* Visor de auditoría (Fase 4, FE-0; Parte 11 §11.10(e)): quién cambió qué, cuándo, con qué
+   motivo y qué había antes. Solo Administrador y Auditor, igual que el API.
+
+   Los filtros por tabla, acción, registro y fechas, el historial de un registro, la verificación
+   de la cadena y la exportación los publica BE-1/BE-2 durante la fase (endpoints 1, 2, 3 y 21);
+   hasta entonces el API ignora esos filtros y responde 404 a lo demás, y la pantalla lo dice. *@
+
+<RolRouteGuard Roles="@(new[] { "Administrador", "Auditor" })"
+               MensajeNoAutorizado="Solo administradores y auditores pueden consultar la auditoría.">
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
                 <MudText Typo="Typo.h5">Auditoría</MudText>
-                <MudText Typo="Typo.body2">Historial de cambios registrados en el sistema</MudText>
+                <MudText Typo="Typo.body2">Registro inalterable de cambios, firmas, inicios de sesión y exportaciones</MudText>
             </CardHeaderContent>
+            <CardHeaderActions>
+                <div class="d-flex flex-wrap gap-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.VerifiedUser"
+                        Disabled="verificando" OnClick="VerificarAsync">
+                        @(verificando ? "Verificando…" : "Verificar integridad")
+                    </MudButton>
+                    <MudMenu Label="Exportar" Variant="Variant.Filled" Color="Color.Primary"
+                        StartIcon="@Icons.Material.Filled.Download" Disabled="exportando">
+                        <MudMenuItem OnClick="@(() => ExportarAsync(ReporteFormatos.Pdf))">PDF</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportarAsync(ReporteFormatos.Excel))">Excel</MudMenuItem>
+                    </MudMenu>
+                </div>
+            </CardHeaderActions>
         </MudCardHeader>
 
         <MudCardContent>
-            <MudTextField T="string" Label="Buscar por tabla, acción o usuario" @bind-Value="searchText" Variant="Variant.Outlined"
-                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
-                Class="mb-4" />
+            @if (verificacion != null)
+            {
+                <MudAlert Severity="@(verificacion.Valida ? Severity.Success : Severity.Error)" Class="mb-4"
+                    ShowCloseIcon="true" CloseIconClicked="@(() => verificacion = null)">
+                    @if (verificacion.Valida)
+                    {
+                        <span>Integridad correcta: @verificacion.FilasRevisadas fila(s) revisadas, ninguna alterada ni borrada.</span>
+                    }
+                    else
+                    {
+                        <span>
+                            La cadena está rota a partir de la fila #@verificacion.PrimeraFilaRota:
+                            ese registro o uno anterior fue alterado o borrado fuera del sistema. Avise a Calidad.
+                        </span>
+                    }
+                </MudAlert>
+            }
+
+            <MudGrid Class="mb-2" Spacing="2">
+                <MudItem xs="12" lg="6">
+                    <MudTextField T="string" Label="Buscar por usuario, tabla o acción" @bind-Value="filtro.Search"
+                        Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                        Immediate="true" OnKeyUp="AlTeclear" />
+                </MudItem>
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudSelect T="string" Label="Tabla" @bind-Value="filtro.Tabla" Variant="Variant.Outlined" Clearable="true">
+                        @foreach (var tabla in AuditoriaTablas.Todas)
+                        {
+                            <MudSelectItem T="string" Value="@tabla">@tabla</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudSelect T="string" Label="Acción" @bind-Value="filtro.Accion" Variant="Variant.Outlined" Clearable="true">
+                        @foreach (var accion in AuditoriaAcciones.Todas)
+                        {
+                            <MudSelectItem T="string" Value="@accion">@accion</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="long?" Label="Id del registro" @bind-Value="filtro.RegistroId" Variant="Variant.Outlined"
+                        Min="1" HideSpinButtons="true" Clearable="true" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudDatePicker Label="Desde" @bind-Date="filtro.Desde" Variant="Variant.Outlined" Editable="true" Clearable="true" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudDatePicker Label="Hasta" @bind-Date="filtro.Hasta" Variant="Variant.Outlined" Editable="true" Clearable="true" />
+                </MudItem>
+                <MudItem xs="12" Class="d-flex flex-wrap gap-2 justify-end">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FilterAltOff" OnClick="LimpiarAsync">Limpiar</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FilterAlt"
+                        OnClick="FiltrarAsync">Filtrar</MudButton>
+                </MudItem>
+            </MudGrid>
 
             @if (isLoading)
             {
                 <MudProgressLinear Indeterminate="true" Class="my-4" />
             }
-            else if (registros != null && registros.Any())
+            else if (registros.Count > 0)
             {
-                <MudTable Items="registros" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="registros" Hover="true" Striped="true" Elevation="0" Dense="true">
                     <HeaderContent>
-                        <MudTh>Fecha y Hora</MudTh>
+                        <MudTh>Fecha y hora</MudTh>
                         <MudTh>Tabla</MudTh>
                         <MudTh>Registro</MudTh>
                         <MudTh>Acción</MudTh>
                         <MudTh>Usuario</MudTh>
-                        <MudTh>Detalle</MudTh>
+                        <MudTh>Motivo</MudTh>
+                        <MudTh></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.FechaHora.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</MudTd>
-                        <MudTd>@context.Tabla</MudTd>
-                        <MudTd>@context.RegistroId</MudTd>
-                        <MudTd>
-                            <MudChip T="string" Color="@AccionColor(context.Accion)" Size="Size.Small" Variant="Variant.Outlined" Text="@context.Accion" />
+                        <MudTd DataLabel="Fecha y hora" Style="white-space: nowrap;">@FormatoAuditoria.FechaHora(context.FechaHora)</MudTd>
+                        <MudTd DataLabel="Tabla">@context.Tabla</MudTd>
+                        <MudTd DataLabel="Registro">@context.RegistroId</MudTd>
+                        <MudTd DataLabel="Acción">
+                            <MudChip T="string" Color="@FormatoAuditoria.ColorAccion(context.Accion)" Size="Size.Small"
+                                Variant="Variant.Outlined" Text="@context.Accion" />
                         </MudTd>
-                        <MudTd>@context.Usuario</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Usuario">@context.Usuario</MudTd>
+                        <MudTd DataLabel="Motivo">
+                            <span class="motivo-corto" title="@context.Motivo">@(string.IsNullOrWhiteSpace(context.Motivo) ? "—" : context.Motivo)</span>
+                        </MudTd>
+                        <MudTd DataLabel="">
                             <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
-                                StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenDetailDialog(context)" Class="action-button">
+                                StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => VerDetalleAsync(context)">
                                 Ver
                             </MudButton>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
 
-                <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
-                    SelectedChanged="HandlePageChange" />
+                <div class="d-flex flex-wrap align-center justify-space-between mt-4 gap-2">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@totalRegistros registro(s)</MudText>
+                    <MudPagination Count="@totalPages" Selected="@currentPage" SelectedChanged="CambiarPaginaAsync" />
+                </div>
             }
             else
             {
                 <MudAlert Severity="Severity.Info" Class="my-4">
-                    No hay registros de auditoría para mostrar
+                    No hay registros de auditoría con estos filtros
                 </MudAlert>
             }
         </MudCardContent>
     </MudCard>
 </MudContainer>
+</RolRouteGuard>
 
 @code {
-    private List<AuditoriaDto>? registros;
-    private string searchText = string.Empty;
+    private const int TamanoPagina = 20;
+
+    private AuditoriaFiltroDto filtro = new();
+    private List<AuditoriaDto> registros = new();
     private int currentPage = 1;
-    private int pageSize = 10;
     private int totalPages = 1;
-    private bool isLoading = false;
+    private int totalRegistros;
+    private bool isLoading;
+    private bool verificando;
+    private bool exportando;
+    private VerificacionAuditoriaDto? verificacion;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAuditoriaAsync();
+        // La guarda es un componente hijo: no detiene el ciclo de vida de la página. Sin esta
+        // comprobación, un Técnico vería además un "No tiene permiso" del API.
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        if (!roles.Contains("Administrador") && !roles.Contains("Auditor"))
+        {
+            return;
+        }
+
+        await CargarAsync();
     }
 
-    private async Task LoadAuditoriaAsync()
+    private async Task CargarAsync()
     {
         isLoading = true;
 
-        try
+        var respuesta = await HttpClientService.BuscarAuditoriaAsync(filtro, currentPage, TamanoPagina);
+        if (respuesta.Success && respuesta.Data != null)
         {
-            var result = await HttpClientService.GetAuditoriaAsync(currentPage, pageSize, searchText);
-
-            if (result != null && result.Success && result.Data != null)
-            {
-                registros = result.Data.Data ?? new List<AuditoriaDto>();
-                totalPages = result.Data.TotalPages;
-            }
-            else
-            {
-                Snackbar.Add(result?.Message ?? "Error al cargar la auditoría", Severity.Error);
-                registros = new List<AuditoriaDto>();
-                totalPages = 1;
-            }
+            registros = respuesta.Data.Data ?? new List<AuditoriaDto>();
+            totalPages = Math.Max(respuesta.Data.TotalPages, 1);
+            totalRegistros = respuesta.Data.TotalCount;
         }
-        catch (Exception ex)
+        else
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add(respuesta.Message, Severity.Error);
             registros = new List<AuditoriaDto>();
+            totalPages = 1;
+            totalRegistros = 0;
         }
-        finally
+
+        isLoading = false;
+    }
+
+    private async Task FiltrarAsync()
+    {
+        if (filtro.Desde.HasValue && filtro.Hasta.HasValue && filtro.Desde > filtro.Hasta)
         {
-            isLoading = false;
+            Snackbar.Add("La fecha \"Desde\" no puede ser posterior a \"Hasta\"", Severity.Warning);
+            return;
+        }
+
+        currentPage = 1;
+        await CargarAsync();
+    }
+
+    private async Task LimpiarAsync()
+    {
+        filtro = new AuditoriaFiltroDto();
+        currentPage = 1;
+        await CargarAsync();
+    }
+
+    private async Task AlTeclear(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await FiltrarAsync();
         }
     }
 
-    private async Task HandlePageChange(int newPage)
+    private async Task CambiarPaginaAsync(int pagina)
     {
-        currentPage = newPage;
-        await LoadAuditoriaAsync();
+        currentPage = pagina;
+        await CargarAsync();
     }
 
-    private async Task OpenDetailDialog(AuditoriaDto registro)
+    private async Task VerDetalleAsync(AuditoriaDto registro)
     {
-        var parameters = new DialogParameters { ["Registro"] = registro };
-        await DialogService.ShowAsync<AuditoriaDetailModal>("Detalle del Registro", parameters);
+        var parametros = new DialogParameters<AuditoriaDetailModal> { { d => d.Registro, registro } };
+        await DialogService.ShowAsync<AuditoriaDetailModal>($"Auditoría #{registro.IdAuditoria}", parametros);
     }
 
-    private static Color AccionColor(string accion) => accion.ToUpperInvariant() switch
+    private async Task VerificarAsync()
     {
-        "INSERT" or "CREATE" or "CREAR" => Color.Success,
-        "UPDATE" or "EDITAR" => Color.Info,
-        "DELETE" or "ELIMINAR" => Color.Error,
-        _ => Color.Default
-    };
+        verificando = true;
+        verificacion = null;
+
+        var respuesta = await HttpClientService.VerificarAuditoriaAsync(filtro.Desde, filtro.Hasta);
+        if (respuesta.Success && respuesta.Data != null)
+        {
+            verificacion = respuesta.Data;
+        }
+        else
+        {
+            Snackbar.Add(respuesta.Message, Severity.Warning);
+        }
+
+        verificando = false;
+    }
+
+    private async Task ExportarAsync(string formato)
+    {
+        exportando = true;
+        Snackbar.Add("Generando el archivo…", Severity.Info);
+
+        var respuesta = await HttpClientService.DescargarAuditoriaAsync(filtro, formato);
+        if (!respuesta.Success)
+        {
+            Snackbar.Add(respuesta.Message, Severity.Warning);
+        }
+
+        exportando = false;
+    }
 }
 
 <style>
-.action-button {
-    border-radius: 8px !important;
-    font-weight: 500 !important;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2) !important;
-    transition: all 0.2s ease !important;
-}
-
-.action-button:hover {
-    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
-    transform: translateY(-1px) !important;
+.motivo-corto {
+    display: inline-block;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
 }
 </style>

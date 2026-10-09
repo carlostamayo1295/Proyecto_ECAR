@@ -22,6 +22,9 @@ public class AuditoriaController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<AuditoriaDto>>>> GetAuditoria([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Auditoria.AsQueryable();
 
         if (!string.IsNullOrEmpty(search))
@@ -62,7 +65,9 @@ public class AuditoriaController : ControllerBase
         return Ok(ApiResponse<PagedResultDto<AuditoriaDto>>.SuccessResponse(pagedResult));
     }
 
-    [HttpGet("{id}")]
+    // {id:long}: sin la restricción, GET api/auditoria/verificar o /exportar (Fase 4) entraban
+    // aquí con "verificar" como id y respondían 400 "datos inválidos" en lugar de 404.
+    [HttpGet("{id:long}")]
     public async Task<ActionResult<ApiResponse<AuditoriaDto>>> GetAuditoriaRegistro(long id)
     {
         var registro = await _context.Auditoria.FindAsync(id);

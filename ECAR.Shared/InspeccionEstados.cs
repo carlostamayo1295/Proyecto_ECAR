@@ -13,6 +13,12 @@ public static class InspeccionEstados
     /// <summary>La inspección fue firmada y cerrada: no admite ninguna modificación.</summary>
     public const string Cerrada = "Cerrada";
 
+    /// <summary>
+    /// Fase 4: una inspección en curso que se descarta con motivo en lugar de borrarse
+    /// (PLAN_FASE4_TAREAS §3.6). BE-1 la añade a EsValido cuando publique POST {id}/anular.
+    /// </summary>
+    public const string Anulada = "Anulada";
+
     public static bool EsValido(string estado) => estado is EnCurso or Cerrada;
 }
 

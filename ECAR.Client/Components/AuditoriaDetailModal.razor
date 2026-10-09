@@ -1,51 +1,78 @@
-<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
-    <TitleContent>
-        <MudText Typo="Typo.h6">Registro de Auditoría #@Registro?.IdAuditoria</MudText>
-    </TitleContent>
+@* Detalle de una fila de auditoría: quién, cuándo, desde dónde, por qué, qué cambió y, si la
+   fila es de un registro (no un evento de "Sistema"), todo su historial. *@
+
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true }">
     <DialogContent>
         @if (Registro != null)
         {
-            <MudGrid Class="mb-4">
-                <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.caption">Tabla</MudText>
-                    <MudText Typo="Typo.body1">@Registro.Tabla</MudText>
+            <MudGrid Spacing="2" Class="mb-3">
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Fecha y hora</MudText>
+                    <MudText Typo="Typo.body2">@FormatoAuditoria.FechaHora(Registro.FechaHora)</MudText>
                 </MudItem>
-                <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.caption">ID del Registro Afectado</MudText>
-                    <MudText Typo="Typo.body1">@Registro.RegistroId</MudText>
-                </MudItem>
-                <MudItem xs="12" sm="6">
+                <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Acción</MudText>
-                    <MudText Typo="Typo.body1">@Registro.Accion</MudText>
+                    <div>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                            Color="@FormatoAuditoria.ColorAccion(Registro.Accion)" Text="@Registro.Accion" />
+                    </div>
                 </MudItem>
-                <MudItem xs="12" sm="6">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption">Registro</MudText>
+                    <MudText Typo="Typo.body2">@Registro.Tabla #@Registro.RegistroId</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
                     <MudText Typo="Typo.caption">Usuario</MudText>
-                    <MudText Typo="Typo.body1">@Registro.Usuario</MudText>
+                    <MudText Typo="Typo.body2">@Registro.Usuario</MudText>
                 </MudItem>
-                <MudItem xs="12">
-                    <MudText Typo="Typo.caption">Fecha y Hora</MudText>
-                    <MudText Typo="Typo.body1">@Registro.FechaHora.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</MudText>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption">Dirección IP</MudText>
+                    <MudText Typo="Typo.body2">@(Registro.DireccionIp ?? "—")</MudText>
                 </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption">Navegador</MudText>
+                    <MudText Typo="Typo.body2" Style="word-break: break-word;">@(Registro.AgenteUsuario ?? "—")</MudText>
+                </MudItem>
+                @if (!string.IsNullOrWhiteSpace(Registro.Motivo))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption">Motivo</MudText>
+                        <MudText Typo="Typo.body2">@Registro.Motivo</MudText>
+                    </MudItem>
+                }
+                @if (!string.IsNullOrWhiteSpace(Registro.Hash))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption">Huella de la fila (SHA-256, encadenada)</MudText>
+                        <MudText Typo="Typo.body2"><code style="word-break: break-all;">@Registro.Hash</code></MudText>
+                    </MudItem>
+                }
             </MudGrid>
 
-            <MudGrid>
-                <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.subtitle2" Class="mb-1">Valor Anterior</MudText>
-                    <MudPaper Elevation="0" Class="value-box pa-3">
-                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@(Registro.ValorAnterior ?? "-")</MudText>
-                    </MudPaper>
-                </MudItem>
-                <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.subtitle2" Class="mb-1">Valor Nuevo</MudText>
-                    <MudPaper Elevation="0" Class="value-box pa-3">
-                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@(Registro.ValorNuevo ?? "-")</MudText>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Cambios</MudText>
+            <CambiosAuditoria Registro="Registro" />
+
+            @if (Registro.Tabla != AuditoriaTablas.Sistema)
+            {
+                <div class="mt-4">
+                    @if (verHistorial)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-1">Historial de @Registro.Tabla #@Registro.RegistroId</MudText>
+                        <HistorialCambiosRegistro Tabla="@Registro.Tabla" RegistroId="@Registro.RegistroId" />
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
+                            OnClick="@(() => verHistorial = true)">
+                            Ver todo el historial de este registro
+                        </MudButton>
+                    }
+                </div>
+            }
         }
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close">Cerrar</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -55,34 +82,10 @@
     [Parameter]
     public AuditoriaDto? Registro { get; set; }
 
+    private bool verHistorial;
+
     private void Close()
     {
         MudDialog.Close(DialogResult.Ok(true));
     }
 }
-
-<style>
-.dialog-button {
-    border-radius: 12px !important;
-    min-width: 100px !important;
-    font-weight: 500 !important;
-}
-
-.dialog-button.mud-button-filled {
-    background-color: #397FDE !important;
-    color: white !important;
-}
-
-.dialog-button.mud-button-filled:hover {
-    background-color: #2A5FB8 !important;
-}
-
-.value-box {
-    border: 1px solid #E0E6ED !important;
-    border-radius: 8px !important;
-    background-color: #F4F5F7 !important;
-    min-height: 80px;
-    max-height: 300px;
-    overflow-y: auto;
-}
-</style>

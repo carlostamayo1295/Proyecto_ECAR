@@ -23,6 +23,10 @@ public class CategoriasEquipoController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<CategoriaEquipoDto>>>> GetCategoriasEquipo([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
+        // Máximo 100 por página, como en el resto de listados: sin límite, pageSize=100000 devolvía la tabla entera.
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.CategoriasEquipo.AsQueryable();
 
         // Aplicar el filtro de búsqueda

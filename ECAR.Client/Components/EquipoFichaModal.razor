@@ -1,0 +1,206 @@
+@inject HttpClientService HttpClientService
+@inject NavigationManager NavigationManager
+@inject AuthorizationService AuthorizationService
+
+@* Ficha técnica y consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Es de solo
+   lectura y la pueden abrir Administrador, Técnico y Auditor. El historial sale de
+   GET /api/inspecciones?idEquipo=: el API aplica sus reglas, así que un Técnico ve solo las suyas. *@
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Equipo.CodigoInterno · @Equipo.NombreEquipo</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Ficha técnica</MudText>
+        <MudGrid Spacing="2" Class="mb-4">
+            @foreach (var (etiqueta, valor) in Campos())
+            {
+                <MudItem xs="6" sm="4" md="3">
+                    <MudText Typo="Typo.caption">@etiqueta</MudText>
+                    <MudText Typo="Typo.body2" Style="word-break: break-word;">@(string.IsNullOrWhiteSpace(valor) ? "-" : valor)</MudText>
+                </MudItem>
+            }
+            <MudItem xs="6" sm="4" md="3">
+                <MudText Typo="Typo.caption">Criticidad</MudText>
+                @if (string.IsNullOrEmpty(Equipo.Criticidad))
+                {
+                    <MudText Typo="Typo.body2">-</MudText>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                        Color="@ColorCriticidad(Equipo.Criticidad)" Text="@Equipo.Criticidad" />
+                }
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3">
+                <MudText Typo="Typo.caption">Estado</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                    Color="@(Equipo.Activo ? Color.Success : Color.Error)" Text="@(Equipo.Activo ? "Activo" : "Inactivo")" />
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">
+            Consulta histórica · @totalInspecciones inspección(es)
+        </MudText>
+
+        @if (cargando)
+        {
+            <MudProgressLinear Indeterminate="true" Class="my-2" />
+        }
+        else if (error != null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@error</MudAlert>
+        }
+        else if (inspecciones.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">Este equipo todavía no tiene inspecciones.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="inspecciones" Dense="true" Hover="true" Striped="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>ID</MudTh>
+                    <MudTh>Fecha</MudTh>
+                    <MudTh>Inspector</MudTh>
+                    <MudTh>Checklist</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Resultado</MudTh>
+                    <MudTh>Evid. / Hall.</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="ID">@context.IdInspeccion</MudTd>
+                    <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
+                    <MudTd DataLabel="Inspector">@context.NombreUsuario</MudTd>
+                    <MudTd DataLabel="Checklist">@context.NombreChecklist</MudTd>
+                    <MudTd DataLabel="Estado">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                            Color="@(context.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
+                            Text="@(context.Estado == InspeccionEstados.Cerrada ? "Cerrada" : "En curso")" />
+                    </MudTd>
+                    <MudTd DataLabel="Resultado">@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)</MudTd>
+                    <MudTd DataLabel="Evid. / Hall.">@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
+                    <MudTd DataLabel="">
+                        @if (context.Estado == InspeccionEstados.Cerrada)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                StartIcon="@Icons.Material.Filled.Assignment" OnClick="() => VerResultado(context)">
+                                Ver resultado
+                            </MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            @if (totalPaginas > 1)
+            {
+                <MudPagination Class="mt-2" Count="@totalPaginas" Selected="@pagina" SelectedChanged="CambiarPaginaAsync" />
+            }
+        }
+
+        @* Fase 4: quién creó el equipo y cada cambio posterior (auditoría). La auditoría solo la
+           leen Administrador y Auditor, igual que el API. *@
+        @if (puedeVerAuditoria)
+        {
+            <div class="mt-4">
+                @if (verCambios)
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Historial de cambios del equipo</MudText>
+                    <HistorialCambiosRegistro Tabla="Equipos" RegistroId="@Equipo.IdEquipo" />
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
+                        OnClick="@(() => verCambios = true)">
+                        Ver historial de cambios del equipo
+                    </MudButton>
+                }
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MudDialog.Close(DialogResult.Ok(true)))">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public EquipoDto Equipo { get; set; } = null!;
+
+    private const int TamanoPagina = 10;
+
+    private List<InspeccionDto> inspecciones = new();
+    private int pagina = 1;
+    private int totalPaginas = 1;
+    private int totalInspecciones;
+    private bool cargando = true;
+    private string? error;
+
+    private bool puedeVerAuditoria;
+    private bool verCambios;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        puedeVerAuditoria = roles.Contains("Administrador") || roles.Contains("Auditor");
+        await CargarHistorialAsync();
+    }
+
+    private IEnumerable<(string Etiqueta, string? Valor)> Campos() => new (string, string?)[]
+    {
+        ("Código interno", Equipo.CodigoInterno),
+        ("Activo fijo", Equipo.ActivoFijo),
+        ("Serial del fabricante", Equipo.SerialFabricante),
+        ("Nombre", Equipo.NombreEquipo),
+        ("Marca", Equipo.Marca),
+        ("Modelo", Equipo.Modelo),
+        ("Fabricante", Equipo.Fabricante),
+        ("Categoría", Equipo.CategoriaNombre),
+        ("Ubicación", Equipo.UbicacionNombre),
+        ("Fecha de creación", Equipo.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy")),
+        ("Código QR", string.IsNullOrEmpty(Equipo.QRCode) ? "Sin generar" : "Generado")
+    };
+
+    private async Task CargarHistorialAsync()
+    {
+        cargando = true;
+        error = null;
+
+        var respuesta = await HttpClientService.GetInspeccionesAsync(pagina, TamanoPagina, idEquipo: Equipo.IdEquipo);
+
+        if (respuesta is { Success: true, Data: not null })
+        {
+            inspecciones = respuesta.Data.Data ?? new List<InspeccionDto>();
+            totalPaginas = Math.Max(respuesta.Data.TotalPages, 1);
+            totalInspecciones = respuesta.Data.TotalCount;
+        }
+        else
+        {
+            inspecciones = new List<InspeccionDto>();
+            error = respuesta?.Message ?? "No se pudo cargar el historial del equipo";
+        }
+
+        cargando = false;
+    }
+
+    private async Task CambiarPaginaAsync(int nueva)
+    {
+        pagina = nueva;
+        await CargarHistorialAsync();
+    }
+
+    private void VerResultado(InspeccionDto inspeccion)
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+        NavigationManager.NavigateTo($"/inspecciones/{inspeccion.IdInspeccion}/resultado");
+    }
+
+    private static Color ColorCriticidad(string? criticidad) => criticidad switch
+    {
+        "Alta" => Color.Error,
+        "Media" => Color.Warning,
+        "Baja" => Color.Success,
+        _ => Color.Default
+    };
+}

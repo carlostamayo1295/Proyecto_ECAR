@@ -122,7 +122,7 @@ public class InspeccionServiceTests
     }
 
     [Fact]
-    public async Task GuardarRespuestasAsync_PreguntaObligatoriaVacia_LanzaArgumentException()
+    public async Task GuardarRespuestasAsync_PreguntaObligatoriaVacia_SeGuardaComoPendiente()
     {
         // Arrange
         using var context = GetInMemoryDbContext();
@@ -149,13 +149,17 @@ public class InspeccionServiceTests
         {
             Respuestas = new List<RespuestaEjecucionDto>
             {
-                new RespuestaEjecucionDto { IdPregunta = 1, Respuesta = "   " }
+                new RespuestaEjecucionDto { IdPregunta = 1, Respuesta = "   ", Observacion = "Escrita antes de responder" }
             }
         };
 
-        // Act & Assert (Punto 5: Rechazar respuestas vacías en obligatorias)
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GuardarRespuestasAsync(4, dto, usuarioId: 10, esAdmin: false));
+        // Act: el guardado es parcial; la obligatoriedad se exige al firmar, no aquí.
+        await service.GuardarRespuestasAsync(4, dto, usuarioId: 10, esAdmin: false);
+
+        // Assert: queda pendiente (sin respuesta) y la observación no se pierde.
+        var guardada = context.RespuestasInspeccion.Single(r => r.IdInspeccion == 4 && r.IdPregunta == 1);
+        Assert.Null(guardada.Respuesta);
+        Assert.Equal("Escrita antes de responder", guardada.Observacion);
     }
 
     [Fact]

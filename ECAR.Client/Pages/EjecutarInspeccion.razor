@@ -1,5 +1,6 @@
 @page "/inspecciones/ejecutar/{IdInspeccion:long}"
 @inject HttpClientService HttpClientService
+@inject SesionService Sesion
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
@@ -114,6 +115,14 @@
 
     private async Task CargarAsync()
     {
+        // TecnicoRouteGuard corre en paralelo a esta página y no detiene su ciclo de vida. Sin
+        // sesión no se llama al API: la guarda ya está mandando al login, y la petición solo
+        // servía para que un "Error al cargar la inspección" se colara durante la redirección.
+        if (!await Sesion.TieneSesionVigenteAsync())
+        {
+            return;
+        }
+
         cargando = true;
         var result = await HttpClientService.GetInspeccionEjecucionAsync(IdInspeccion);
 
@@ -190,23 +199,40 @@
             return false;
         }
 
-        var faltantes = inspeccion.Preguntas.Count(p => p.FaltaResponder);
-        if (faltantes > 0)
+        // El aviso dice cuáles faltan por su número de orden, no solo cuántas: con un checklist
+        // largo, "faltan 2" obliga al técnico a repasar todo el formulario en el teléfono.
+        var faltantes = NumerosDe(inspeccion.Preguntas.Where(p => p.FaltaResponder));
+        if (faltantes.Count > 0)
         {
-            Snackbar.Add($"Faltan {faltantes} pregunta(s) obligatoria(s) por responder", Severity.Warning);
+            Snackbar.Add(faltantes.Count == 1
+                    ? $"Falta por responder la pregunta obligatoria {faltantes[0]}"
+                    : $"Faltan por responder las preguntas obligatorias {UnirNumeros(faltantes)}",
+                Severity.Warning);
             return false;
         }
 
-        var novedadSinObservacion = inspeccion.Preguntas
-            .Count(p => p.EsNovedad && string.IsNullOrWhiteSpace(p.Observacion));
-        if (novedadSinObservacion > 0)
+        var novedadSinObservacion = NumerosDe(inspeccion.Preguntas
+            .Where(p => p.EsNovedad && string.IsNullOrWhiteSpace(p.Observacion)));
+        if (novedadSinObservacion.Count > 0)
         {
-            Snackbar.Add($"{novedadSinObservacion} novedad(es) sin observación: la observación es obligatoria", Severity.Warning);
+            Snackbar.Add(novedadSinObservacion.Count == 1
+                    ? $"La pregunta {novedadSinObservacion[0]} es una novedad y necesita observación"
+                    : $"Las preguntas {UnirNumeros(novedadSinObservacion)} son novedades y necesitan observación",
+                Severity.Warning);
             return false;
         }
 
         return true;
     }
+
+    private static List<int> NumerosDe(IEnumerable<PreguntaEjecucionDto> preguntas) =>
+        preguntas.Select(p => p.Orden).OrderBy(n => n).ToList();
+
+    // "2, 5 y 7"
+    private static string UnirNumeros(List<int> numeros) =>
+        numeros.Count == 1
+            ? numeros[0].ToString()
+            : $"{string.Join(", ", numeros.Take(numeros.Count - 1))} y {numeros[^1]}";
 
     private void IrAPreguntas() => pasoActivo = 0;
 

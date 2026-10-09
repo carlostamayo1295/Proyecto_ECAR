@@ -1,4 +1,5 @@
 @inject AuthorizationService AuthorizationService
+@inject SesionService Sesion
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
@@ -11,6 +12,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Sin sesión o con la sesión vencida se va al login conservando la página, como en las
+        // otras guardas. Antes se mandaba al inicio y el usuario perdía dónde estaba.
+        if (!await Sesion.TieneSesionVigenteAsync())
+        {
+            await Sesion.IrAlLoginAsync(expirada: await Sesion.HayTokenAsync());
+            return;
+        }
+
         var isAdmin = await AuthorizationService.IsAdminAsync();
         
         if (!isAdmin)

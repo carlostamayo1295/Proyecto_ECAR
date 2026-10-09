@@ -22,9 +22,14 @@ public class RespuestaEjecucionDto
     [Range(1, long.MaxValue, ErrorMessage = "La pregunta es requerida")]
     public long IdPregunta { get; set; }
 
-    /// <summary>"Si" / "No" para preguntas Sí/No; texto libre para las de tipo Texto.</summary>
-    [Required(ErrorMessage = "La respuesta es requerida")]
-    public string Respuesta { get; set; } = string.Empty;
+    /// <summary>
+    /// "Si" / "No" para preguntas Sí/No; texto libre para las de tipo Texto. Vacía o null
+    /// significa "pendiente": el guardado es parcial (el técnico puede escribir la observación
+    /// antes de responder, o desmarcar una casilla) y las obligatorias se exigen al firmar.
+    /// No lleva [Required]: con [ApiController] eso rechazaba la cadena vacía antes de llegar
+    /// al servicio, y desmarcar cualquier respuesta daba 400.
+    /// </summary>
+    public string? Respuesta { get; set; }
 
     /// <summary>Obligatoria cuando la respuesta reporta novedad (regla 4 del SRS).</summary>
     public string? Observacion { get; set; }

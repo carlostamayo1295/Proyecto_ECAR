@@ -2,6 +2,7 @@ using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class HallazgosController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -32,6 +34,10 @@ public class HallazgosController : ControllerBase
         [FromQuery] string? estado = null,
         [FromQuery] string? criticidad = null)
     {
+        // Máximo 100 por página, como en el resto de listados: sin límite, pageSize=100000 devolvía la tabla entera.
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Hallazgos
             .Include(h => h.Inspeccion)
                 .ThenInclude(i => i.Equipo)
@@ -111,6 +117,7 @@ public class HallazgosController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<HallazgoDto>>> CreateHallazgo(CreateHallazgoDto createDto)
     {
         var inspeccion = await _context.Inspecciones
@@ -149,6 +156,7 @@ public class HallazgosController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<HallazgoDto>>> UpdateHallazgo(long id, UpdateHallazgoDto updateDto)
     {
         var hallazgo = await _context.Hallazgos
@@ -242,6 +250,7 @@ public class HallazgosController : ControllerBase
 
     // Borrado Lógico estricto (Nunca se eliminan físicamente de la base de datos)
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteHallazgo(long id)
     {
         var hallazgo = await _context.Hallazgos.IgnoreQueryFilters().FirstOrDefaultAsync(h => h.IdHallazgo == id);

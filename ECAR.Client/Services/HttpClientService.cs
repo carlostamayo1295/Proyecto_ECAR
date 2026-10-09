@@ -1,6 +1,10 @@
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.JSInterop;
+using System.Globalization;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -10,11 +14,13 @@ public class HttpClientService
 {
     private readonly HttpClient _httpClient;
     private readonly AuthService _authService;
+    private readonly IJSRuntime _jsRuntime;
 
-    public HttpClientService(HttpClient httpClient, AuthService authService)
+    public HttpClientService(HttpClient httpClient, AuthService authService, IJSRuntime jsRuntime)
     {
         _httpClient = httpClient;
         _authService = authService;
+        _jsRuntime = jsRuntime;
     }
 
     private async Task AddAuthorizationHeaderAsync()
@@ -127,6 +133,25 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error deleting usuario: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Reactiva un usuario desactivado (PUT api/usuarios/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarUsuarioAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/usuarios/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando usuario: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }
@@ -434,6 +459,25 @@ public class HttpClientService
         }
     }
 
+    /// <summary>Reactiva un checklist desactivado (PUT api/checklists/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarChecklistAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/checklists/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando checklist: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
     public async Task<ApiResponse<ChecklistDto>?> CreateChecklistVersionAsync(long id, CreateChecklistVersionDto createDto)
     {
         try
@@ -603,7 +647,7 @@ public class HttpClientService
 
     // Métodos del API de Equipos
     public async Task<ApiResponse<PagedResultDto<EquipoDto>>?> GetEquiposAsync(int page = 1, int pageSize = 100,
-        string? search = null, string? criticidad = null)
+        string? search = null, string? criticidad = null, bool? activo = null, string? planta = null, string? area = null)
     {
         try
         {
@@ -618,6 +662,21 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(criticidad))
             {
                 query += $"&criticidad={Uri.EscapeDataString(criticidad)}";
+            }
+
+            if (activo.HasValue)
+            {
+                query += $"&activo={activo.Value.ToString().ToLowerInvariant()}";
+            }
+
+            if (!string.IsNullOrEmpty(planta))
+            {
+                query += $"&planta={Uri.EscapeDataString(planta)}";
+            }
+
+            if (!string.IsNullOrEmpty(area))
+            {
+                query += $"&area={Uri.EscapeDataString(area)}";
             }
 
             var response = await _httpClient.GetAsync(query);
@@ -701,6 +760,25 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error deleting equipo: {ex.Message}");
+            await RemoveAuthorizationHeaderAsync();
+            return null;
+        }
+    }
+
+    /// <summary>Reactiva un equipo desactivado (PUT api/equipos/{id}/activar).</summary>
+    public async Task<ApiResponse<bool>?> ActivarEquipoAsync(long id)
+    {
+        try
+        {
+            await AddAuthorizationHeaderAsync();
+            var response = await _httpClient.PutAsync($"api/equipos/{id}/activar", null);
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
+            await RemoveAuthorizationHeaderAsync();
+            return apiResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error activando equipo: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }
@@ -1027,7 +1105,7 @@ public class HttpClientService
 
     // Métodos del API de Inspecciones
     public async Task<ApiResponse<PagedResultDto<InspeccionDto>>?> GetInspeccionesAsync(int page = 1, int pageSize = 10,
-        string? search = null)
+        string? search = null, string? estado = null, long? idEquipo = null)
     {
         try
         {
@@ -1037,6 +1115,16 @@ public class HttpClientService
             if (!string.IsNullOrEmpty(search))
             {
                 query += $"&search={Uri.EscapeDataString(search)}";
+            }
+
+            if (!string.IsNullOrEmpty(estado))
+            {
+                query += $"&estado={Uri.EscapeDataString(estado)}";
+            }
+
+            if (idEquipo.HasValue)
+            {
+                query += $"&idEquipo={idEquipo.Value}";
             }
 
             var response = await _httpClient.GetAsync(query);
@@ -1171,24 +1259,6 @@ public class HttpClientService
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting evidencia: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
-    public async Task<ApiResponse<EvidenciaDto>?> CreateEvidenciaAsync(CreateEvidenciaDto createDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync("api/evidencias", createDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<EvidenciaDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error creating evidencia: {ex.Message}");
             await RemoveAuthorizationHeaderAsync();
             return null;
         }
@@ -1397,15 +1467,17 @@ public class HttpClientService
     /// <summary>
     /// Guarda un lote de respuestas (upsert por pregunta). Se puede llamar con una sola respuesta
     /// para el guardado incremental mientras el técnico avanza.
+    /// Devuelve el estado completo recalculado por el servidor —incluidos los contadores—,
+    /// así que no hace falta volver a pedir la ejecución tras guardar.
     /// </summary>
-    public async Task<ApiResponse<List<RespuestaInspeccionDto>>?> GuardarRespuestasAsync(long idInspeccion,
+    public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
         GuardarRespuestasDto guardarDto)
     {
         try
         {
             await AddAuthorizationHeaderAsync();
             var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{idInspeccion}/respuestas", guardarDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<RespuestaInspeccionDto>>>();
+            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionEjecucionDto>>();
             await RemoveAuthorizationHeaderAsync();
             return apiResponse;
         }
@@ -1611,4 +1683,267 @@ public class HttpClientService
             return null;
         }
     }
+
+    // =============================================================================================
+    // Fase 4 — hallazgos, auditoría, reportes y Parte 11 (PLAN_FASE4_TAREAS §3.4)
+    //
+    // Los endpoints se publican a lo largo de la fase. Mientras uno no existe, el API responde 404
+    // sin cuerpo; estos métodos nunca devuelven null: devuelven Success = false con un mensaje que
+    // se puede mostrar tal cual. El token va en la propia petición, no en DefaultRequestHeaders,
+    // para que dos llamadas simultáneas no se pisen la cabecera.
+    // =============================================================================================
+
+    private static readonly JsonSerializerOptions OpcionesJson = new(JsonSerializerDefaults.Web);
+
+    private async Task<HttpRequestMessage> CrearPeticionAsync(HttpMethod metodo, string url, object? cuerpo = null)
+    {
+        var peticion = new HttpRequestMessage(metodo, url);
+        var token = await _authService.GetTokenAsync();
+        if (!string.IsNullOrEmpty(token))
+        {
+            peticion.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        if (cuerpo != null)
+        {
+            peticion.Content = JsonContent.Create(cuerpo, cuerpo.GetType(), options: OpcionesJson);
+        }
+
+        return peticion;
+    }
+
+    private async Task<ApiResponse<T>> EnviarAsync<T>(HttpMethod metodo, string url, object? cuerpo = null)
+    {
+        try
+        {
+            using var peticion = await CrearPeticionAsync(metodo, url, cuerpo);
+            using var response = await _httpClient.SendAsync(peticion);
+            return await LeerRespuestaAsync<T>(response);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error en {metodo} {url}: {ex.Message}");
+            return ApiResponse<T>.ErrorResponse("No se pudo conectar con el servidor. Compruebe la conexión e intente de nuevo.");
+        }
+    }
+
+    /// <summary>
+    /// Lee un ApiResponse; si el cuerpo es un ProblemDetails de validación ([ApiController])
+    /// junta sus errores, y si no hay cuerpo construye el mensaje a partir del código HTTP.
+    /// </summary>
+    private static async Task<ApiResponse<T>> LeerRespuestaAsync<T>(HttpResponseMessage response)
+    {
+        var texto = await response.Content.ReadAsStringAsync();
+        if (!string.IsNullOrWhiteSpace(texto))
+        {
+            try
+            {
+                using var documento = JsonDocument.Parse(texto);
+                var raiz = documento.RootElement;
+                if (raiz.ValueKind == JsonValueKind.Object)
+                {
+                    if (raiz.TryGetProperty("success", out _))
+                    {
+                        var api = raiz.Deserialize<ApiResponse<T>>(OpcionesJson);
+                        if (api != null)
+                        {
+                            if (!api.Success && string.IsNullOrWhiteSpace(api.Message))
+                            {
+                                api.Message = MensajeSegunEstado(response.StatusCode);
+                            }
+
+                            return api;
+                        }
+                    }
+
+                    if (raiz.TryGetProperty("errors", out var errores) && errores.ValueKind == JsonValueKind.Object)
+                    {
+                        var lista = errores.EnumerateObject()
+                            .SelectMany(campo => campo.Value.EnumerateArray().Select(e => e.GetString() ?? string.Empty))
+                            .Where(e => e.Length > 0)
+                            .ToList();
+                        return ApiResponse<T>.ErrorResponse(
+                            lista.Count > 0 ? string.Join(" ", lista) : MensajeSegunEstado(response.StatusCode), lista);
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Cuerpo que no es JSON (p. ej. una página de error): se usa el código HTTP.
+            }
+        }
+
+        return ApiResponse<T>.ErrorResponse(MensajeSegunEstado(response.StatusCode));
+    }
+
+    private static string MensajeSegunEstado(HttpStatusCode estado) => (int)estado switch
+    {
+        400 => "La solicitud no es válida.",
+        401 => "Su sesión no es válida. Inicie sesión de nuevo.",
+        403 => "No tiene permiso para realizar esta acción.",
+        404 => "Esta función todavía no está disponible en el servidor.",
+        405 => "El servidor ya no admite esta acción.",
+        409 => "La acción no es posible en el estado actual del registro.",
+        423 => "La cuenta está bloqueada temporalmente.",
+        _ => $"El servidor respondió con un error ({(int)estado})."
+    };
+
+    /// <summary>Añade a la ruta los filtros con valor, con fechas en formato ISO (yyyy-MM-dd).</summary>
+    private static string ConFiltros(string ruta, params (string Clave, object? Valor)[] filtros)
+    {
+        var partes = new List<string>();
+        foreach (var (clave, valor) in filtros)
+        {
+            var texto = valor switch
+            {
+                null => null,
+                string s when string.IsNullOrWhiteSpace(s) => null,
+                string s => s.Trim(),
+                DateTime fecha => fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                bool b => b ? "true" : "false",
+                IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+                _ => valor.ToString()
+            };
+
+            if (texto != null)
+            {
+                partes.Add($"{clave}={Uri.EscapeDataString(texto)}");
+            }
+        }
+
+        if (partes.Count == 0)
+        {
+            return ruta;
+        }
+
+        return ruta + (ruta.Contains('?') ? "&" : "?") + string.Join("&", partes);
+    }
+
+    /// <summary>
+    /// Descarga un archivo del API (PDF, Excel) y lo entrega al navegador con wwwroot/js/descargas.js.
+    /// El archivo pasa por un DotNetStreamReference: no se convierte a base64 ni se carga dos veces.
+    /// </summary>
+    public async Task<ApiResponse<bool>> DescargarArchivoAsync(string url, string nombreArchivo)
+    {
+        try
+        {
+            using var peticion = await CrearPeticionAsync(HttpMethod.Get, url);
+            using var response = await _httpClient.SendAsync(peticion);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await LeerRespuestaAsync<bool>(response);
+                return ApiResponse<bool>.ErrorResponse(error.Message, error.Errors);
+            }
+
+            var tipo = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+            await using var contenido = await response.Content.ReadAsStreamAsync();
+            using var referencia = new DotNetStreamReference(contenido);
+            await _jsRuntime.InvokeVoidAsync("ecarDescargas.guardar", nombreArchivo, tipo, referencia);
+
+            return ApiResponse<bool>.SuccessResponse(true, "Archivo descargado");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error descargando {url}: {ex.Message}");
+            return ApiResponse<bool>.ErrorResponse("No se pudo descargar el archivo. Compruebe la conexión e intente de nuevo.");
+        }
+    }
+
+    // --- Auditoría (endpoints 1, 2, 3 y 21) ---
+
+    public Task<ApiResponse<PagedResultDto<AuditoriaDto>>> BuscarAuditoriaAsync(AuditoriaFiltroDto filtro,
+        int page = 1, int pageSize = 20) =>
+        EnviarAsync<PagedResultDto<AuditoriaDto>>(HttpMethod.Get, ConFiltros("api/auditoria",
+            ("page", page), ("pageSize", pageSize), ("search", filtro.Search), ("tabla", filtro.Tabla),
+            ("registroId", filtro.RegistroId), ("idUsuario", filtro.IdUsuario), ("accion", filtro.Accion),
+            ("desde", filtro.Desde), ("hasta", filtro.Hasta)));
+
+    /// <summary>Todas las filas de auditoría de un registro, en orden (historial de cambios).</summary>
+    public Task<ApiResponse<List<AuditoriaDto>>> GetHistorialRegistroAsync(string tabla, long registroId) =>
+        EnviarAsync<List<AuditoriaDto>>(HttpMethod.Get,
+            $"api/auditoria/registro/{Uri.EscapeDataString(tabla)}/{registroId}");
+
+    public Task<ApiResponse<VerificacionAuditoriaDto>> VerificarAuditoriaAsync(DateTime? desde = null, DateTime? hasta = null) =>
+        EnviarAsync<VerificacionAuditoriaDto>(HttpMethod.Get,
+            ConFiltros("api/auditoria/verificar", ("desde", desde), ("hasta", hasta)));
+
+    public Task<ApiResponse<bool>> DescargarAuditoriaAsync(AuditoriaFiltroDto filtro, string formato) =>
+        DescargarArchivoAsync(ConFiltros("api/auditoria/exportar",
+                ("formato", formato), ("search", filtro.Search), ("tabla", filtro.Tabla),
+                ("registroId", filtro.RegistroId), ("idUsuario", filtro.IdUsuario), ("accion", filtro.Accion),
+                ("desde", filtro.Desde), ("hasta", filtro.Hasta)),
+            $"ECAR_auditoria_{DateTime.Now:yyyyMMdd_HHmm}.{formato}");
+
+    // --- Hallazgos (endpoints 4, 5, 8 y 9; el alta y la edición usan Create/UpdateHallazgoAsync) ---
+
+    public Task<ApiResponse<PagedResultDto<HallazgoDto>>> BuscarHallazgosAsync(HallazgoFiltroDto filtro,
+        int page = 1, int pageSize = 10) =>
+        EnviarAsync<PagedResultDto<HallazgoDto>>(HttpMethod.Get, ConFiltros("api/hallazgos",
+            ("page", page), ("pageSize", pageSize), ("search", filtro.Search), ("estado", filtro.Estado),
+            ("criticidad", filtro.Criticidad), ("idEquipo", filtro.IdEquipo), ("idInspeccion", filtro.IdInspeccion),
+            ("desde", filtro.Desde), ("hasta", filtro.Hasta)));
+
+    public Task<ApiResponse<HallazgoDetalleDto>> GetHallazgoDetalleAsync(long id) =>
+        EnviarAsync<HallazgoDetalleDto>(HttpMethod.Get, $"api/hallazgos/{id}");
+
+    public Task<ApiResponse<HallazgoDto>> CambiarEstadoHallazgoAsync(long id, CambiarEstadoHallazgoDto cambio) =>
+        EnviarAsync<HallazgoDto>(HttpMethod.Post, $"api/hallazgos/{id}/estado", cambio);
+
+    public Task<ApiResponse<HallazgoDto>> AnularHallazgoAsync(long id, string motivo) =>
+        EnviarAsync<HallazgoDto>(HttpMethod.Post, $"api/hallazgos/{id}/anular", new MotivoDto { Motivo = motivo });
+
+    // --- Inspecciones y evidencias (endpoints 10, 11, 13 y 14) ---
+
+    /// <summary>Sustituye a DeleteInspeccionAsync: la inspección en curso se anula con motivo y se conserva.</summary>
+    public Task<ApiResponse<InspeccionDto>> AnularInspeccionAsync(long id, string motivo) =>
+        EnviarAsync<InspeccionDto>(HttpMethod.Post, $"api/inspecciones/{id}/anular", new MotivoDto { Motivo = motivo });
+
+    /// <summary>Sustituye a DeleteEvidenciaAsync: la foto se marca como retirada y el archivo se conserva.</summary>
+    public Task<ApiResponse<EvidenciaDto>> RetirarEvidenciaAsync(long id, string motivo) =>
+        EnviarAsync<EvidenciaDto>(HttpMethod.Post, $"api/evidencias/{id}/retirar", new MotivoDto { Motivo = motivo });
+
+    public Task<ApiResponse<IntegridadInspeccionDto>> VerificarIntegridadInspeccionAsync(long id) =>
+        EnviarAsync<IntegridadInspeccionDto>(HttpMethod.Get, $"api/inspecciones/{id}/integridad");
+
+    /// <summary>Copia completa y legible de una inspección firmada (Parte 11 §11.10(b)).</summary>
+    public Task<ApiResponse<bool>> DescargarRegistroInspeccionAsync(long id) =>
+        DescargarArchivoAsync($"api/inspecciones/{id}/registro.pdf", $"ECAR_inspeccion_{id}.pdf");
+
+    // --- Reportes (endpoints 15 a 20) ---
+
+    /// <summary>
+    /// Vista previa de un reporte (formato=json). T es PagedResultDto de la fila del reporte, o
+    /// InspeccionesPorFechasDto para el de inspecciones por fechas.
+    /// </summary>
+    public Task<ApiResponse<T>> GetReporteAsync<T>(string tipo, ReporteFiltroDto filtro, int page = 1, int pageSize = 50) =>
+        EnviarAsync<T>(HttpMethod.Get, UrlReporte(tipo, filtro, ReporteFormatos.Json, page, pageSize));
+
+    /// <summary>Descarga un reporte en PDF o Excel (ReporteFormatos.Pdf / ReporteFormatos.Excel).</summary>
+    public Task<ApiResponse<bool>> DescargarReporteAsync(string tipo, ReporteFiltroDto filtro, string formato) =>
+        DescargarArchivoAsync(UrlReporte(tipo, filtro, formato, null, null),
+            $"ECAR_{tipo}_{filtro.Desde:yyyyMMdd}_{filtro.Hasta:yyyyMMdd}.{formato}");
+
+    private static string UrlReporte(string tipo, ReporteFiltroDto filtro, string formato, int? page, int? pageSize) =>
+        ConFiltros($"api/reportes/{tipo}",
+            ("formato", formato), ("page", page), ("pageSize", pageSize),
+            ("desde", filtro.Desde), ("hasta", filtro.Hasta), ("planta", filtro.Planta), ("area", filtro.Area),
+            ("idEquipo", filtro.IdEquipo), ("idUsuario", filtro.IdUsuario), ("estado", filtro.Estado),
+            ("criticidad", filtro.Criticidad));
+
+    // --- Cuentas (endpoints 23 a 26; el login sigue en AuthService) ---
+
+    public Task<ApiResponse<bool>> CambiarPasswordAsync(CambiarPasswordDto cambio) =>
+        EnviarAsync<bool>(HttpMethod.Post, "api/auth/cambiar-password", cambio);
+
+    /// <summary>Política de contraseñas y minutos de inactividad. Es anónimo.</summary>
+    public Task<ApiResponse<PoliticaSeguridadDto>> GetPoliticaSeguridadAsync() =>
+        EnviarAsync<PoliticaSeguridadDto>(HttpMethod.Get, "api/auth/politica");
+
+    public Task<ApiResponse<PasswordTemporalDto>> RestablecerPasswordAsync(long idUsuario, string motivo) =>
+        EnviarAsync<PasswordTemporalDto>(HttpMethod.Post, $"api/usuarios/{idUsuario}/restablecer-password",
+            new MotivoDto { Motivo = motivo });
+
+    public Task<ApiResponse<bool>> DesbloquearUsuarioAsync(long idUsuario, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Post, $"api/usuarios/{idUsuario}/desbloquear", new MotivoDto { Motivo = motivo });
 }

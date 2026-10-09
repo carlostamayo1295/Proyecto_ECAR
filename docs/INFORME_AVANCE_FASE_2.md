@@ -13,16 +13,15 @@
 ## 1. Resumen ejecutivo
 
 El proyecto se encuentra al **cierre de la Fase 2 del cronograma (Checklists y Gestión QR),
-semana 5 de 12**, con las **Fases 0, 1 y 2 completadas**. La Fase 2 queda lista para la
-**Entrega 3 (semana 6)**, en la fecha comprometida.
+semana 5 de 12**, con las **Fases 0, 1 y 2 completadas**. La Fase 2 queda lista
 
-Desde el informe anterior el equipo entregó la **administración completa de checklists y
+Desde la reunion anterior se ha logrado la **administración completa de checklists y
 preguntas**, el **versionamiento de checklists** con protección de la evidencia histórica, y
 el **código QR por equipo**: generación e impresión de la etiqueta desde la ficha del equipo y
 **consulta del equipo desde el teléfono al escanear la etiqueta**, sin necesidad de iniciar
 sesión. Todo opera de extremo a extremo sobre servicios reales y ha sido verificado.
 
-| Indicador | 08/09/2026 | 16/09/2026 |
+| Indicador | 09/09/2026 | 30/09/2026 |
 |---|---|---|
 | Avance global del MVP | ≈ 40 % | **≈ 50 %** |
 | Fases completadas | 2 de 7 | **3 de 7** |
@@ -52,7 +51,7 @@ semana 6 como estaba previsto; la Fase 3 (inspecciones en campo) arranca la mism
 
 ---
 
-## 3. Qué se entrega en la Fase 2 (demostrable)
+## 3. Qué se muestra en la Fase 2 (demostrable) 
 
 ### 3.1 Checklists de inspección
 
@@ -122,32 +121,10 @@ semana 6 como estaba previsto; la Fase 3 (inspecciones en campo) arranca la mism
 2. Dashboard ejecutivo (Fase 5).
 3. Despliegue en el servidor de ECAR (Fase 6).
 
----
-
-## 6. Puntos que requieren decisión o insumo de ECAR
-
-Se mantienen los seis puntos del informe anterior. **Los puntos 2 y 3 son ahora urgentes**:
-la Fase 3 comienza la próxima semana y su diseño depende de ellos.
-
-| # | Tema | Qué necesitamos de ECAR | Urgencia |
-|---|---|---|---|
-| 1 | **Active Directory** | Servidor, puerto, dominio, tipo de conexión segura y cuenta de prueba | Media — el sistema funciona con autenticación local mientras tanto |
-| 2 | **Almacenamiento de evidencias** | Confirmar: carpeta en el servidor de aplicaciones (propuesta del equipo), recurso de red o base de datos; tamaño máximo por fotografía (propuesta: 5 MB) y formatos (propuesta: JPG/PNG) | **Alta — semana 6** |
-| 3 | **Firma digital** | Confirmar si basta con **firma manuscrita en pantalla + usuario autenticado + fecha/hora + huella de integridad** (propuesta del equipo) o si se exige certificado digital | **Alta — semana 6** |
-| 4 | **Programación de inspecciones** | Periodicidad por equipo o por criticidad | Media — necesaria para el reporte de cumplimiento (Fase 4) |
-| 5 | **Ambiente de despliegue** | Servidor IIS, SQL Server 2022, certificado HTTPS. **Nuevo:** la URL pública del sistema, porque queda impresa en las etiquetas QR | Media — la URL antes de imprimir etiquetas definitivas; el ambiente en la semana 9 |
-| 6 | **Versión de .NET** | Validación formal de .NET 10 (el SRS indica .NET 8) | Media — antes del despliegue |
-
-Si al inicio de la semana 6 no hay respuesta sobre los puntos 2 y 3, el equipo avanzará con
-las propuestas indicadas y las ajustará después, asumiendo el retrabajo correspondiente.
-
-**Nota sobre el QR:** las etiquetas codifican la dirección web del sistema. Las que se
-impriman en desarrollo apuntan a la dirección de pruebas; las etiquetas definitivas deben
-imprimirse **después** de definir la dirección de producción (punto 5).
 
 ---
 
-## 7. Calidad y verificación
+## 6. Calidad y verificación
 
 | Verificación | Resultado |
 |---|---|
@@ -157,46 +134,15 @@ imprimirse **después** de definir la dirección de producción (punto 5).
 | Cobertura del modelo de datos frente al SRS | **13 de 13 tablas** |
 | Verificación funcional de Fase 2 | Ciclo completo QR y versionamiento probados contra el API y en el navegador (escritorio y móvil) |
 
-**Deuda técnica controlada:** 100 advertencias de compilación no bloqueantes (programada su
-limpieza en la semana 6) y una pantalla sobre datos de demostración (Respuestas de
-inspección), que se reemplaza en la Fase 3.
-
 ---
 
-## 8. Plan de trabajo de las próximas cuatro semanas
+## 7. Conclusión
 
-| Semana | Foco | Entregable hacia ECAR |
-|---|---|---|
-| **6** (21 – 27 sep) | **Entrega 3** y arranque de Fase 3: ajustes al modelo de inspección, servicios de ejecución y respuestas, carga de fotografías, pantalla móvil de inspección | **Entrega 3:** checklists, versionamiento y QR (sesión de demostración) |
-| **7** (28 sep – 4 oct) | Fase 3: firma digital, cierre inmutable, resultado final, pruebas en dispositivos móviles | Demostración interna del flujo completo |
-| **8** (5 – 11 oct) | Estabilización de Fase 3; inicio de Fase 4 (auditoría automática) | **Entrega 4:** inspecciones, evidencias y firma |
-| **9** (12 – 18 oct) | Fase 4: auditoría automática, ciclo de vida de hallazgos, reportes PDF/Excel | Avance hacia Entrega 5 (semana 10) |
-
----
-
-## 9. Riesgos del proyecto
-
-| Riesgo | Probabilidad | Impacto | Estado / Mitigación |
-|---|---|---|---|
-| Definición tardía de almacenamiento de evidencias y firma digital | Media | **Alto** | **Escalado.** Bloquea el diseño de Fase 3; el equipo avanzará con las propuestas de la sección 6 si no hay respuesta |
-| Comportamiento de cámara y firma en los dispositivos reales de planta | Media | Medio | **Nuevo.** Se solicita a ECAR el modelo de tablet/teléfono que usarán los técnicos para probar en la semana 7 |
-| Auditoría automática subestimada por su exigencia regulatoria | Media | **Alto** | Se aborda al inicio de la Fase 4 y se valida con Calidad de ECAR antes de UAT |
-| Demora en los datos de Active Directory | Media | Medio | Arquitectura preparada; se activa por configuración |
-| Indisponibilidad del ambiente de despliegue en la semana 12 | Media | **Alto** | Se solicita habilitarlo a más tardar en la semana 9 |
-
----
-
-## 10. Conclusión
-
-En la semana 5 el proyecto cierra la **Fase 2 completa y verificada** y alcanza el **50 % del
+La **Fase 2 completa y verificada** y alcanza el **50 % del
 MVP** en la fecha prevista. Con checklists versionados y equipos etiquetados con QR, la
-plataforma tiene todo lo necesario para la **inspección en campo**, que es el corazón
+plataforma tiene todo lo necesario para la **inspección en field**, que es el corazón
 funcional del sistema y el foco de las dos próximas semanas.
 
-Solicitamos a ECAR priorizar las definiciones de **almacenamiento de evidencias** y **alcance
-de la firma digital** (sección 6), y proponemos agendar la **sesión de demostración de la
-Entrega 3** durante la semana 6, idealmente con un teléfono de planta para probar el escaneo
-de etiquetas.
 
 ---
 

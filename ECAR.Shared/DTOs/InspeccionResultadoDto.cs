@@ -43,5 +43,16 @@ public class InspeccionResultadoDto
     /// <summary>SHA-256 del contenido firmado. Visible para el Auditor (regla 6 del SRS).</summary>
     public string? FirmaHash { get; set; }
 
+    // --- Manifestación de la firma (Fase 4, Parte 11 §11.50) ---
+
+    /// <summary>Nombre del firmante tal como era al firmar.</summary>
+    public string? FirmaNombre { get; set; }
+
+    /// <summary>Significado de la firma, p. ej. "Responsable de la ejecución de la inspección".</summary>
+    public string? FirmaSignificado { get; set; }
+
+    /// <summary>Cómo se calculó FirmaHash: "SHA256-v0" (antes de la Fase 4) o "HMACSHA256-v1".</summary>
+    public string? FirmaAlgoritmo { get; set; }
+
     public bool ConNovedad => Resultado == InspeccionResultados.ConNovedad;
 }
