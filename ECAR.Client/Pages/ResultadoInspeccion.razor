@@ -130,6 +130,13 @@
                 {
                     <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; max-width: 300px; background: white;" />
                 }
+
+                @* Manifestación de la firma (Fase 4, Parte 11 §11.50). Queda dentro del área de
+                   impresión, así que también sale en "Imprimir / PDF". *@
+                @if (ManifestacionFirma(resultado) is { } manifestacion)
+                {
+                    <MudText Typo="Typo.body2" Class="d-block mt-2">@manifestacion</MudText>
+                }
             </div>
 
             <!-- Botones de Acción (Ocultos al imprimir) -->
@@ -225,5 +232,21 @@
     private async Task ImprimirReporte()
     {
         await jsRuntime.InvokeVoidAsync("window.print");
+    }
+
+    // Manifestación de la firma (Fase 4, Parte 11 §11.50): nombre, fecha/hora (Colombia, UTC−5)
+    // y significado, tal como estaban al momento de firmar. Null si la inspección es anterior a
+    // la Fase 4 y no tiene FirmaNombre/FirmaSignificado todavía.
+    private static string? ManifestacionFirma(InspeccionResultadoDto r)
+    {
+        if (string.IsNullOrWhiteSpace(r.FirmaNombre) || string.IsNullOrWhiteSpace(r.FirmaSignificado)
+            || r.FechaCierre is not { } cierre)
+        {
+            return null;
+        }
+
+        var horaColombia = cierre.AddHours(-5);
+        return $"Firmado electrónicamente por {r.FirmaNombre} el {horaColombia:dd/MM/yyyy HH:mm} " +
+               $"(hora de Colombia, UTC−5). Significado: {r.FirmaSignificado}";
     }
 }
