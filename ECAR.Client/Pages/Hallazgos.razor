@@ -281,8 +281,10 @@ await LoadHallazgosAsync();
 
 private async Task OpenViewDialog(HallazgoDto hallazgo)
 {
-var parameters = new DialogParameters { ["Hallazgo"] = hallazgo };
-await DialogService.ShowAsync<HallazgoDetailModal>("Detalle del Hallazgo", parameters);
+    var parameters = new DialogParameters { ["Hallazgo"] = hallazgo };
+    var dialog = await DialogService.ShowAsync<HallazgoDetailModal>("Detalle del Hallazgo", parameters);
+    await dialog.Result;
+    await LoadHallazgosAsync();
 }
 
 // Plan, endpoint 7: solo Administrador y Técnico editan, y solo en Abierto o EnProceso.

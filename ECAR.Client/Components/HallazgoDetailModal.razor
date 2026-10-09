@@ -1,3 +1,10 @@
+
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
+
+
 <MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
     <TitleContent>
         <MudText Typo="Typo.h6">Hallazgo #@Hallazgo?.IdHallazgo</MudText>
@@ -5,6 +12,10 @@
     <DialogContent>
         @if (Hallazgo != null)
         {
+            @if (cargando)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+            }
             <MudGrid Class="mb-4">
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.caption">Equipo</MudText>
@@ -22,7 +33,7 @@
                 <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Estado</MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                        Color="@(Hallazgo.Estado == "Cerrado" ? Color.Success : Color.Warning)" Text="@(Hallazgo.Estado ?? "-")" />
+                             Color="@EstadoColor(Hallazgo.Estado)" Text="@EtiquetaEstado(Hallazgo.Estado)" />
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudText Typo="Typo.caption">Fecha de registro</MudText>
@@ -34,10 +45,105 @@
             <MudPaper Elevation="0" Class="value-box pa-3">
                 <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@Hallazgo.Descripcion</MudText>
             </MudPaper>
+            
+            @if (detalle is { } d)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Origen</MudText>
+                <MudPaper Elevation="0" Class="value-box pa-3">
+                    <MudText Typo="Typo.body2">
+                        @(d.Origen == HallazgoOrigenes.Novedad ? "Novedad de inspección" : d.Origen == HallazgoOrigenes.Manual ? "Registro manual" : "-")
+                        · Inspección #@d.IdInspeccion @(d.FechaInspeccion.Year > 1 ? "del " + d.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "")
+                    </MudText>
+                    <MudText Typo="Typo.body2">
+                        Inspector: @(d.NombreInspector ?? "-")
+                    </MudText>
+                    @if (d.Origen == HallazgoOrigenes.Novedad)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2" Style="word-break: break-word;">
+                            <b>Pregunta:</b> @(d.Pregunta ?? "-")
+                        </MudText>
+                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">
+                            <b>Observación del técnico:</b> @(string.IsNullOrWhiteSpace(d.ObservacionRespuesta) ? "-" : d.ObservacionRespuesta)
+                        </MudText>
+                    }
+                </MudPaper>
+
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Seguimiento</MudText>
+                <MudPaper Elevation="0" Class="value-box pa-3">
+                    <MudText Typo="Typo.body2">
+                        Registrado por: @(d.NombreUsuarioRegistro ?? "-")
+                    </MudText>
+                    <MudText Typo="Typo.body2">
+                        Responsable: @(d.NombreResponsable ?? "Sin asignar")
+                    </MudText>
+                    <MudText Typo="Typo.body2">
+                        Fecha de compromiso: @(d.FechaCompromiso is null ? "-" : d.FechaCompromiso.Value.ToLocalTime().ToString("dd/MM/yyyy"))
+                    </MudText>
+                    @if (!string.IsNullOrWhiteSpace(d.AccionCorrectiva))
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2" Style="white-space: pre-wrap; word-break: break-word;">
+                            <b>Acción correctiva:</b> @d.AccionCorrectiva
+                        </MudText>
+                    }
+                    @if (d.FechaCierre is not null)
+                    {
+                        <MudText Typo="Typo.body2">
+                            Cerrado el @d.FechaCierre.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") por @(d.NombreUsuarioCierre ?? "-")
+                        </MudText>
+                    }
+                    @if (d.Estado == HallazgoEstados.Anulado)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2" Style="word-break: break-word;">
+                            <b>Anulado. Motivo:</b> @(d.MotivoAnulacion ?? "-")
+                        </MudText>
+                    }
+                </MudPaper>
+            }
         }
+        
+        @if (cerrando)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mt-4">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Cerrar hallazgo</MudText>
+                <MudTextField T="string" Label="Acción correctiva realizada" @bind-Value="accionCorrectiva"
+                              Variant="Variant.Outlined" Lines="3" Immediate="true" AutoFocus="true"
+                              Error="@(intentoCerrar && string.IsNullOrWhiteSpace(accionCorrectiva))"
+                              ErrorText="La acción correctiva es obligatoria para cerrar el hallazgo."
+                              HelperText="Describa qué se hizo para resolver la novedad." />
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="@procesando"
+                               OnClick="ConfirmarCierreAsync" Class="dialog-button action-state">Continuar</MudButton>
+                    <MudButton Variant="Variant.Outlined" Disabled="@procesando"
+                               OnClick="CancelarCierre" Class="dialog-button">Cancelar</MudButton>
+                </div>
+            </MudPaper>
+        }
+         
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+        <div class="d-flex flex-wrap gap-2 pa-2">
+            @if (PuedePasarAEnProceso)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@procesando"
+                           OnClick="PasarAEnProcesoAsync" Class="dialog-button action-state">Pasar a en proceso</MudButton>
+            }
+            @if (PuedeCerrar && !cerrando)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="@procesando"
+                           OnClick="IniciarCierre" Class="dialog-button action-state">Cerrar hallazgo</MudButton>
+            }
+            @if (PuedeReabrir)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@procesando"
+                           OnClick="ReabrirAsync" Class="dialog-button action-state">Reabrir</MudButton>
+            }
+            @if (PuedeAnular)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@procesando"
+                           OnClick="AnularAsync" Class="dialog-button action-state">Anular</MudButton>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close" Class="dialog-button">Cerrar</MudButton>
+        </div>
     </DialogActions>
 </MudDialog>
 
@@ -46,7 +152,186 @@
 
     [Parameter]
     public HallazgoDto? Hallazgo { get; set; }
+    
+    
+    // Detalle completo (endpoint 5): origen, seguimiento, cierre y anulación.
+    private HallazgoDetalleDto? detalle;
+    private bool cargando;
+    private bool puedeGestionar;
+    private bool esAdmin;
 
+    private long IdHallazgo => Hallazgo?.IdHallazgo ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        esAdmin = roles.Contains("Administrador");
+        puedeGestionar = esAdmin || roles.Contains("Técnico");
+
+        if (Hallazgo != null)
+        {
+            await CargarDetalleAsync();
+        }
+    }
+
+    private async Task CargarDetalleAsync()
+    {
+        cargando = true;
+        try
+        {
+            var result = await HttpClientService.GetHallazgoDetalleAsync(IdHallazgo);
+            if (result != null && result.Success && result.Data != null)
+            {
+                detalle = result.Data;
+                // El detalle trae todo lo del hallazgo de la lista y más; así el encabezado queda al día.
+                Hallazgo = result.Data;
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "No se pudo cargar el detalle del hallazgo", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+        // Cierre: la acción correctiva es obligatoria (plan, §3.5).
+    private bool procesando;
+    private bool cerrando;
+    private bool intentoCerrar;
+    private string? accionCorrectiva;
+
+    // Ciclo de vida (plan §3.5): Abierto -> EnProceso -> Cerrado -> (Admin) Abierto.
+    // Anulado solo desde Abierto o EnProceso, y solo el Administrador.
+    private bool PuedePasarAEnProceso => puedeGestionar && Hallazgo?.Estado == HallazgoEstados.Abierto;
+
+    private bool PuedeCerrar => puedeGestionar && Hallazgo?.Estado == HallazgoEstados.EnProceso;
+
+    private bool PuedeReabrir => esAdmin && Hallazgo?.Estado == HallazgoEstados.Cerrado;
+
+    private bool PuedeAnular => esAdmin &&
+        (Hallazgo?.Estado == HallazgoEstados.Abierto || Hallazgo?.Estado == HallazgoEstados.EnProceso);
+
+    private async Task PasarAEnProcesoAsync()
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Pasar a en proceso",
+            "El hallazgo quedará en seguimiento.", "Pasar a en proceso", Color.Warning);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var cambio = new CambiarEstadoHallazgoDto { Estado = HallazgoEstados.EnProceso, Motivo = motivo };
+        await EjecutarAsync(() => HttpClientService.CambiarEstadoHallazgoAsync(IdHallazgo, cambio),
+            "El hallazgo pasó a en proceso.");
+    }
+
+    private void IniciarCierre()
+    {
+        accionCorrectiva = null;
+        intentoCerrar = false;
+        cerrando = true;
+    }
+
+    private void CancelarCierre()
+    {
+        cerrando = false;
+        intentoCerrar = false;
+        accionCorrectiva = null;
+    }
+
+    private async Task ConfirmarCierreAsync()
+    {
+        intentoCerrar = true;
+        if (string.IsNullOrWhiteSpace(accionCorrectiva))
+        {
+            return;
+        }
+
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Cerrar hallazgo",
+            "El hallazgo quedará cerrado con la acción correctiva que escribió.", "Cerrar hallazgo", Color.Success);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var cambio = new CambiarEstadoHallazgoDto
+        {
+            Estado = HallazgoEstados.Cerrado,
+            AccionCorrectiva = accionCorrectiva.Trim(),
+            Motivo = motivo
+        };
+
+        var ok = await EjecutarAsync(() => HttpClientService.CambiarEstadoHallazgoAsync(IdHallazgo, cambio),
+            "El hallazgo se cerró correctamente.");
+        if (ok)
+        {
+            CancelarCierre();
+        }
+    }
+
+    private async Task ReabrirAsync()
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Reabrir hallazgo",
+            "El hallazgo volverá a estar abierto.", "Reabrir", Color.Warning);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var cambio = new CambiarEstadoHallazgoDto { Estado = HallazgoEstados.Abierto, Motivo = motivo };
+        await EjecutarAsync(() => HttpClientService.CambiarEstadoHallazgoAsync(IdHallazgo, cambio),
+            "El hallazgo se reabrió.");
+    }
+
+    private async Task AnularAsync()
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Anular hallazgo",
+            "El hallazgo quedará anulado y no se podrá modificar.", "Anular", Color.Error);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        await EjecutarAsync(() => HttpClientService.AnularHallazgoAsync(IdHallazgo, motivo),
+            "El hallazgo se anuló.");
+    }
+
+    // Ejecuta una acción del API; si sale bien, recarga el detalle para que cambien estado y botones.
+    private async Task<bool> EjecutarAsync(Func<Task<ApiResponse<HallazgoDto>>> accion, string mensajeExito)
+    {
+        procesando = true;
+        try
+        {
+            var result = await accion();
+            if (result != null && result.Success)
+            {
+                Snackbar.Add(mensajeExito, Severity.Success);
+                await CargarDetalleAsync();
+                return true;
+            }
+
+            Snackbar.Add(result?.Message ?? "No se pudo completar la acción.", Severity.Error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            return false;
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+    
+    
     private void Close()
     {
         MudDialog.Close(DialogResult.Ok(true));
@@ -59,6 +344,22 @@
         "baja" => Color.Info,
         _ => Color.Default
     };
+    
+    
+    private static Color EstadoColor(string? estado) => estado switch
+    {
+        HallazgoEstados.Abierto => Color.Error,
+        HallazgoEstados.EnProceso => Color.Warning,
+        HallazgoEstados.Cerrado => Color.Success,
+        _ => Color.Default
+    };
+
+    private static string EtiquetaEstado(string? estado) => estado switch
+    {
+        HallazgoEstados.EnProceso => "En proceso",
+        null or "" => "-",
+        _ => estado
+    };
 }
 
 <style>
@@ -67,16 +368,38 @@
     min-width: 100px !important;
     font-weight: 500 !important;
 }
-
-.dialog-button.mud-button-filled {
+.dialog-button.mud-button-filled:not(.action-state) {
     background-color: #397FDE !important;
     color: white !important;
 }
 
-.dialog-button.mud-button-filled:hover {
+.dialog-button.mud-button-filled:not(.action-state):hover {
     background-color: #2A5FB8 !important;
 }
 
+.dialog-button.action-state.mud-button-filled.mud-button-filled-warning {
+    /* noinspection CssUnresolvedCustomProperty */
+    background-color: var(--mud-palette-warning, #ff9800) !important;
+    /* noinspection CssUnresolvedCustomProperty */
+    color: var(--mud-palette-warning-text, #ffffff) !important;
+}
+
+.dialog-button.action-state.mud-button-filled.mud-button-filled-success {
+    /* noinspection CssUnresolvedCustomProperty */
+    background-color: var(--mud-palette-success, #00c853) !important;
+    /* noinspection CssUnresolvedCustomProperty */
+    color: var(--mud-palette-success-text, #ffffff) !important;
+}
+
+.dialog-button.action-state.mud-button-filled.mud-button-filled-error {
+    /* noinspection CssUnresolvedCustomProperty */
+    background-color: var(--mud-palette-error, #f44336) !important;
+    /* noinspection CssUnresolvedCustomProperty */
+    color: var(--mud-palette-error-text, #ffffff) !important;
+}
+.dialog-button.action-state.mud-button-filled:hover {
+    filter: brightness(0.92);
+}
 .value-box {
     border: 1px solid #E0E6ED !important;
     border-radius: 8px !important;
