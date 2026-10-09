@@ -3,6 +3,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
 
 
 <MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
@@ -52,7 +53,7 @@
                 <MudPaper Elevation="0" Class="value-box pa-3">
                     <MudText Typo="Typo.body2">
                         @(d.Origen == HallazgoOrigenes.Novedad ? "Novedad de inspección" : d.Origen == HallazgoOrigenes.Manual ? "Registro manual" : "-")
-                        · Inspección #@d.IdInspeccion @(d.FechaInspeccion.Year > 1 ? "del " + d.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "")
+                        <MudLink Typo="Typo.inherit" OnClick="@(() => IrAInspeccion(d.IdInspeccion))">Inspección #@d.IdInspeccion</MudLink>
                     </MudText>
                     <MudText Typo="Typo.body2">
                         Inspector: @(d.NombreInspector ?? "-")
@@ -338,7 +339,11 @@
             procesando = false;
         }
     }
-    
+    private void IrAInspeccion(long idInspeccion)
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+        NavigationManager.NavigateTo($"/inspecciones/{idInspeccion}/resultado");
+    }
     
     private void Close()
     {
