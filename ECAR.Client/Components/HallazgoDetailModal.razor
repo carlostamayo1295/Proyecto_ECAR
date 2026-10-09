@@ -101,6 +101,12 @@
             }
         }
         
+        @if (puedeVerHistorial && IdHallazgo > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Historial de cambios</MudText>
+            <HistorialCambiosRegistro Tabla="Hallazgos" RegistroId="IdHallazgo" />
+        }
+        
         @if (cerrando)
         {
             <MudPaper Outlined="true" Class="pa-3 mt-4">
@@ -159,6 +165,7 @@
     private bool cargando;
     private bool puedeGestionar;
     private bool esAdmin;
+    private bool puedeVerHistorial;
 
     private long IdHallazgo => Hallazgo?.IdHallazgo ?? 0;
 
@@ -167,6 +174,7 @@
         var roles = await AuthorizationService.GetUserRolesAsync();
         esAdmin = roles.Contains("Administrador");
         puedeGestionar = esAdmin || roles.Contains("Técnico");
+        puedeVerHistorial = esAdmin || roles.Contains("Auditor");
 
         if (Hallazgo != null)
         {
