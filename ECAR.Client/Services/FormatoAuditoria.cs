@@ -9,9 +9,9 @@ public static class FormatoAuditoria
     public static Color ColorAccion(string? accion) => accion switch
     {
         AuditoriaAcciones.Crear or AuditoriaAcciones.Activar or AuditoriaAcciones.LoginExitoso => Color.Success,
-        AuditoriaAcciones.Modificar or AuditoriaAcciones.CambioPassword => Color.Info,
+        AuditoriaAcciones.Modificar or AuditoriaAcciones.Reabrir or AuditoriaAcciones.CambioPassword => Color.Info,
         AuditoriaAcciones.Firmar or AuditoriaAcciones.Cerrar => Color.Primary,
-        AuditoriaAcciones.Desactivar or AuditoriaAcciones.RestablecerPassword => Color.Warning,
+        AuditoriaAcciones.Desactivar or AuditoriaAcciones.Retirar or AuditoriaAcciones.RestablecerPassword => Color.Warning,
         AuditoriaAcciones.Eliminar or AuditoriaAcciones.Anular or AuditoriaAcciones.LoginFallido
             or AuditoriaAcciones.CuentaBloqueada => Color.Error,
         // Filas anteriores a la Fase 4.

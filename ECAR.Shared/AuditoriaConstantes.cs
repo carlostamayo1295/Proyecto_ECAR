@@ -16,6 +16,12 @@ public static class AuditoriaAcciones
     public const string Cerrar = "Cerrar";
     public const string Firmar = "Firmar";
 
+    /// <summary>Un hallazgo cerrado que el Administrador vuelve a abrir, con motivo (§3.5).</summary>
+    public const string Reabrir = "Reabrir";
+
+    /// <summary>Una evidencia quitada de una inspección en curso: se conserva, no se borra (§3.6).</summary>
+    public const string Retirar = "Retirar";
+
     // Eventos sin entidad (Tabla = "Sistema").
     public const string LoginExitoso = "LoginExitoso";
     public const string LoginFallido = "LoginFallido";
@@ -28,7 +34,7 @@ public static class AuditoriaAcciones
 
     public static readonly IReadOnlyList<string> Todas =
     [
-        Crear, Modificar, Eliminar, Desactivar, Activar, Anular, Cerrar, Firmar,
+        Crear, Modificar, Eliminar, Desactivar, Activar, Anular, Cerrar, Firmar, Reabrir, Retirar,
         LoginExitoso, LoginFallido, CuentaBloqueada, CierreSesion, CambioPassword,
         RestablecerPassword, Exportacion, VerificacionIntegridad
     ];
@@ -46,6 +52,6 @@ public static class AuditoriaTablas
     [
         "Equipos", "CategoriasEquipo", "Ubicaciones", "Checklists", "PreguntasChecklist",
         "Inspecciones", "RespuestasInspeccion", "Evidencias", "Hallazgos",
-        "Usuarios", "Roles", "UsuarioRol", Sistema
+        "Usuarios", "Roles", "UsuarioRol", "HistorialPasswords", Sistema
     ];
 }

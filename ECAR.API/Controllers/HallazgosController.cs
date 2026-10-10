@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -117,7 +119,10 @@ public class HallazgosController : ControllerBase
             Descripcion = createDto.Descripcion,
             Criticidad = createDto.Criticidad,
             Estado = EstadoAbierto,
-            FechaRegistro = DateTime.UtcNow
+            FechaRegistro = DateTime.UtcNow,
+            // La migración Fase4HallazgosAuditoria exige quién lo registra; el endpoint 6 completo es de BE-1.
+            Origen = HallazgoOrigenes.Manual,
+            IdUsuarioRegistro = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
         };
 
         _context.Hallazgos.Add(hallazgo);

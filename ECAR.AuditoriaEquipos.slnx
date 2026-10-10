@@ -3,5 +3,6 @@
   <Project Path="ECAR.API/ECAR.API.csproj" />
   <Project Path="ECAR.Client/ECAR.Client.csproj" />
   <Project Path="ECAR.Infrastructure/ECAR.Infrastructure.csproj" />
+  <Project Path="ECAR.IntegrationTests/ECAR.IntegrationTests.csproj" />
   <Project Path="ECAR.Shared/ECAR.Shared.csproj" />
 </Solution>

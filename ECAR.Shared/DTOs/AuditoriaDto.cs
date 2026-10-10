@@ -2,7 +2,8 @@ namespace ECAR.Shared.DTOs;
 
 /// <summary>
 /// Una fila de la auditoría. Las propiedades a partir de IdUsuario son de la Fase 4
-/// (PLAN_FASE4_TAREAS §3.1 y §3.3); mientras BE-0 no publique la migración llegan vacías.
+/// (PLAN_FASE4_TAREAS §3.1 y §3.3): la migración Fase4HallazgosAuditoria las crea y la
+/// auditoría transaccional las rellena; llegan vacías hasta que AuditoriaController las mapee.
 /// </summary>
 public class AuditoriaDto
 {

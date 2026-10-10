@@ -39,10 +39,28 @@ public class Evidencia
     [Column("IdUsuarioCarga")]
     public long IdUsuarioCarga { get; set; }
 
+    // Fase 4: una foto quitada antes de firmar se conserva (§3.6).
+
+    [Column("Retirada")]
+    public bool Retirada { get; set; }
+
+    [Column("FechaRetiro")]
+    public DateTime? FechaRetiro { get; set; }
+
+    [Column("IdUsuarioRetiro")]
+    public long? IdUsuarioRetiro { get; set; }
+
+    [MaxLength(500)]
+    [Column("MotivoRetiro")]
+    public string? MotivoRetiro { get; set; }
+
     // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;
 
     [ForeignKey("IdUsuarioCarga")]
     public virtual Usuario UsuarioCargaDetalle { get; set; } = null!;
+
+    [ForeignKey("IdUsuarioRetiro")]
+    public virtual Usuario? UsuarioRetiro { get; set; }
 }
