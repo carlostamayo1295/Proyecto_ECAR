@@ -62,6 +62,11 @@ public class Equipo
     [Column("FechaCreacion")]
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Una de FrecuenciasInspeccion; la usa el reporte de cumplimiento (Fase 4).</summary>
+    [MaxLength(20)]
+    [Column("FrecuenciaInspeccion")]
+    public string? FrecuenciaInspeccion { get; set; }
+
     // Propiedades de navegación
     [ForeignKey("IdCategoria")]
     public virtual CategoriaEquipo? Categoria { get; set; }

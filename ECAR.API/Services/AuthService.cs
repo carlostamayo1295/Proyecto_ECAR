@@ -131,7 +131,9 @@ public class AuthService : IAuthService
         {
             new Claim(ClaimTypes.NameIdentifier, usuario.IdUsuario.ToString()),
             new Claim(ClaimTypes.Email, usuario.Correo),
-            new Claim(ClaimTypes.Name, usuario.Nombre)
+            new Claim(ClaimTypes.Name, usuario.Nombre),
+            // Si el sello cambia (desactivación, cambio de contraseña), el token deja de valer.
+            new Claim(SelloSeguridad.TipoClaim, usuario.SecurityStamp)
         };
 
         // ASP.NET lee estos claims cuando un endpoint exige un rol.
@@ -157,6 +159,7 @@ public class AuthService : IAuthService
 
     private int GetJwtExpirationHours()
     {
-        return int.TryParse(_configuration["JWT:ExpirationHours"], out var hours) ? hours : 24;
+        // 8 h, un turno (PLAN_FASE4_TAREAS §3.8); el cierre por inactividad lo hace el cliente.
+        return int.TryParse(_configuration["JWT:ExpirationHours"], out var hours) ? hours : 8;
     }
 }

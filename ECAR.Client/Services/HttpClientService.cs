@@ -1648,23 +1648,13 @@ public class HttpClientService
     /// Firma y cierra la inspección. Si falta alguna pregunta obligatoria o una novedad sin
     /// observación, el API responde 400 y detalla los faltantes en Errors.
     /// </summary>
-    public async Task<ApiResponse<InspeccionResultadoDto>?> FirmarInspeccionAsync(long id, FirmarInspeccionDto firmarDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync($"api/inspecciones/{id}/firmar", firmarDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionResultadoDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error firmando inspeccion: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>
+    /// Endpoint 12. Como los métodos de la Fase 4, nunca devuelve null: un 400 trae la contraseña
+    /// incorrecta (sin Errors) o lo que falta para cerrar (con Errors), y un 423 la cuenta
+    /// bloqueada, aunque el servidor no mande cuerpo.
+    /// </summary>
+    public Task<ApiResponse<InspeccionResultadoDto>> FirmarInspeccionAsync(long id, FirmarInspeccionDto firmarDto) =>
+        EnviarAsync<InspeccionResultadoDto>(HttpMethod.Post, $"api/inspecciones/{id}/firmar", firmarDto);
 
     public async Task<ApiResponse<InspeccionResultadoDto>?> GetInspeccionResultadoAsync(long id)
     {
