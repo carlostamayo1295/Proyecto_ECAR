@@ -61,6 +61,24 @@
                     <MudPaper Elevation="0" Outlined="true" Class="pa-2">
                         <code style="word-break: break-all;">@resultado.FirmaHash</code>
                     </MudPaper>
+
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.VerifiedUser" Class="mt-3 print-hidden"
+                               Disabled="@_verificando" OnClick="VerificarIntegridadAsync">
+                        @(_verificando ? "Verificando…" : "Verificar integridad")
+                    </MudButton>
+
+                    @if (_integridad != null)
+                    {
+                        <MudAlert Severity="@(_integridad.Integra ? Severity.Success : Severity.Error)" Dense="true" Class="mt-3">
+                            @(_integridad.Integra
+                                ? "Integridad verificada: la inspección no ha cambiado desde que se firmó."
+                                : "Integridad alterada: el contenido no coincide con la huella registrada al firmar.")
+                            <MudText Typo="Typo.caption" Class="d-block">
+                                Algoritmo: @_integridad.Algoritmo · Verificado el @_integridad.VerificadoEn.AddHours(-5).ToString("dd/MM/yyyy HH:mm") (hora de Colombia, UTC−5)
+                            </MudText>
+                        </MudAlert>
+                    }
                 </MudPaper>
             }
 
@@ -144,6 +162,10 @@
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="VolverListado">
                     Volver al Listado
                 </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@_descargando"
+                           StartIcon="@Icons.Material.Filled.Download" OnClick="DescargarRegistroAsync">
+                    @(_descargando ? "Generando…" : "Descargar registro PDF")
+                </MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImprimirReporte">
                     <MudIcon Icon="@Icons.Material.Filled.Print" Class="mr-2" /> Imprimir / PDF
                 </MudButton>
@@ -163,6 +185,9 @@
     private string? _error;
     private bool _puedeVerHash;
     private Dictionary<long, string?> _miniaturas = new();
+    private IntegridadInspeccionDto? _integridad;
+    private bool _verificando;
+    private bool _descargando;
 
     protected override async Task OnInitializedAsync()
     {
@@ -234,7 +259,44 @@
         await jsRuntime.InvokeVoidAsync("window.print");
     }
 
-    // Manifestación de la firma (Fase 4, Parte 11 §11.50): nombre, fecha/hora (Colombia, UTC−5)
+
+    private async Task VerificarIntegridadAsync()
+    {
+        if (_verificando) return;
+
+        _verificando = true;
+        _integridad = null;
+        var respuesta = await Http.VerificarIntegridadInspeccionAsync(IdInspeccion);
+        _verificando = false;
+
+        if (respuesta.Success && respuesta.Data != null)
+        {
+            _integridad = respuesta.Data;
+        }
+        else
+        {
+            Snackbar.Add(string.IsNullOrWhiteSpace(respuesta.Message)
+                ? "No se pudo verificar la integridad." : respuesta.Message, Severity.Error);
+        }
+    }
+
+    // copia completa y legible de la inspección firmada.
+    private async Task DescargarRegistroAsync()
+    {
+        if (_descargando) return;
+
+        _descargando = true;
+        var respuesta = await Http.DescargarRegistroInspeccionAsync(IdInspeccion);
+        _descargando = false;
+
+        if (!respuesta.Success)
+        {
+            Snackbar.Add(string.IsNullOrWhiteSpace(respuesta.Message)
+                ? "No se pudo descargar el registro." : respuesta.Message, Severity.Error);
+        }
+    }
+
+    // Manifestación de la firma : nombre, fecha/hora (Colombia, UTC−5)
     // y significado, tal como estaban al momento de firmar. Null si la inspección es anterior a
     // la Fase 4 y no tiene FirmaNombre/FirmaSignificado todavía.
     private static string? ManifestacionFirma(InspeccionResultadoDto r)
