@@ -1264,24 +1264,6 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> DeleteEvidenciaAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.DeleteAsync($"api/evidencias/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting evidencia: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
     // Métodos del API de Hallazgos
     public async Task<ApiResponse<PagedResultDto<HallazgoDto>>?> GetHallazgosAsync(int page = 1, int pageSize = 10,
         string? search = null, long? idInspeccion = null, string? estado = null)
