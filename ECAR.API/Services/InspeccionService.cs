@@ -154,7 +154,7 @@ public class InspeccionService : IInspeccionService
                 Resultado = i.Resultado,
                 Observaciones = i.Observaciones,
                 TieneFirma = !string.IsNullOrEmpty(i.FirmaDigital),
-                TotalEvidencias = i.Evidencias.Count,
+                TotalEvidencias = i.Evidencias.Count(e => !e.Retirada),
                 TotalHallazgos = i.Hallazgos.Count
             })
             .ToListAsync();

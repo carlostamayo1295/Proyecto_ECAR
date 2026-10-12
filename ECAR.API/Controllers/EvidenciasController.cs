@@ -63,6 +63,7 @@ public class EvidenciasController : ControllerBase
             .Include(e => e.UsuarioCargaDetalle)
             .Include(e => e.Inspeccion)
                 .ThenInclude(i => i.Equipo)
+            .Where(e => !e.Retirada)
             .AsQueryable();
 
         if (idInspeccion.HasValue && idInspeccion.Value > 0)
@@ -141,7 +142,7 @@ public class EvidenciasController : ControllerBase
         }
 
         var evidencias = await _context.Evidencias
-            .Where(e => e.IdInspeccion == idInspeccion)
+            .Where(e => e.IdInspeccion == idInspeccion && !e.Retirada)
             .OrderBy(e => e.FechaCarga)
             .Select(e => new EvidenciaDto
             {
