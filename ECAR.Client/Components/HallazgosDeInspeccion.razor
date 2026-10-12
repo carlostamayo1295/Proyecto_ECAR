@@ -1,7 +1,7 @@
 ﻿@inject HttpClientService Http
 @inject IDialogService DialogService
 
-<MudText Typo="Typo.subtitle2" Class="mt-4 mb-2"><b>Hallazgos de la inspección</b></MudText>
+<MudText Typo="Typo.subtitle2" Class="mt-4 mb-2"><b>Hallazgos generados</b></MudText>
 
 @if (_cargando)
 {
@@ -115,8 +115,8 @@ else
 
     private static Color ColorEstado(string? estado) => estado switch
     {
-        "Abierto" => Color.Warning,
-        "EnProceso" => Color.Info,
+        "Abierto" => Color.Error,
+        "EnProceso" => Color.Warning,
         "Cerrado" => Color.Success,
         _ => Color.Default
     };
