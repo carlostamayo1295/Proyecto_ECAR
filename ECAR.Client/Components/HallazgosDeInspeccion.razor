@@ -1,0 +1,123 @@
+﻿@inject HttpClientService Http
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.subtitle2" Class="mt-4 mb-2"><b>Hallazgos de la inspección</b></MudText>
+
+@if (_cargando)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else if (_error != null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">@_error</MudAlert>
+}
+else if (_hallazgos.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+        Esta inspección no tiene hallazgos registrados.
+    </MudAlert>
+}
+else
+{
+    <div class="mb-4">
+        @foreach (var h in _hallazgos)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2">
+                <div class="d-flex flex-wrap align-center gap-2 mb-1">
+                    <MudText Typo="Typo.body2"><b>Hallazgo #@h.IdHallazgo</b></MudText>
+                    <MudChip T="string" Size="Size.Small" Color="@ColorCriticidad(h.Criticidad)">@h.Criticidad</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorEstado(h.Estado)">
+                        @(h.Estado == "EnProceso" ? "En proceso" : h.Estado)
+                    </MudChip>
+                </div>
+                <MudText Typo="Typo.body2">@h.Descripcion</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    Responsable: @(string.IsNullOrWhiteSpace(h.NombreResponsable) ? "Sin asignar" : h.NombreResponsable)
+                </MudText>
+                @if (h.FechaCompromiso.HasValue)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                        Fecha de compromiso: @h.FechaCompromiso.Value.ToString("dd/MM/yyyy")
+                    </MudText>
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Visibility"
+                           OnClick="@(() => AbrirDetalleAsync(h))" Class="mt-1 print-hidden">
+                    Ver detalle
+                </MudButton>
+                
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public long IdInspeccion { get; set; }
+
+    private List<HallazgoDto> _hallazgos = new();
+    private bool _cargando = true;
+    private string? _error;
+    private long _idCargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IdInspeccion != _idCargado)
+        {
+            _idCargado = IdInspeccion;
+            await CargarAsync();
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            var filtro = new HallazgoFiltroDto { IdInspeccion = IdInspeccion };
+            var result = await Http.BuscarHallazgosAsync(filtro, 1, 50);
+
+            if (result != null && result.Success && result.Data != null)
+            {
+                _hallazgos = result.Data.Data ?? new List<HallazgoDto>();
+            }
+            else
+            {
+                _error = result?.Message ?? "No se pudieron cargar los hallazgos.";
+            }
+        }
+        catch (Exception)
+        {
+            _error = "Error de conexión al cargar los hallazgos.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    
+    private async Task AbrirDetalleAsync(HallazgoDto hallazgo)
+    {
+        var parameters = new DialogParameters { ["Hallazgo"] = hallazgo };
+        var dialog = await DialogService.ShowAsync<HallazgoDetailModal>("Detalle del Hallazgo", parameters);
+        await dialog.Result;
+        await CargarAsync();
+    }
+    private static Color ColorCriticidad(string? criticidad) => criticidad switch
+    {
+        "Alta" => Color.Error,
+        "Media" => Color.Warning,
+        "Baja" => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color ColorEstado(string? estado) => estado switch
+    {
+        "Abierto" => Color.Warning,
+        "EnProceso" => Color.Info,
+        "Cerrado" => Color.Success,
+        _ => Color.Default
+    };
+}
