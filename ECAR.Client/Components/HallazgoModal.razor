@@ -10,11 +10,11 @@
     </TitleContent>
     <DialogContent>
         <MudForm @ref="form">
-            <MudSelect T="long" Label="Inspección" @bind-Value="idInspeccion" Variant="Variant.Outlined"
+            <MudSelect T="long?" Label="Inspección" @bind-Value="idInspeccion" Variant="Variant.Outlined"
                 Required="true" RequiredError="La inspección es requerida" Disabled="IsEditMode" Class="mb-3">
                 @foreach (var inspeccion in inspecciones)
                 {
-                    <MudSelectItem T="long" Value="inspeccion.IdInspeccion">
+                    <MudSelectItem T="long?" Value="@((long?)inspeccion.IdInspeccion)">
                         #@inspeccion.IdInspeccion - @inspeccion.NombreEquipo (@inspeccion.FechaInspeccion.ToString("dd/MM/yyyy"))
                     </MudSelectItem>
                 }
@@ -61,7 +61,7 @@
     private bool IsEditMode => Hallazgo != null;
 
     private List<InspeccionDto> inspecciones = new();
-    private long idInspeccion;
+    private long? idInspeccion;
     private string descripcion = string.Empty;
     private string? criticidad = "Media";
     private string? estado = "Abierto";
@@ -77,7 +77,7 @@
 
         if (esAdmin)
         {
-            var respUsuarios = await HttpClient.GetUsuariosAsync(1, 200);
+            var respUsuarios = await HttpClient.GetUsuariosAsync(1, 50);
             if (respUsuarios?.Success == true && respUsuarios.Data != null)
             {
                 usuarios = (respUsuarios.Data.Data ?? new List<UsuarioDto>())
@@ -151,7 +151,7 @@
         }
         else
         {
-            if (idInspeccion == 0)
+            if (idInspeccion == null)
             {
                 Snackbar.Add("Debe seleccionar una inspección", Severity.Warning);
                 return;
@@ -159,7 +159,7 @@
 
             var createDto = new CreateHallazgoDto
             {
-                IdInspeccion = idInspeccion,
+                IdInspeccion = idInspeccion ?? 0,
                 Descripcion = descripcion,
                 Criticidad = criticidad,
                 FechaCompromiso = fechaCompromiso?.Date,
