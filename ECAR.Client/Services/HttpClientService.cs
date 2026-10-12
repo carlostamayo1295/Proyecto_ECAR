@@ -1648,23 +1648,13 @@ public class HttpClientService
     /// Firma y cierra la inspección. Si falta alguna pregunta obligatoria o una novedad sin
     /// observación, el API responde 400 y detalla los faltantes en Errors.
     /// </summary>
-    public async Task<ApiResponse<InspeccionResultadoDto>?> FirmarInspeccionAsync(long id, FirmarInspeccionDto firmarDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync($"api/inspecciones/{id}/firmar", firmarDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionResultadoDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error firmando inspeccion: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>
+    /// Endpoint 12. Como los métodos de la Fase 4, nunca devuelve null: un 400 trae la contraseña
+    /// incorrecta (sin Errors) o lo que falta para cerrar (con Errors), y un 423 la cuenta
+    /// bloqueada, aunque el servidor no mande cuerpo.
+    /// </summary>
+    public Task<ApiResponse<InspeccionResultadoDto>> FirmarInspeccionAsync(long id, FirmarInspeccionDto firmarDto) =>
+        EnviarAsync<InspeccionResultadoDto>(HttpMethod.Post, $"api/inspecciones/{id}/firmar", firmarDto);
 
     public async Task<ApiResponse<InspeccionResultadoDto>?> GetInspeccionResultadoAsync(long id)
     {
@@ -1718,75 +1708,14 @@ public class HttpClientService
         {
             using var peticion = await CrearPeticionAsync(metodo, url, cuerpo);
             using var response = await _httpClient.SendAsync(peticion);
-            return await LeerRespuestaAsync<T>(response);
+            return await LectorRespuestaApi.LeerAsync<T>(response);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error en {metodo} {url}: {ex.Message}");
-            return ApiResponse<T>.ErrorResponse("No se pudo conectar con el servidor. Compruebe la conexión e intente de nuevo.");
+            return ApiResponse<T>.ErrorResponse(LectorRespuestaApi.MensajeSinConexion);
         }
     }
-
-    /// <summary>
-    /// Lee un ApiResponse; si el cuerpo es un ProblemDetails de validación ([ApiController])
-    /// junta sus errores, y si no hay cuerpo construye el mensaje a partir del código HTTP.
-    /// </summary>
-    private static async Task<ApiResponse<T>> LeerRespuestaAsync<T>(HttpResponseMessage response)
-    {
-        var texto = await response.Content.ReadAsStringAsync();
-        if (!string.IsNullOrWhiteSpace(texto))
-        {
-            try
-            {
-                using var documento = JsonDocument.Parse(texto);
-                var raiz = documento.RootElement;
-                if (raiz.ValueKind == JsonValueKind.Object)
-                {
-                    if (raiz.TryGetProperty("success", out _))
-                    {
-                        var api = raiz.Deserialize<ApiResponse<T>>(OpcionesJson);
-                        if (api != null)
-                        {
-                            if (!api.Success && string.IsNullOrWhiteSpace(api.Message))
-                            {
-                                api.Message = MensajeSegunEstado(response.StatusCode);
-                            }
-
-                            return api;
-                        }
-                    }
-
-                    if (raiz.TryGetProperty("errors", out var errores) && errores.ValueKind == JsonValueKind.Object)
-                    {
-                        var lista = errores.EnumerateObject()
-                            .SelectMany(campo => campo.Value.EnumerateArray().Select(e => e.GetString() ?? string.Empty))
-                            .Where(e => e.Length > 0)
-                            .ToList();
-                        return ApiResponse<T>.ErrorResponse(
-                            lista.Count > 0 ? string.Join(" ", lista) : MensajeSegunEstado(response.StatusCode), lista);
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Cuerpo que no es JSON (p. ej. una página de error): se usa el código HTTP.
-            }
-        }
-
-        return ApiResponse<T>.ErrorResponse(MensajeSegunEstado(response.StatusCode));
-    }
-
-    private static string MensajeSegunEstado(HttpStatusCode estado) => (int)estado switch
-    {
-        400 => "La solicitud no es válida.",
-        401 => "Su sesión no es válida. Inicie sesión de nuevo.",
-        403 => "No tiene permiso para realizar esta acción.",
-        404 => "Esta función todavía no está disponible en el servidor.",
-        405 => "El servidor ya no admite esta acción.",
-        409 => "La acción no es posible en el estado actual del registro.",
-        423 => "La cuenta está bloqueada temporalmente.",
-        _ => $"El servidor respondió con un error ({(int)estado})."
-    };
 
     /// <summary>Añade a la ruta los filtros con valor, con fechas en formato ISO (yyyy-MM-dd).</summary>
     private static string ConFiltros(string ruta, params (string Clave, object? Valor)[] filtros)
@@ -1832,7 +1761,7 @@ public class HttpClientService
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = await LeerRespuestaAsync<bool>(response);
+                var error = await LectorRespuestaApi.LeerAsync<bool>(response);
                 return ApiResponse<bool>.ErrorResponse(error.Message, error.Errors);
             }
 

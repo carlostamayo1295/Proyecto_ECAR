@@ -66,6 +66,11 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
         ClockSkew = TimeSpan.Zero
     };
+    // Un token deja de valer en cuanto se desactiva al usuario o cambia su contraseña (endpoint 27).
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = SelloSeguridad.ValidarTokenAsync
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -94,6 +99,9 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+// Auditoría transaccional (Fase 4): ECARDbContext recibe IContextoAuditoria por su constructor.
+builder.Services.AddScoped<IMotivoCambio, MotivoCambio>();
+builder.Services.AddScoped<ECAR.Infrastructure.Data.IContextoAuditoria, ContextoAuditoriaHttp>();
 builder.Services.AddScoped<IInspeccionService, InspeccionService>();
 
 // Configurar almacenamiento de evidencias

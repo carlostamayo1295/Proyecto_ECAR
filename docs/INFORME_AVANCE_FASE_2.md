@@ -51,7 +51,7 @@ semana 6 como estaba previsto; la Fase 3 (inspecciones en campo) arranca la mism
 
 ---
 
-## 3. Qué se muestra en la Fase 2 (demostrable) 
+## 3. Qué se muestra en la Fase 2git 
 
 ### 3.1 Checklists de inspección
 
@@ -146,5 +146,5 @@ funcional del sistema y el foco de las dos próximas semanas.
 
 ---
 
-*Documento generado el 16 de septiembre de 2026 a partir del estado verificado del
+*Documento generado el 30 de septiembre de 2026 a partir del estado verificado del
 repositorio.*
