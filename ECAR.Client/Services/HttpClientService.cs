@@ -1708,75 +1708,14 @@ public class HttpClientService
         {
             using var peticion = await CrearPeticionAsync(metodo, url, cuerpo);
             using var response = await _httpClient.SendAsync(peticion);
-            return await LeerRespuestaAsync<T>(response);
+            return await LectorRespuestaApi.LeerAsync<T>(response);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error en {metodo} {url}: {ex.Message}");
-            return ApiResponse<T>.ErrorResponse("No se pudo conectar con el servidor. Compruebe la conexión e intente de nuevo.");
+            return ApiResponse<T>.ErrorResponse(LectorRespuestaApi.MensajeSinConexion);
         }
     }
-
-    /// <summary>
-    /// Lee un ApiResponse; si el cuerpo es un ProblemDetails de validación ([ApiController])
-    /// junta sus errores, y si no hay cuerpo construye el mensaje a partir del código HTTP.
-    /// </summary>
-    private static async Task<ApiResponse<T>> LeerRespuestaAsync<T>(HttpResponseMessage response)
-    {
-        var texto = await response.Content.ReadAsStringAsync();
-        if (!string.IsNullOrWhiteSpace(texto))
-        {
-            try
-            {
-                using var documento = JsonDocument.Parse(texto);
-                var raiz = documento.RootElement;
-                if (raiz.ValueKind == JsonValueKind.Object)
-                {
-                    if (raiz.TryGetProperty("success", out _))
-                    {
-                        var api = raiz.Deserialize<ApiResponse<T>>(OpcionesJson);
-                        if (api != null)
-                        {
-                            if (!api.Success && string.IsNullOrWhiteSpace(api.Message))
-                            {
-                                api.Message = MensajeSegunEstado(response.StatusCode);
-                            }
-
-                            return api;
-                        }
-                    }
-
-                    if (raiz.TryGetProperty("errors", out var errores) && errores.ValueKind == JsonValueKind.Object)
-                    {
-                        var lista = errores.EnumerateObject()
-                            .SelectMany(campo => campo.Value.EnumerateArray().Select(e => e.GetString() ?? string.Empty))
-                            .Where(e => e.Length > 0)
-                            .ToList();
-                        return ApiResponse<T>.ErrorResponse(
-                            lista.Count > 0 ? string.Join(" ", lista) : MensajeSegunEstado(response.StatusCode), lista);
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Cuerpo que no es JSON (p. ej. una página de error): se usa el código HTTP.
-            }
-        }
-
-        return ApiResponse<T>.ErrorResponse(MensajeSegunEstado(response.StatusCode));
-    }
-
-    private static string MensajeSegunEstado(HttpStatusCode estado) => (int)estado switch
-    {
-        400 => "La solicitud no es válida.",
-        401 => "Su sesión no es válida. Inicie sesión de nuevo.",
-        403 => "No tiene permiso para realizar esta acción.",
-        404 => "Esta función todavía no está disponible en el servidor.",
-        405 => "El servidor ya no admite esta acción.",
-        409 => "La acción no es posible en el estado actual del registro.",
-        423 => "La cuenta está bloqueada temporalmente.",
-        _ => $"El servidor respondió con un error ({(int)estado})."
-    };
 
     /// <summary>Añade a la ruta los filtros con valor, con fechas en formato ISO (yyyy-MM-dd).</summary>
     private static string ConFiltros(string ruta, params (string Clave, object? Valor)[] filtros)
@@ -1822,7 +1761,7 @@ public class HttpClientService
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = await LeerRespuestaAsync<bool>(response);
+                var error = await LectorRespuestaApi.LeerAsync<bool>(response);
                 return ApiResponse<bool>.ErrorResponse(error.Message, error.Errors);
             }
 
