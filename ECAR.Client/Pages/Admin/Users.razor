@@ -59,14 +59,25 @@
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
                         </MudTd>
                         <MudTd>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" 
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" 
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteUser(context)" Class="action-button">
-                                @(context.Activo ? "Desactivar" : "Activar")
-                            </MudButton>
+                            <div class="d-flex flex-wrap gap-1">
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                    Editar
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteUser(context)" Class="action-button">
+                                    @(context.Activo ? "Desactivar" : "Activar")
+                                </MudButton>
+                                @* Fase 4 (Parte 11 §11.300): contraseña temporal y desbloqueo, ambos con motivo. *@
+                                <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.LockReset" OnClick="() => RestablecerPassword(context)" Class="action-button">
+                                    Restablecer contraseña
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.LockOpen" OnClick="() => DesbloquearUsuario(context)" Class="action-button">
+                                    Desbloquear
+                                </MudButton>
+                            </div>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -174,6 +185,51 @@
         if (result is not null && !result.Canceled)
         {
             await LoadDataAsync();
+        }
+    }
+
+    // Endpoint 25: el servidor genera una contraseña temporal que solo se ve esta vez; el usuario
+    // debe cambiarla al entrar. El motivo queda en la auditoría.
+    private async Task RestablecerPassword(UsuarioDto usuario)
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Restablecer contraseña",
+            $"Se generará una contraseña temporal para '{usuario.Nombre}'. El usuario deberá cambiarla al iniciar sesión.",
+            "Restablecer", Color.Warning);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var respuesta = await HttpClientService.RestablecerPasswordAsync(usuario.IdUsuario, motivo);
+        if (respuesta.Success && respuesta.Data is { } temporal)
+        {
+            await PasswordTemporalDialog.MostrarAsync(DialogService, usuario.Nombre, temporal.PasswordTemporal);
+        }
+        else
+        {
+            Snackbar.Add(respuesta.Message ?? "No se pudo completar la accion", Severity.Error);
+        }
+    }
+
+    // Endpoint 26: quita el bloqueo por intentos fallidos. El motivo queda en la auditoría.
+    private async Task DesbloquearUsuario(UsuarioDto usuario)
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Desbloquear cuenta",
+            $"La cuenta de '{usuario.Nombre}' volverá a poder iniciar sesión.",
+            "Desbloquear", Color.Info);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var respuesta = await HttpClientService.DesbloquearUsuarioAsync(usuario.IdUsuario, motivo);
+        if (respuesta.Success)
+        {
+            Snackbar.Add($"Cuenta de '{usuario.Nombre}' desbloqueada", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(respuesta.Message ?? "No se pudo completar la accion", Severity.Error);
         }
     }
 
