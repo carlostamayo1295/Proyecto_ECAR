@@ -257,9 +257,11 @@
 
         try
         {
-            var result = await AuthService.LoginAsync(loginDto);
-            
-            if (result != null)
+            // Fase 4: el servidor dice por qué no se pudo entrar (usuario o contraseña incorrectos,
+            // cuenta bloqueada con 423, etc.) y se muestra tal cual.
+            var respuesta = await AuthService.LoginConMensajeAsync(loginDto);
+
+            if (respuesta.Success && respuesta.Data is { } result)
             {
                 // El reloj de inactividad arranca ahora: si no, la última actividad guardada
                 // podría ser de hace horas y la sesión se cerraría nada más entrar.
@@ -296,7 +298,9 @@
             }
             else
             {
-                errorMessage = "Credenciales inválidas. Por favor verifique su correo y contraseña.";
+                errorMessage = string.IsNullOrWhiteSpace(respuesta.Message)
+                    ? "No se pudo iniciar sesión. Intente de nuevo."
+                    : respuesta.Message;
             }
         }
         catch (Exception ex)
