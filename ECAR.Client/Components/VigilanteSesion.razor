@@ -51,6 +51,7 @@
                 var segundos = await JS.InvokeAsync<int>("ecarActividad.segundosInactivo");
                 if (segundos >= minutos * 60)
                 {
+                    await HttpClientService.CerrarSesionAsync(porInactividad: true);
                     await InvokeAsync(() => Sesion.IrAlLoginAsync(expirada: false, porInactividad: true));
                     return;
                 }

@@ -2,6 +2,7 @@
 @inject NavigationManager NavigationManager
 @inject AuthorizationService AuthorizationService
 @inject AuthService AuthService
+@inject HttpClientService HttpClientService
 
 @using MudBlazor
 
@@ -173,6 +174,7 @@
 
     private async Task HandleLogout()
     {
+        await HttpClientService.CerrarSesionAsync();
         await AuthService.ClearTokenAsync();
         NavigationManager.NavigateTo("/login", forceLoad: true);
     }

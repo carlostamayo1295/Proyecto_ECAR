@@ -142,8 +142,17 @@
 
         if (IsEditMode && Checklist != null)
         {
+            // Fase 4 (§3.3): modificar un checklist pide motivo, que queda en la auditoría.
+            var motivo = await MotivoDialog.PedirAsync(DialogService, "Modificar checklist",
+                $"Indique por qué modifica el checklist «{nombre}».", "Guardar", Color.Primary);
+            if (motivo is null)
+            {
+                return;
+            }
+
             var updateDto = new UpdateChecklistDto
             {
+                Motivo = motivo,
                 Nombre = nombre,
                 Version = version,
                 Activo = activo,

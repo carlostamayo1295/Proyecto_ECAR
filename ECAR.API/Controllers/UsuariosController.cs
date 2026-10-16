@@ -251,6 +251,18 @@ public class UsuariosController : ControllerBase
                 "No se puede desactivar o retirar el rol al último administrador activo"));
         }
 
+        // §3.3: desactivar o reactivar exige motivo, también desde la edición.
+        if (updateDto.Activo.HasValue && updateDto.Activo.Value != usuario.Activo)
+        {
+            var errorMotivo = MotivoObligatorio.Validar(updateDto.Motivo);
+            if (errorMotivo != null)
+            {
+                return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(errorMotivo));
+            }
+
+            _motivoCambio.Establecer(updateDto.Motivo);
+        }
+
         if (!string.IsNullOrWhiteSpace(updateDto.Nombre))
             usuario.Nombre = updateDto.Nombre.Trim();
 
@@ -309,7 +321,7 @@ public class UsuariosController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteUsuario(long id)
+    public async Task<ActionResult<ApiResponse<bool>>> DeleteUsuario(long id, [FromQuery] string? motivo = null)
     {
         var usuario = await _context.Usuarios
             .Include(u => u.UsuarioRoles)
@@ -328,6 +340,14 @@ public class UsuariosController : ControllerBase
                 "No se puede desactivar al último administrador activo"));
         }
 
+        var errorMotivo = MotivoObligatorio.Validar(motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(motivo);
+
         // Borrado lógico: se marca como inactivo en lugar de eliminarlo
         usuario.Activo = false;
         await _context.SaveChangesAsync();
@@ -342,7 +362,7 @@ public class UsuariosController : ControllerBase
     /// </summary>
     [HttpPut("{id}/activar")]
     [Authorize(Roles = "Administrador")]
-    public async Task<ActionResult<ApiResponse<bool>>> ActivarUsuario(long id)
+    public async Task<ActionResult<ApiResponse<bool>>> ActivarUsuario(long id, [FromQuery] string? motivo = null)
     {
         var usuario = await _context.Usuarios.FindAsync(id);
 
@@ -350,6 +370,14 @@ public class UsuariosController : ControllerBase
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Usuario no encontrado"));
         }
+
+        var errorMotivo = MotivoObligatorio.Validar(motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(motivo);
 
         usuario.Activo = true;
         await _context.SaveChangesAsync();

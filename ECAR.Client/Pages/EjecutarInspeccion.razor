@@ -143,6 +143,14 @@
             return;
         }
 
+        // Fase 4: una anulada tampoco admite cambios y no tiene resultado; se vuelve al listado.
+        if (inspeccion.EstaAnulada)
+        {
+            Snackbar.Add("La inspección está anulada y no admite cambios", Severity.Warning);
+            NavigationManager.NavigateTo("/inspecciones", replace: true);
+            return;
+        }
+
         RefrescarContadores();
         cargando = false;
     }

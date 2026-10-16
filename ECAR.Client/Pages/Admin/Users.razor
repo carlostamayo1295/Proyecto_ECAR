@@ -29,6 +29,14 @@
             }
             else if (usuarios != null && usuarios.Any())
             {
+                @* Parte 11 §11.300(d): el Administrador ve qué cuentas bloquearon los intentos fallidos. *@
+                @if (usuarios.Count(EstaBloqueado) is var bloqueadas and > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                        @(bloqueadas == 1 ? "Hay 1 cuenta bloqueada" : $"Hay {bloqueadas} cuentas bloqueadas") por intentos
+                        fallidos en esta lista. Se desbloquean solas pasado el tiempo de bloqueo o con «Desbloquear».
+                    </MudAlert>
+                }
                 <MudTable Items="usuarios" Hover="true" Striped="true" Elevation="0">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
@@ -57,6 +65,16 @@
                         <MudTd>
                             <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)" 
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
+                            @if (EstaBloqueado(context))
+                            {
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled"
+                                    Text="@($"Bloqueada hasta {context.BloqueadoHasta!.Value.ToLocalTime():HH:mm}")" />
+                            }
+                            @if (context.DebeCambiarPassword)
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined"
+                                    Text="Contraseña temporal" title="Debe cambiarla al entrar" />
+                            }
                         </MudTd>
                         <MudTd>
                             <div class="d-flex flex-wrap gap-1">
@@ -73,10 +91,13 @@
                                     StartIcon="@Icons.Material.Filled.LockReset" OnClick="() => RestablecerPassword(context)" Class="action-button">
                                     Restablecer contraseña
                                 </MudButton>
-                                <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" 
-                                    StartIcon="@Icons.Material.Filled.LockOpen" OnClick="() => DesbloquearUsuario(context)" Class="action-button">
-                                    Desbloquear
-                                </MudButton>
+                                @if (EstaBloqueado(context))
+                                {
+                                    <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                        StartIcon="@Icons.Material.Filled.LockOpen" OnClick="() => DesbloquearUsuario(context)" Class="action-button">
+                                        Desbloquear
+                                    </MudButton>
+                                }
                             </div>
                         </MudTd>
                     </RowTemplate>
@@ -98,6 +119,8 @@
 
 @code {
     private List<UsuarioDto>? usuarios;
+
+    private static bool EstaBloqueado(UsuarioDto usuario) => usuario.BloqueadoHasta > DateTime.UtcNow;
     private List<RolDto>? availableRoles;
     private string searchText = string.Empty;
     private int currentPage = 1;
@@ -236,11 +259,12 @@
     private async Task DeleteUser(UsuarioDto usuario)
     {
         var action = usuario.Activo ? "desactivar" : "activar";
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea {action} el usuario '{usuario.Nombre}'?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
-        var result = await dialog.Result;
+        // Fase 4 (§3.3): desactivar y reactivar piden motivo, que queda en la auditoría.
+        var motivo = await MotivoDialog.PedirAsync(DialogService, $"{char.ToUpper(action[0])}{action[1..]} usuario",
+            $"Indique por qué va a {action} al usuario «{usuario.Nombre}».", $"{char.ToUpper(action[0])}{action[1..]}",
+            usuario.Activo ? Color.Error : Color.Success);
 
-        if (result is not null && !result.Canceled)
+        if (motivo is not null)
         {
             isLoading = true;
             try
@@ -248,8 +272,8 @@
                 // DELETE es el borrado lógico y siempre desactiva: activar tiene su propio
                 // endpoint. Antes los dos botones llamaban a DELETE y "Activar" no hacía nada.
                 var resultado = usuario.Activo
-                    ? await HttpClientService.DeleteUsuarioAsync(usuario.IdUsuario)
-                    : await HttpClientService.ActivarUsuarioAsync(usuario.IdUsuario);
+                    ? await HttpClientService.DeleteUsuarioAsync(usuario.IdUsuario, motivo)
+                    : await HttpClientService.ActivarUsuarioAsync(usuario.IdUsuario, motivo);
 
                 if (resultado != null && resultado.Success)
                 {

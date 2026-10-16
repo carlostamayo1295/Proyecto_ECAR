@@ -35,6 +35,7 @@
                         ValueChanged="OnEstadoChanged">
                         <MudSelectItem T="string" Value="@InspeccionEstados.EnCurso">En curso</MudSelectItem>
                         <MudSelectItem T="string" Value="@InspeccionEstados.Cerrada">Cerrada</MudSelectItem>
+                        <MudSelectItem T="string" Value="@InspeccionEstados.Anulada">Anulada</MudSelectItem>
                     </MudSelect>
                 </MudItem>
             </MudGrid>
@@ -64,8 +65,8 @@
                         <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                         <MudTd DataLabel="Estado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                Color="@(context.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
-                                Text="@(context.Estado == InspeccionEstados.EnCurso ? "En curso" : "Cerrada")" />
+                                Color="@EstadoColor(context.Estado)" Text="@EstadoTexto(context.Estado)"
+                                title="@(context.Estado == InspeccionEstados.Anulada ? $"Anulada: {context.MotivoAnulacion}" : null)" />
                         </MudTd>
                         <MudTd DataLabel="Resultado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
@@ -96,19 +97,20 @@
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
                                 Ver
                             </MudButton>
-                            @if (puedeEjecutar)
+                            @if (puedeEjecutar && context.Estado != InspeccionEstados.Anulada)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                     Editar
                                 </MudButton>
                             }
-                            @* Una inspección cerrada no se borra (regla 6): el API respondería 409. *@
+                            @* Fase 4 (§3.6): una inspección en curso ya no se borra, se anula con motivo y se
+                               conserva con sus respuestas y fotos. Una cerrada no se toca (regla 6). *@
                             @if (puedeEjecutar && context.Estado == InspeccionEstados.EnCurso)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteInspeccion(context)" Class="action-button">
-                                    Eliminar
+                                    StartIcon="@Icons.Material.Filled.Block" OnClick="() => AnularInspeccion(context)" Class="action-button">
+                                    Anular
                                 </MudButton>
                             }
                         </MudTd>
@@ -257,39 +259,45 @@
         await DialogService.ShowAsync<InspeccionDetailModal>("Detalle de la Inspección", parameters);
     }
 
-    private async Task DeleteInspeccion(InspeccionDto inspeccion)
+    private async Task AnularInspeccion(InspeccionDto inspeccion)
     {
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la inspección #{inspeccion.IdInspeccion} del equipo '{inspeccion.NombreEquipo}'?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Anular inspección",
+            $"La inspección #{inspeccion.IdInspeccion} del equipo «{inspeccion.NombreEquipo}» quedará anulada: " +
+            "se conservan sus respuestas y fotos, pero ya no se podrá continuar ni firmar.", "Anular", Color.Error);
+        if (motivo is null)
         {
-            isLoading = true;
-            try
-            {
-                var deleteResult = await HttpClientService.DeleteInspeccionAsync(inspeccion.IdInspeccion);
+            return;
+        }
 
-                if (deleteResult != null && deleteResult.Success)
-                {
-                    Snackbar.Add("Inspección eliminada exitosamente", Severity.Success);
-                    await LoadInspeccionesAsync();
-                }
-                else
-                {
-                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar inspección", Severity.Error);
-                }
-            }
-            catch (Exception ex)
+        isLoading = true;
+        try
+        {
+            var resultado = await HttpClientService.AnularInspeccionAsync(inspeccion.IdInspeccion, motivo);
+            Snackbar.Add(resultado.Success ? "Inspección anulada" : resultado.Message,
+                resultado.Success ? Severity.Success : Severity.Error);
+            if (resultado.Success)
             {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-            }
-            finally
-            {
-                isLoading = false;
+                await LoadInspeccionesAsync();
             }
         }
+        finally
+        {
+            isLoading = false;
+        }
     }
+
+    private static Color EstadoColor(string estado) => estado switch
+    {
+        InspeccionEstados.Cerrada => Color.Success,
+        InspeccionEstados.Anulada => Color.Default,
+        _ => Color.Warning
+    };
+
+    private static string EstadoTexto(string estado) => estado switch
+    {
+        InspeccionEstados.EnCurso => "En curso",
+        _ => estado
+    };
 
     private static Color ResultadoColor(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
     {

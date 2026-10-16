@@ -56,13 +56,14 @@
                 <MudPaper Elevation="2" Class="pa-4 mb-4">
                     <MudText Typo="Typo.subtitle2" Class="mb-1 text-primary"><b>Auditoría Criptográfica</b></MudText>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
-                        Este hash SHA-256 garantiza la inmutabilidad de la inspección en el servidor.
+                        Esta huella garantiza la inmutabilidad de la inspección: desde la Fase 4 es un
+                        HMAC-SHA256 con una clave que solo tiene el servidor (Parte 11 §11.70).
                     </MudText>
                     <MudPaper Elevation="0" Outlined="true" Class="pa-2">
                         <code style="word-break: break-all;">@resultado.FirmaHash</code>
                     </MudPaper>
 
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                StartIcon="@Icons.Material.Filled.VerifiedUser" Class="mt-3 print-hidden"
                                Disabled="@_verificando" OnClick="VerificarIntegridadAsync">
                         @(_verificando ? "Verificando…" : "Verificar integridad")
@@ -141,6 +142,9 @@
                 }
             </div>
 
+            <!-- Hallazgos generados (FE-1, tarea 4): los crea el servidor al firmar, uno por novedad -->
+            <HallazgosDeInspeccion IdInspeccion="@resultado.IdInspeccion" />
+
             <!-- Visualización de la Firma Capturada -->
             <div class="mb-4 text-center">
                 <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del Técnico</b></MudText>
@@ -159,10 +163,10 @@
 
             <!-- Botones de Acción (Ocultos al imprimir) -->
             <div class="d-flex justify-end gap-3 mt-6 print-hidden">
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="VolverListado">
+                <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="VolverListado">
                     Volver al Listado
                 </MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@_descargando"
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_descargando"
                            StartIcon="@Icons.Material.Filled.Download" OnClick="DescargarRegistroAsync">
                     @(_descargando ? "Generando…" : "Descargar registro PDF")
                 </MudButton>

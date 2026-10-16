@@ -42,7 +42,7 @@
            StartIcon="@Icons.Material.Filled.Lock"
            Disabled="@(Firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
            OnClick="@(() => AbrirConfirmacionAsync(firmaCapturada!, observacionesCierre))">
-    @(Firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")
+    @(Firmando ? "Confirmando su identidad…" : "Firmar y cerrar la inspección")
 </MudButton>
 
 @code {
@@ -92,10 +92,10 @@
         firmando = true;
         await InvokeAsync(StateHasChanged);
 
-        InspeccionResultadoDto? resultado;
+        ApiResponse<InspeccionResultadoDto>? respuesta;
         try
         {
-            resultado = await ConfirmarIdentidadDialog.AbrirAsync(
+            respuesta = await ConfirmarIdentidadDialog.AbrirAsync(
                 DialogService,
                 Inspeccion.IdInspeccion,
                 QuitarPrefijoDataUri(firmaPng),
@@ -107,14 +107,28 @@
             await InvokeAsync(StateHasChanged);
         }
 
-        if (resultado == null)
+        if (respuesta == null)
         {
             // El usuario canceló el diálogo de confirmación; no se pierde la firma capturada.
             return;
         }
 
+        if (!respuesta.Success || respuesta.Data == null)
+        {
+            // Reglas 3 y 4: obligatorias sin responder o novedades sin observación. Se listan y
+            // se vuelve a las preguntas, como antes de pedir la contraseña.
+            Snackbar.Add(respuesta.Message, Severity.Error);
+            foreach (var error in respuesta.Errors ?? [])
+            {
+                Snackbar.Add(error, Severity.Warning);
+            }
+
+            await OnVolverAPreguntas.InvokeAsync();
+            return;
+        }
+
         Snackbar.Add("Inspección firmada y cerrada", Severity.Success);
-        await OnFirmada.InvokeAsync(resultado);
+        await OnFirmada.InvokeAsync(respuesta.Data);
     }
 
     private static string QuitarPrefijoDataUri(string firmaPng)

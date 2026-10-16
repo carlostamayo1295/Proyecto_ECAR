@@ -19,4 +19,8 @@ public class UpdateUsuarioDto
     public string? Password { get; set; }
 
     public List<long>? RoleIds { get; set; }
+
+    /// <summary>Fase 4 (§3.3): obligatorio si la edición desactiva o reactiva al usuario.</summary>
+    [MaxLength(500, ErrorMessage = "El motivo no puede exceder 500 caracteres")]
+    public string? Motivo { get; set; }
 }

@@ -33,4 +33,12 @@ public class UpdateEquipoDto
     public long? IdUbicacion { get; set; }
 
     public bool? Activo { get; set; }
+
+    /// <summary>Una de FrecuenciasInspeccion; vacío la quita (reporte de cumplimiento).</summary>
+    [MaxLength(20, ErrorMessage = "La frecuencia no puede exceder 20 caracteres")]
+    public string? FrecuenciaInspeccion { get; set; }
+
+    /// <summary>Fase 4 (§3.3): obligatorio al modificar un equipo; queda en la auditoría.</summary>
+    [MaxLength(500, ErrorMessage = "El motivo no puede exceder 500 caracteres")]
+    public string? Motivo { get; set; }
 }

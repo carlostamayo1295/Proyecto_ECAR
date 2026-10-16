@@ -1,17 +1,25 @@
 ﻿@* Confirmación de identidad antes de firmar (Parte 11 §11.200(a)(1)). Se abre al pulsar
-   "Firmar y cerrar" en PasoFirma.razor. Si la contraseña es incorrecta (400) o la cuenta está
-   bloqueada (423), el diálogo se queda abierto para no perder la firma ya dibujada.
+   "Firmar y cerrar" en PasoFirma.razor y en el modal de Inspecciones. Si la contraseña es
+   incorrecta (400 sin Errors) o la cuenta está bloqueada (423), el diálogo se queda abierto para
+   no perder la firma ya dibujada. Si lo que falla es el contenido (400 con Errors: obligatorias
+   sin responder, novedades sin observación), se cierra y devuelve la lista para mostrarla.
 
    Uso:
-       var resultado = await ConfirmarIdentidadDialog.AbrirAsync(DialogService, idInspeccion, firmaPngSinPrefijo, observaciones);
-       if (resultado is null) return; // canceló
+       var respuesta = await ConfirmarIdentidadDialog.AbrirAsync(DialogService, idInspeccion, firmaPngSinPrefijo, observaciones);
+       if (respuesta is null) return;              // canceló
+       if (!respuesta.Success) { ... respuesta.Errors ... }   // faltan datos para cerrar
 *@
+@inject AuthorizationService AuthorizationService
+
 <MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = false }">
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-4">
             Para firmar y cerrar la inspección, confirme su contraseña. Esto equivale a su firma
             electrónica sobre este registro.
         </MudText>
+
+        <MudTextField T="string" Label="Usuario" Value="@usuario" ReadOnly="true" Variant="Variant.Outlined"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Person" Class="mb-3" />
 
         <MudTextField T="string"
                        @bind-Value="password"
@@ -20,7 +28,7 @@
                        Variant="Variant.Outlined"
                        Immediate="true"
                        AutoFocus="true"
-                       Disabled="@enviando"
+                       Disabled="@(enviando || bloqueado)"
                        AdornmentIcon="@(mostrarPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
                        Adornment="Adornment.End"
                        OnAdornmentClick="@(() => mostrarPassword = !mostrarPassword)"
@@ -36,7 +44,7 @@
         }
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancelar" Disabled="@enviando">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="Cancelar" Disabled="@enviando">Cancelar</MudButton>
         <MudButton Color="Color.Primary"
                    Variant="Variant.Filled"
                    OnClick="ConfirmarAsync"
@@ -63,12 +71,21 @@
 
     [Inject] private HttpClientService HttpClientService { get; set; } = null!;
 
+    private string usuario = string.Empty;
     private string password = string.Empty;
     private bool mostrarPassword;
     private bool enviando;
     private bool tieneError;
     private bool bloqueado;
     private string mensajeError = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Plan FE-3, tarea 1: el usuario es el de la sesión y no se puede cambiar.
+        var nombre = await AuthorizationService.GetUserNameAsync();
+        var correo = await AuthorizationService.GetUserEmailAsync();
+        usuario = string.IsNullOrWhiteSpace(correo) ? nombre ?? string.Empty : $"{nombre} ({correo})";
+    }
 
     private async Task ConfirmarAsync()
     {
@@ -91,26 +108,27 @@
 
         enviando = false;
 
-        if (result != null && result.Success && result.Data != null)
+        // Firmada, o el contenido no permite cerrarla todavía: en los dos casos decide quien abrió
+        // el diálogo (mostrar el resultado o la lista de lo que falta).
+        if ((result.Success && result.Data != null) || result.Errors is { Count: > 0 })
         {
-            MudDialog.Close(DialogResult.Ok(result.Data));
+            MudDialog.Close(DialogResult.Ok(result));
             return;
         }
 
-        // Error 400 (contraseña incorrecta) o 423 (cuenta bloqueada): el mensaje ya viene
-        // armado por BE-3 según el contrato del endpoint 12. No cerramos el diálogo: la firma
-        // dibujada en el canvas sigue intacta para reintentar.
-        var mensaje = result?.Message ?? "No se pudo verificar la contraseña. Intente de nuevo.";
-
-        if (mensaje.Contains("bloquead", StringComparison.OrdinalIgnoreCase))
+        // 400 sin Errors (contraseña incorrecta) o 423 (cuenta bloqueada): el diálogo sigue
+        // abierto y la firma dibujada en el canvas queda intacta para reintentar.
+        if (result.Message.Contains("bloquead", StringComparison.OrdinalIgnoreCase))
         {
             bloqueado = true;
-            mensajeError = mensaje;
+            mensajeError = result.Message;
         }
         else
         {
             tieneError = true;
-            mensajeError = mensaje;
+            mensajeError = string.IsNullOrWhiteSpace(result.Message)
+                ? "No se pudo verificar la contraseña. Intente de nuevo."
+                : result.Message;
             password = string.Empty;
         }
     }
@@ -126,10 +144,11 @@
     private void Cancelar() => MudDialog.Cancel();
 
     /// <summary>
-    /// Abre el diálogo de confirmación de identidad y firma la inspección.
-    /// Devuelve el resultado si firmó correctamente, o null si el usuario canceló.
+    /// Abre el diálogo de confirmación de identidad y firma la inspección. Devuelve la respuesta del
+    /// servidor si firmó (Success) o si faltan datos para cerrar (Errors con la lista), o null si
+    /// el usuario canceló.
     /// </summary>
-    public static async Task<InspeccionResultadoDto?> AbrirAsync(IDialogService dialogos,
+    public static async Task<ApiResponse<InspeccionResultadoDto>?> AbrirAsync(IDialogService dialogos,
         long idInspeccion, string firmaPngBase64, string? observaciones = null)
     {
         var parametros = new DialogParameters<ConfirmarIdentidadDialog>
@@ -141,6 +160,6 @@
 
         var dialogo = await dialogos.ShowAsync<ConfirmarIdentidadDialog>("Confirmar identidad", parametros);
         var resultado = await dialogo.Result;
-        return resultado is { Canceled: false, Data: InspeccionResultadoDto datos } ? datos : null;
+        return resultado is { Canceled: false, Data: ApiResponse<InspeccionResultadoDto> respuesta } ? respuesta : null;
     }
 }

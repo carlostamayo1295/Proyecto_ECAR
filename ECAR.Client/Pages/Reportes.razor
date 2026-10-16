@@ -370,11 +370,11 @@
                         <MudItem xs="12" Class="d-flex flex-wrap gap-2 justify-end">
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search"
                                 Disabled="cargandoFechas" OnClick="ConsultarFechasAsync">Consultar</MudButton>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                 Disabled="descargandoFechas" OnClick="@(() => DescargarFechasAsync(ReporteFormatos.Pdf))">
                                 @(descargandoFechas ? "Generando…" : "PDF")
                             </MudButton>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.GridOn"
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.GridOn"
                                 Disabled="descargandoFechas" OnClick="@(() => DescargarFechasAsync(ReporteFormatos.Excel))">
                                 @(descargandoFechas ? "Generando…" : "Excel")
                             </MudButton>
@@ -660,11 +660,11 @@
     private RenderFragment BotonesConsulta<T>(Func<Task> consultar, Func<string, Task> descargar, EstadoReporte<T> estado) => @<MudItem xs="12" Class="d-flex flex-wrap gap-2 justify-end">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search"
             Disabled="estado.Cargando" OnClick="consultar">Consultar</MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PictureAsPdf"
             Disabled="estado.Descargando" OnClick="@(() => descargar(ReporteFormatos.Pdf))">
             @(estado.Descargando ? "Generando…" : "PDF")
         </MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.GridOn"
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.GridOn"
             Disabled="estado.Descargando" OnClick="@(() => descargar(ReporteFormatos.Excel))">
             @(estado.Descargando ? "Generando…" : "Excel")
         </MudButton>

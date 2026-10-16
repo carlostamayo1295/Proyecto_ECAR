@@ -115,13 +115,27 @@
         {
             if (IsEditMode && Usuario != null)
             {
+                // Fase 4 (§3.3): desactivar o reactivar desde la edición también pide motivo.
+                string? motivo = null;
+                if (activo != Usuario.Activo)
+                {
+                    motivo = await MotivoDialog.PedirAsync(DialogService, activo ? "Activar usuario" : "Desactivar usuario",
+                        $"Indique por qué va a {(activo ? "activar" : "desactivar")} a «{nombre}».",
+                        activo ? "Activar" : "Desactivar", activo ? Color.Success : Color.Error);
+                    if (motivo is null)
+                    {
+                        return;
+                    }
+                }
+
                 var updateDto = new UpdateUsuarioDto
                 {
                     Nombre = nombre,
                     Correo = correo,
                     UsuarioAD = usuarioAD,
                     Activo = activo,
-                    RoleIds = selectedRoleIds.ToList()
+                    RoleIds = selectedRoleIds.ToList(),
+                    Motivo = motivo
                 };
 
                 var result = await HttpClientService.UpdateUsuarioAsync(Usuario.IdUsuario, updateDto);

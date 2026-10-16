@@ -120,44 +120,14 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> DeleteUsuarioAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.DeleteAsync($"api/usuarios/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting usuario: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Fase 4 (§3.3): desactivar un usuario exige motivo, que queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> DeleteUsuarioAsync(long id, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Delete, ConFiltros($"api/usuarios/{id}", ("motivo", motivo)));
 
-    /// <summary>Reactiva un usuario desactivado (PUT api/usuarios/{id}/activar).</summary>
-    public async Task<ApiResponse<bool>?> ActivarUsuarioAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsync($"api/usuarios/{id}/activar", null);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error activando usuario: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Fase 4 (§3.3): reactivar un usuario exige motivo, que queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> ActivarUsuarioAsync(long id, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Put, ConFiltros($"api/usuarios/{id}/activar", ("motivo", motivo)));
 
-    // Métodos del API de Roles
     public async Task<ApiResponse<PagedResultDto<RolDto>>?> GetRolesAsync(int page = 1, int pageSize = 10,
         string? search = null)
     {
@@ -441,42 +411,13 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> DeleteChecklistAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.DeleteAsync($"api/checklists/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting checklist: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Fase 4 (§3.3): desactivar un checklist exige motivo, que queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> DeleteChecklistAsync(long id, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Delete, ConFiltros($"api/checklists/{id}", ("motivo", motivo)));
 
-    /// <summary>Reactiva un checklist desactivado (PUT api/checklists/{id}/activar).</summary>
-    public async Task<ApiResponse<bool>?> ActivarChecklistAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsync($"api/checklists/{id}/activar", null);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error activando checklist: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Fase 4 (§3.3): reactivar un checklist exige motivo, que queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> ActivarChecklistAsync(long id, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Put, ConFiltros($"api/checklists/{id}/activar", ("motivo", motivo)));
 
     public async Task<ApiResponse<ChecklistDto>?> CreateChecklistVersionAsync(long id, CreateChecklistVersionDto createDto)
     {
@@ -747,42 +688,13 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> DeleteEquipoAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.DeleteAsync($"api/equipos/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting equipo: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Fase 4 (§3.3): desactivar un equipo exige motivo, que queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> DeleteEquipoAsync(long id, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Delete, ConFiltros($"api/equipos/{id}", ("motivo", motivo)));
 
-    /// <summary>Reactiva un equipo desactivado (PUT api/equipos/{id}/activar).</summary>
-    public async Task<ApiResponse<bool>?> ActivarEquipoAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsync($"api/equipos/{id}/activar", null);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error activando equipo: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Fase 4 (§3.3): reactivar un equipo exige motivo, que queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> ActivarEquipoAsync(long id, string motivo) =>
+        EnviarAsync<bool>(HttpMethod.Put, ConFiltros($"api/equipos/{id}/activar", ("motivo", motivo)));
 
     public async Task<ApiResponse<List<LookupDto>>?> GetEquipoCategoriasLookupAsync()
     {
@@ -1195,25 +1107,7 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> DeleteInspeccionAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.DeleteAsync($"api/inspecciones/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting inspeccion: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
 
-    // Métodos del API de Evidencias
     public async Task<ApiResponse<PagedResultDto<EvidenciaDto>>?> GetEvidenciasAsync(int page = 1, int pageSize = 10,
         string? search = null, long? idInspeccion = null)
     {
@@ -1356,25 +1250,7 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<bool>?> DeleteHallazgoAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.DeleteAsync($"api/hallazgos/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<bool>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting hallazgo: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
 
-    // Métodos del API de Preguntas de Checklist
     public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(long idChecklist)
     {
         try
@@ -1850,6 +1726,13 @@ public class HttpClientService
     /// <summary>Política de contraseñas y minutos de inactividad. Es anónimo.</summary>
     public Task<ApiResponse<PoliticaSeguridadDto>> GetPoliticaSeguridadAsync() =>
         EnviarAsync<PoliticaSeguridadDto>(HttpMethod.Get, "api/auth/politica");
+
+    /// <summary>
+    /// Deja el cierre de sesión en la auditoría (evento CierreSesion). Se llama antes de borrar el
+    /// token; si falla (sin red, token vencido) el cierre sigue igual.
+    /// </summary>
+    public Task<ApiResponse<bool>> CerrarSesionAsync(bool porInactividad = false) =>
+        EnviarAsync<bool>(HttpMethod.Post, ConFiltros("api/auth/logout", ("porInactividad", porInactividad)));
 
     public Task<ApiResponse<PasswordTemporalDto>> RestablecerPasswordAsync(long idUsuario, string motivo) =>
         EnviarAsync<PasswordTemporalDto>(HttpMethod.Post, $"api/usuarios/{idUsuario}/restablecer-password",

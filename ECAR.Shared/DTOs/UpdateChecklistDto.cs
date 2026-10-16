@@ -12,5 +12,9 @@ public class UpdateChecklistDto
 
     public bool? Activo { get; set; }
 
+    /// <summary>Fase 4 (§3.3): obligatorio al modificar un checklist; queda en la auditoría.</summary>
+    [MaxLength(500, ErrorMessage = "El motivo no puede exceder 500 caracteres")]
+    public string? Motivo { get; set; }
+
     public List<CreatePreguntaChecklistDto>? Preguntas { get; set; }
 }

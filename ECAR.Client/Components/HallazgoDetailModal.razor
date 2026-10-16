@@ -53,7 +53,15 @@
                 <MudPaper Elevation="0" Class="value-box pa-3">
                     <MudText Typo="Typo.body2">
                         @(d.Origen == HallazgoOrigenes.Novedad ? "Novedad de inspección" : d.Origen == HallazgoOrigenes.Manual ? "Registro manual" : "-")
-                        <MudLink Typo="Typo.inherit" OnClick="@(() => IrAInspeccion(d.IdInspeccion))">Inspección #@d.IdInspeccion</MudLink>
+                        @* Solo una inspección firmada tiene página de resultado; la de uno manual puede seguir en curso. *@
+                        @if (d.EstadoInspeccion == InspeccionEstados.Cerrada)
+                        {
+                            <MudLink Typo="Typo.inherit" OnClick="@(() => IrAInspeccion(d.IdInspeccion))">Inspección #@d.IdInspeccion</MudLink>
+                        }
+                        else
+                        {
+                            <span>Inspección #@d.IdInspeccion (@(d.EstadoInspeccion == InspeccionEstados.EnCurso ? "en curso" : "anulada"))</span>
+                        }
                     </MudText>
                     <MudText Typo="Typo.body2">
                         Inspector: @(d.NombreInspector ?? "-")
@@ -120,8 +128,8 @@
                 <div class="d-flex flex-wrap gap-2 mt-3">
                     <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="@procesando"
                                OnClick="ConfirmarCierreAsync" Class="dialog-button action-state">Continuar</MudButton>
-                    <MudButton Variant="Variant.Outlined" Disabled="@procesando"
-                               OnClick="CancelarCierre" Class="dialog-button">Cancelar</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Default" Disabled="@procesando"
+                               OnClick="CancelarCierre" Class="dialog-button action-state">Cancelar</MudButton>
                 </div>
             </MudPaper>
         }

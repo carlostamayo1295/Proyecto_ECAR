@@ -49,6 +49,17 @@
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="6">
+                    @* Fase 4: el reporte de cumplimiento cuenta como programados los equipos con frecuencia. *@
+                    <MudSelect T="string" Label="Frecuencia de inspección" @bind-Value="frecuencia"
+                        Variant="Variant.Outlined" Clearable="true" Class="mb-3"
+                        HelperText="Sin frecuencia, el equipo no entra en el reporte de cumplimiento">
+                        @foreach (var opcion in FrecuenciasInspeccion.Todas)
+                        {
+                            <MudSelectItem T="string" Value="@opcion">@opcion</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
                     <MudSelect T="long?" Label="Categoría" @bind-Value="idCategoria"
                         Variant="Variant.Outlined" Clearable="true" Class="mb-3">
                         @foreach (var cat in categorias)
@@ -104,6 +115,7 @@
     private string? modelo;
     private string? fabricante;
     private string? criticidad;
+    private string? frecuencia;
     private long? idCategoria;
     private long? idUbicacion;
     private bool activo = true;
@@ -126,6 +138,7 @@
             modelo = Equipo.Modelo;
             fabricante = Equipo.Fabricante;
             criticidad = Equipo.Criticidad;
+            frecuencia = Equipo.FrecuenciaInspeccion;
             idCategoria = Equipo.IdCategoria;
             idUbicacion = Equipo.IdUbicacion;
             activo = Equipo.Activo;
@@ -147,8 +160,18 @@
         {
             if (IsEditMode && Equipo != null)
             {
+                // Fase 4 (§3.3): modificar un equipo pide motivo, que queda en la auditoría.
+                var motivo = await MotivoDialog.PedirAsync(DialogService, "Modificar equipo",
+                    $"Indique por qué modifica el equipo «{nombreEquipo}».", "Guardar", Color.Primary);
+                if (motivo is null)
+                {
+                    return;
+                }
+
                 var updateDto = new UpdateEquipoDto
                 {
+                    Motivo = motivo,
+                    FrecuenciaInspeccion = frecuencia ?? string.Empty,
                     CodigoInterno = codigoInterno,
                     ActivoFijo = activoFijo,
                     NombreEquipo = nombreEquipo,
@@ -187,7 +210,8 @@
                     Fabricante = fabricante,
                     Criticidad = criticidad,
                     IdCategoria = idCategoria,
-                    IdUbicacion = idUbicacion
+                    IdUbicacion = idUbicacion,
+                    FrecuenciaInspeccion = frecuencia
                 };
 
                 var result = await HttpClientService.CreateEquipoAsync(createDto);

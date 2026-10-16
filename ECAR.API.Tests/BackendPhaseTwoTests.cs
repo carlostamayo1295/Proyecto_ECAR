@@ -1,4 +1,5 @@
 using ECAR.API.Controllers;
+using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
@@ -19,7 +20,7 @@ public class BackendPhaseTwoTests
     {
         await using var context = CreateContext();
         var origen = await SeedChecklistAsync(context, "Inspección Preventiva", "1.0", preguntas: 3);
-        var controller = new ChecklistsController(context);
+        var controller = new ChecklistsController(context, new MotivoCambio());
 
         var result = await controller.CreateVersion(origen.IdChecklist, new CreateChecklistVersionDto { Version = "2.0" });
 
@@ -40,7 +41,7 @@ public class BackendPhaseTwoTests
     {
         await using var context = CreateContext();
         var origen = await SeedChecklistAsync(context, "Inspección Preventiva", "1.0", preguntas: 1);
-        var controller = new ChecklistsController(context);
+        var controller = new ChecklistsController(context, new MotivoCambio());
 
         var repetida = await controller.CreateVersion(origen.IdChecklist, new CreateChecklistVersionDto { Version = "1.0" });
         Assert.IsType<BadRequestObjectResult>(repetida.Result);
@@ -56,7 +57,7 @@ public class BackendPhaseTwoTests
         await using var context = CreateContext();
         var origen = await SeedChecklistAsync(context, "Inspección Preventiva", "1.0", preguntas: 2);
         await SeedChecklistAsync(context, "Otro checklist", "1.0", preguntas: 1);
-        var controller = new ChecklistsController(context);
+        var controller = new ChecklistsController(context, new MotivoCambio());
         await controller.CreateVersion(origen.IdChecklist, new CreateChecklistVersionDto { Version = "2.0" });
 
         var result = await controller.GetVersiones(origen.IdChecklist);
@@ -75,10 +76,11 @@ public class BackendPhaseTwoTests
         await using var context = CreateContext();
         var checklist = await SeedChecklistAsync(context, "Inspección Preventiva", "1.0", preguntas: 1);
         await SeedRespuestaAsync(context, checklist);
-        var controller = new ChecklistsController(context);
+        var controller = new ChecklistsController(context, new MotivoCambio());
 
         var result = await controller.UpdateChecklist(checklist.IdChecklist, new UpdateChecklistDto
         {
+            Motivo = "Se corrige la redacción de la pregunta",
             Preguntas = new List<CreatePreguntaChecklistDto>
             {
                 new() { Pregunta = "Nueva", TipoRespuesta = TiposRespuesta.SiNo }
@@ -196,7 +198,7 @@ public class BackendPhaseTwoTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Cliente:BaseUrl"] = "https://app.ecar.test/" })
             .Build();
-        return new EquiposController(context, configuration);
+        return new EquiposController(context, configuration, new MotivoCambio());
     }
 
     private static async Task<Checklist> SeedChecklistAsync(ECARDbContext context, string nombre, string version, int preguntas)
