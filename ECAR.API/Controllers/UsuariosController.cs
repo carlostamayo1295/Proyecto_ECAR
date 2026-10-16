@@ -1,11 +1,15 @@
 using BCrypt.Net;
+using ECAR.API.Configuration;
+using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ECAR.API.Controllers;
 
@@ -15,10 +19,12 @@ namespace ECAR.API.Controllers;
 public class UsuariosController : ControllerBase
 {
     private readonly ECARDbContext _context;
+    private readonly PoliticaPasswords _politica;
 
-    public UsuariosController(ECARDbContext context)
+    public UsuariosController(ECARDbContext context, PoliticaPasswords? politica = null)
     {
         _context = context;
+        _politica = politica ?? new PoliticaPasswords(Options.Create(new SeguridadOptions()));
     }
 
     [HttpGet]
@@ -109,6 +115,8 @@ public class UsuariosController : ControllerBase
         if (string.IsNullOrWhiteSpace(createDto.Password) && createDto.UsuarioAD == null)
             return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(
                 "Debe indicar una contraseña local o un usuario de Active Directory"));
+        if (!string.IsNullOrWhiteSpace(createDto.Password) && _politica.Validar(createDto.Password) is { Count: > 0 } erroresPassword)
+            return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse("La contraseña no cumple la política", erroresPassword));
 
         // El correo y el usuario de Active Directory deben ser únicos.
         var existingUsuario = await _context.Usuarios
@@ -150,7 +158,9 @@ public class UsuariosController : ControllerBase
             Correo = createDto.Correo,
             UsuarioAD = createDto.UsuarioAD,
             PasswordHash = passwordHash,
-            Activo = true
+            Activo = true,
+            FechaCambioPassword = passwordHash.Length == 0 ? null : DateTime.UtcNow,
+            DebeCambiarPassword = passwordHash.Length > 0
         };
 
         foreach (var roleId in roleIds)
@@ -254,7 +264,12 @@ public class UsuariosController : ControllerBase
         // Actualizar la contraseña solo si viene en la solicitud
         if (!string.IsNullOrEmpty(updateDto.Password))
         {
-            usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updateDto.Password);
+            if (_politica.Validar(updateDto.Password) is { Count: > 0 } erroresPassword)
+            {
+                return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse("La contraseña no cumple la política", erroresPassword));
+            }
+
+            _politica.Establecer(_context, usuario, updateDto.Password, esTemporal: true);
         }
 
         // Reemplazar las asignaciones de roles solo cuando la solicitud incluye RoleIds.
@@ -345,6 +360,65 @@ public class UsuariosController : ControllerBase
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Usuario activado exitosamente"));
     }
+
+    [HttpPost("{id}/restablecer-password")]
+    public async Task<ActionResult<ApiResponse<PasswordTemporalDto>>> RestablecerPassword(
+        long id,
+        MotivoDto motivoDto,
+        [FromServices] IMotivoCambio motivoCambio)
+    {
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id);
+        if (usuario == null)
+        {
+            return NotFound(ApiResponse<PasswordTemporalDto>.ErrorResponse("Usuario no encontrado"));
+        }
+
+        if (!usuario.Activo)
+        {
+            return BadRequest(ApiResponse<PasswordTemporalDto>.ErrorResponse(
+                "No se puede restablecer la contraseña de un usuario inactivo"));
+        }
+
+        var temporal = _politica.GenerarTemporal();
+        _politica.Establecer(_context, usuario, temporal, esTemporal: true);
+        motivoCambio.Establecer(motivoDto.Motivo);
+        _context.RegistrarEvento(AuditoriaAcciones.RestablecerPassword, usuario.IdUsuario,
+            new { Usuario = usuario.Correo, DebeCambiarAlEntrar = true });
+        await _context.SaveChangesAsync();
+
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers.Pragma = "no-cache";
+
+        return Ok(ApiResponse<PasswordTemporalDto>.SuccessResponse(
+            new PasswordTemporalDto { PasswordTemporal = temporal, DebeCambiarAlEntrar = true },
+            "Contraseña restablecida. Entréguela al usuario: no se volverá a mostrar"));
+    }
+
+    [HttpPost("{id}/desbloquear")]
+    public async Task<ActionResult<ApiResponse<bool>>> DesbloquearUsuario(
+        long id,
+        MotivoDto motivoDto,
+        [FromServices] IMotivoCambio motivoCambio)
+    {
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id);
+        if (usuario == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Usuario no encontrado"));
+        }
+
+        if (usuario.BloqueadoHasta is not { } bloqueadoHasta || bloqueadoHasta <= DateTime.UtcNow)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse("La cuenta no está bloqueada"));
+        }
+
+        usuario.BloqueadoHasta = null;
+        usuario.IntentosFallidos = 0;
+        motivoCambio.Establecer(motivoDto.Motivo);
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<bool>.SuccessResponse(true, "Cuenta desbloqueada exitosamente"));
+    }
+
 
     private Task<bool> HasAnotherActiveAdministrator(long excludedUserId) =>
         _context.UsuarioRoles.AnyAsync(ur =>

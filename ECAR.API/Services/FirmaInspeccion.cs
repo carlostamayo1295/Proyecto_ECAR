@@ -131,7 +131,7 @@ public static class FirmaInspeccion
     }
 
     /// <summary>Neutraliza los separadores para que dos campos distintos no produzcan el mismo texto.</summary>
-    private static string Escapar(string? valor) => (valor ?? string.Empty)
+    internal static string Escapar(string? valor) => (valor ?? string.Empty)
         .Replace(@"\", @"\\", StringComparison.Ordinal)
         .Replace(";", @"\;", StringComparison.Ordinal)
         .Replace("|", @"\|", StringComparison.Ordinal)
