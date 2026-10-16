@@ -144,7 +144,7 @@ public static class FirmaInspeccion
             .Append("idChecklist=").Append(inspeccion.IdChecklist).Append('|')
             .Append("idUsuario=").Append(inspeccion.IdUsuario).Append('|')
             .Append("fechaCierre=")
-            .Append(fechaCierre.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture))
+            .Append(EnUtc(fechaCierre).ToString("O", CultureInfo.InvariantCulture))
             .Append('|')
             .Append("respuestas=[");
 
@@ -165,6 +165,15 @@ public static class FirmaInspeccion
         constructor.Append("]|").Append("firma=").Append(firmaPngBase64);
         return constructor.ToString();
     }
+
+    /// <summary>
+    /// La fecha de cierre se guarda en UTC, pero SQL Server la devuelve sin zona (Kind Unspecified)
+    /// y ToUniversalTime la tomaría por hora local: al recalcular la huella de una inspección leída
+    /// de la base daría otra fecha y la verificación fallaría siempre. Sin zona, se toma como UTC.
+    /// </summary>
+    private static DateTime EnUtc(DateTime fecha) => fecha.Kind == DateTimeKind.Unspecified
+        ? DateTime.SpecifyKind(fecha, DateTimeKind.Utc)
+        : fecha.ToUniversalTime();
 
     /// <summary>Neutraliza los separadores para que dos campos distintos no produzcan el mismo texto.</summary>
     private static string Escapar(string? valor) => (valor ?? string.Empty)

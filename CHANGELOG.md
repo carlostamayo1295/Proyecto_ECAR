@@ -10,13 +10,50 @@ horaria de Colombia.
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.
 - Revisión de integración backend con estado de ECAR-209 a ECAR-216.
 
+### Añadido (rama `fase_4_prueba`, 16/10/2026)
+
+- **Hallazgos (ECAR-211/212):** endpoints 4 a 9 con filtros, detalle con origen, alta manual,
+  edición limitada, transiciones validadas (409), cierre con acción correctiva, reabrir solo el
+  Administrador y anulación con motivo. Un hallazgo por cada "No" al firmar, en la misma transacción.
+- **Inspecciones:** anular con motivo (endpoint 10); la inspección y sus fotos se conservan.
+- **Auditoría:** filtros, historial de un registro y verificación de la cadena por lotes
+  (endpoints 1 a 3); exportación a Excel y PDF (21).
+- **Reportes (ECAR-213):** los seis del SRS §7 con vista previa paginada, PDF y Excel, fechas
+  obligatorias (máximo un año) y cumplimiento según `FrecuenciaInspeccion`; registro PDF de cada
+  inspección firmada (14).
+- **Evidencias (ECAR-214):** retirar con motivo solo en inspecciones en curso; las retiradas no
+  entran en la ejecución, el resultado ni la huella.
+- **Firma (ECAR-215):** contraseña en cada firma (400 si es errónea, 423 si la cuenta está
+  bloqueada), manifestación con nombre, significado y zona horaria, HMAC-SHA256 con
+  `Firma:ClaveHmac` y verificación de integridad (13).
+- **Cuentas (ECAR-216):** bloqueo tras 5 intentos con eventos de acceso, política e historial de
+  contraseñas, caducidad a 90 días, cambio obligatorio tras restablecer, desbloquear, y
+  `PUT /api/usuarios/{id}` ya no fija contraseñas (22 a 26).
+- **§3.3:** motivo obligatorio al modificar equipos y checklists y al desactivar o reactivar.
+- Frecuencia de inspección editable en equipos y evento `CierreSesion`.
+
+### Cambiado
+
+- Sin `DELETE` de inspecciones, evidencias ni hallazgos (responden 405).
+- PDF con PDFsharp-MigraDoc **6.2.4**, la última versión MIT (la 6.5 es AGPL-3.0), y Excel con ClosedXML (MIT).
+- `System.Security.Cryptography.Pkcs` 10.0.13 para cerrar las alertas NU1902/NU1903.
+
+### Corregido
+
+- La huella de la firma se recalculaba mal al leer la inspección de SQL Server: la fecha llega sin
+  zona y se tomaba como hora local. Afectaba también a la verificación SHA-256 de la Fase 3.
+
+### Verificado
+
+- 143 pruebas de API y 11 de integración contra SQL Server superadas el 16/10/2026.
+- Prueba de punta a punta contra el API: 62 de 62 comprobaciones.
+
 ### Pendiente
 
-- Integrar el ciclo de vida de hallazgos y la anulación de inspecciones (ECAR-211/212).
-- Implementar los seis reportes, exportaciones y el registro PDF (ECAR-213).
-- Integrar el retiro lógico de evidencias, sin borrado físico (ECAR-214).
-- Implementar firma electrónica HMAC, verificación de integridad y reautenticación (ECAR-215).
-- Implementar bloqueo, caducidad, historial y administración de contraseñas (ECAR-216).
+- Confirmar con ECAR la definición de cumplimiento, el texto del significado de la firma y la
+  compresión de fotos (ALCOA+ "Original").
+- Configurar `Firma:ClaveHmac` en cada entorno; en la Fase 6, quitar al login de la aplicación los
+  permisos `ALTER` y `db_owner` (el trigger no frena a un `db_owner`).
 
 ## [2026-10-09] — Base backend de Fase 4 (ECAR-209/210)
 

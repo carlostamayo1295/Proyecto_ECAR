@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ECAR.Infrastructure\ECAR.Infrastructure.csproj" />
+    <!-- La firma (FirmaInspeccion, FirmaElectronica) vive en el API: se prueba releyendo de SQL Server. -->
+    <ProjectReference Include="..\ECAR.API\ECAR.API.csproj" />
   </ItemGroup>
 
 </Project>

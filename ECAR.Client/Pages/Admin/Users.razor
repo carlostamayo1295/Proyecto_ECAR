@@ -227,6 +227,8 @@
         if (respuesta.Success && respuesta.Data is { } temporal)
         {
             await PasswordTemporalDialog.MostrarAsync(DialogService, usuario.Nombre, temporal.PasswordTemporal);
+            // Restablecer también desbloquea y marca «Contraseña temporal»: se recarga la lista.
+            await LoadDataAsync();
         }
         else
         {
@@ -249,6 +251,8 @@
         if (respuesta.Success)
         {
             Snackbar.Add($"Cuenta de '{usuario.Nombre}' desbloqueada", Severity.Success);
+            // El bloqueo y el aviso salen de la lista: hay que recargarla para que desaparezcan.
+            await LoadDataAsync();
         }
         else
         {
