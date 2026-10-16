@@ -1,5 +1,6 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudCard Class="pa-4 mb-4">
     <MudText Typo="Typo.h6" Class="mb-3">Resumen antes de firmar</MudText>
@@ -40,7 +41,7 @@
 <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
            StartIcon="@Icons.Material.Filled.Lock"
            Disabled="@(Firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
-           OnClick="@(() => FirmarAsync(firmaCapturada!, observacionesCierre))">
+           OnClick="@(() => AbrirConfirmacionAsync(firmaCapturada!, observacionesCierre))">
     @(Firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")
 </MudButton>
 
@@ -70,7 +71,11 @@
         firmaCapturada = firmaBase64;
     }
 
-    protected async Task FirmarAsync(string firmaPng, string? observaciones = null)
+    // Fase 4 (Parte 11 §11.200(a)(1)): antes de firmar se pide confirmar la identidad con
+    // contraseña. ConfirmarIdentidadDialog hace la llamada real a FirmarInspeccionAsync y se
+    // queda abierto si la contraseña es incorrecta o la cuenta está bloqueada, para no perder
+    // la firma ya dibujada en el canvas.
+    private async Task AbrirConfirmacionAsync(string firmaPng, string? observaciones)
     {
         if (firmando)
         {
@@ -87,32 +92,29 @@
         firmando = true;
         await InvokeAsync(StateHasChanged);
 
-        var result = await HttpClientService.FirmarInspeccionAsync(Inspeccion.IdInspeccion, new FirmarInspeccionDto
+        InspeccionResultadoDto? resultado;
+        try
         {
-            FirmaPngBase64 = QuitarPrefijoDataUri(firmaPng),
-            Observaciones = observaciones
-        });
-
-        firmando = false;
-        await InvokeAsync(StateHasChanged);
-
-        if (result == null || !result.Success || result.Data == null)
+            resultado = await ConfirmarIdentidadDialog.AbrirAsync(
+                DialogService,
+                Inspeccion.IdInspeccion,
+                QuitarPrefijoDataUri(firmaPng),
+                observaciones);
+        }
+        finally
         {
-            Snackbar.Add(result?.Message ?? "Error al firmar la inspección", Severity.Error);
+            firmando = false;
+            await InvokeAsync(StateHasChanged);
+        }
 
-            if (result?.Errors is { Count: > 0 })
-            {
-                foreach (var error in result.Errors)
-                {
-                    Snackbar.Add(error, Severity.Warning);
-                }
-                await OnVolverAPreguntas.InvokeAsync();
-            }
+        if (resultado == null)
+        {
+            // El usuario canceló el diálogo de confirmación; no se pierde la firma capturada.
             return;
         }
 
-        Snackbar.Add(result.Message ?? "Inspección firmada y cerrada", Severity.Success);
-        await OnFirmada.InvokeAsync(result.Data);
+        Snackbar.Add("Inspección firmada y cerrada", Severity.Success);
+        await OnFirmada.InvokeAsync(resultado);
     }
 
     private static string QuitarPrefijoDataUri(string firmaPng)

@@ -25,7 +25,17 @@ else
             Variant="Variant.Outlined" ReadOnly="true" />
     }
 
-    <MudText Typo="Typo.caption" Class="d-block mt-1">@Firmante(resultado)</MudText>
+    @* Manifestación de la firma (Fase 4, Parte 11 §11.50): nombre, fecha/hora y significado,
+       tal como quedaron al momento de firmar. Solo existe para inspecciones firmadas desde la
+       Fase 4; las anteriores no tienen FirmaNombre/FirmaSignificado y caen al texto corto. *@
+    @if (ManifestacionFirma(resultado) is { } manifestacion)
+    {
+        <MudText Typo="Typo.caption" Class="d-block mt-1">@manifestacion</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.caption" Class="d-block mt-1">@Firmante(resultado)</MudText>
+    }
 
     @if (puedeVerHash && !string.IsNullOrEmpty(resultado.FirmaHash))
     {
@@ -74,6 +84,22 @@ else
     private static string Firmante(InspeccionResultadoDto r) => r.FechaCierre is { } cierre
         ? $"Firmada por {r.NombreUsuario} el {cierre.ToLocalTime():dd/MM/yyyy HH:mm}"
         : $"Firmada por {r.NombreUsuario}";
+
+    // Manifestación de la firma (Parte 11 §11.50): nombre, fecha/hora (Colombia, UTC−5) y
+    // significado, tal como estaban al momento de firmar. Null si la inspección es anterior a
+    // la Fase 4 y no tiene FirmaNombre/FirmaSignificado.
+    private static string? ManifestacionFirma(InspeccionResultadoDto r)
+    {
+        if (string.IsNullOrWhiteSpace(r.FirmaNombre) || string.IsNullOrWhiteSpace(r.FirmaSignificado)
+            || r.FechaCierre is not { } cierre)
+        {
+            return null;
+        }
+
+        var horaColombia = cierre.AddHours(-5);
+        return $"Firmado electrónicamente por {r.FirmaNombre} el {horaColombia:dd/MM/yyyy HH:mm} " +
+               $"(hora de Colombia, UTC−5). Significado: {r.FirmaSignificado}";
+    }
 }
 
 <style>

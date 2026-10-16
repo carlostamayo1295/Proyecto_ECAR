@@ -29,7 +29,29 @@
                 Su sesión expiró. Inicie sesión de nuevo para volver a la página en la que estaba.
             </MudAlert>
         }
+        else if (PasswordCambiada)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-4" Dense="true">
+                Su contraseña se cambió correctamente. Inicie sesión con la nueva contraseña.
+            </MudAlert>
+        }
 
+        @if (_diasParaVencer is { } diasParaVencer)
+        {
+            @* Fase 4 (Parte 11 §11.300(b)): la contraseña está por vencer; se avisa antes de entrar. *@
+            <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+                @(diasParaVencer <= 0
+                    ? "Su contraseña vence hoy."
+                    : $"Su contraseña vence en {diasParaVencer} día(s).")
+                Le recomendamos cambiarla ahora.
+            </MudAlert>
+            <div class="d-flex gap-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CambiarAhora">Cambiar ahora</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ContinuarAlDestino">Continuar</MudButton>
+            </div>
+        }
+        else
+        {
         <MudForm @ref="form" Class="login-form">
             <MudTextField T="string" Label="Correo o Usuario AD" @bind-Value="loginDto.CorreoOrUsuarioAD" Variant="Variant.Outlined" Required="false" RequiredError="El correo o usuario AD es requerido" Class="mb-3" AdornmentIcon="@Icons.Material.Filled.Email" Adornment="Adornment.Start" />
             <MudTextField T="string" Label="Password" @bind-Value="loginDto.Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="false" RequiredError="El password es requerido" Class="mb-4" AdornmentIcon="@Icons.Material.Filled.Lock" Adornment="Adornment.Start" />
@@ -57,6 +79,7 @@
                 </MudAlert>
             }
         </MudForm>
+        }
 
         <MudDivider Class="my-4" />
 
@@ -169,6 +192,17 @@
 
     private bool CerradaPorInactividad => Inactividad == "1";
 
+    // La pone CambiarPassword.razor al terminar: el servidor invalida el token anterior.
+    [SupplyParameterFromQuery(Name = "passwordCambiada")]
+    [Parameter]
+    public string? PasswordCambiadaParam { get; set; }
+
+    private bool PasswordCambiada => PasswordCambiadaParam == "1";
+
+    // Días que faltan para que caduque la contraseña, solo si faltan DiasAvisoVencimiento o menos.
+    private const int DiasAvisoVencimiento = 10;
+    private int? _diasParaVencer;
+
     /// <summary>
     /// Destino tras iniciar sesión. Solo se acepta una ruta de esta misma aplicación: si se
     /// aceptara cualquier URL, un enlace como /login?returnUrl=https://sitio-falso pondría al
@@ -201,6 +235,15 @@
         return "/" + ruta;
     }
 
+    private void CambiarAhora()
+    {
+        var destino = DestinoSeguro();
+        var url = "/cambiar-password" + (destino == "/" ? string.Empty : "?returnUrl=" + Uri.EscapeDataString(destino));
+        NavigationManager.NavigateTo(url, forceLoad: true);
+    }
+
+    private void ContinuarAlDestino() => NavigationManager.NavigateTo(DestinoSeguro(), forceLoad: true);
+
     private async Task HandleLogin()
     {
         if (string.IsNullOrWhiteSpace(loginDto.CorreoOrUsuarioAD) || string.IsNullOrWhiteSpace(loginDto.Password))
@@ -214,9 +257,11 @@
 
         try
         {
-            var result = await AuthService.LoginAsync(loginDto);
-            
-            if (result != null)
+            // Fase 4: el servidor dice por qué no se pudo entrar (usuario o contraseña incorrectos,
+            // cuenta bloqueada con 423, etc.) y se muestra tal cual.
+            var respuesta = await AuthService.LoginConMensajeAsync(loginDto);
+
+            if (respuesta.Success && respuesta.Data is { } result)
             {
                 // El reloj de inactividad arranca ahora: si no, la última actividad guardada
                 // podría ser de hace horas y la sesión se cerraría nada más entrar.
@@ -229,13 +274,33 @@
                     // Sin actividad.js no hay cierre por inactividad; el login sigue.
                 }
 
+                // Contraseña temporal o caducada: se cambia antes de entrar (Fase 4, §11.300(b)).
+                if (result.DebeCambiarPassword)
+                {
+                    CambiarAhora();
+                    return;
+                }
+
+                // Contraseña por vencer: se avisa y el usuario decide si la cambia ahora.
+                if (result.PasswordExpiraEl is { } expira)
+                {
+                    var dias = (int)Math.Ceiling((expira - DateTime.UtcNow).TotalDays);
+                    if (dias <= DiasAvisoVencimiento)
+                    {
+                        _diasParaVencer = Math.Max(dias, 0);
+                        return;
+                    }
+                }
+
                 // Login exitoso. forceLoad recarga el layout para reflejar roles y menú.
                 // Si se llegó aquí desde una página protegida, se vuelve a ella.
                 NavigationManager.NavigateTo(DestinoSeguro(), forceLoad: true);
             }
             else
             {
-                errorMessage = "Credenciales inválidas. Por favor verifique su correo y contraseña.";
+                errorMessage = string.IsNullOrWhiteSpace(respuesta.Message)
+                    ? "No se pudo iniciar sesión. Intente de nuevo."
+                    : respuesta.Message;
             }
         }
         catch (Exception ex)
