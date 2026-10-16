@@ -43,6 +43,9 @@ public class InspeccionEjecucionDto
 
     public bool EstaCerrada => Estado == InspeccionEstados.Cerrada;
 
+    /// <summary>Fase 4: anulada con motivo; como una cerrada, ya no admite cambios.</summary>
+    public bool EstaAnulada => Estado == InspeccionEstados.Anulada;
+
     /// <summary>true cuando no quedan obligatorias sin responder y se puede pasar a la firma.</summary>
     public bool PuedeFirmar => ObligatoriasRespondidas >= TotalObligatorias;
 }

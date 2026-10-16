@@ -38,7 +38,9 @@ public class InspeccionService : IInspeccionService
         // Punto 6: 409 Conflict si la inspección no está 'En curso'
         if (inspeccion.Estado != InspeccionEstados.EnCurso)
         {
-            throw new InspeccionCerradaException("La inspección está cerrada y no permite modificaciones.");
+            throw new InspeccionCerradaException(inspeccion.Estado == InspeccionEstados.Anulada
+                ? InmutabilidadInspeccion.MensajeAnulada
+                : "La inspección está cerrada y no permite modificaciones.");
         }
 
         var preguntasValidas = inspeccion.Checklist.Preguntas.ToDictionary(p => p.IdPregunta);
@@ -216,33 +218,5 @@ public class InspeccionService : IInspeccionService
             Page = page,
             PageSize = size
         };
-    }
-    
-    public async Task<bool> RetirarEvidenciaAsync(long idEvidencia, RetirarEvidenciaDto dto, long idUsuario)
-    {
-        // 1. Buscar la evidencia por ID
-        var evidencia = await _context.Evidencias
-            .FirstOrDefaultAsync(e => e.IdEvidencia == idEvidencia);
-    
-        if (evidencia == null)
-        {
-            throw new KeyNotFoundException($"No se encontró la evidencia con ID {idEvidencia}.");
-        }
-    
-        if (evidencia.Retirada)
-        {
-            throw new InvalidOperationException("La evidencia ya se encuentra retirada.");
-        }
-    
-        // 2. Aplicar la baja lógica (Fase 4)
-        evidencia.Retirada = true;
-        evidencia.FechaRetiro = DateTime.UtcNow;
-        evidencia.IdUsuarioRetiro = idUsuario;
-        evidencia.MotivoRetiro = dto.Motivo;
-    
-        // 3. Guardar cambios
-        await _context.SaveChangesAsync();
-    
-        return true;
     }
 }

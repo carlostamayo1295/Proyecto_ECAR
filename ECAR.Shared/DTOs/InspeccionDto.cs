@@ -19,6 +19,10 @@ public class InspeccionDto
     public bool TieneFirma { get; set; }
     public int TotalEvidencias { get; set; }
     public int TotalHallazgos { get; set; }
+
+    // Fase 4: una inspección en curso se anula con motivo en lugar de borrarse (§3.6).
+    public string? MotivoAnulacion { get; set; }
+    public DateTime? FechaAnulacion { get; set; }
 }
 
 public class CreateInspeccionDto

@@ -1,11 +1,15 @@
 using BCrypt.Net;
+using ECAR.API.Configuration;
+using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ECAR.API.Controllers;
 
@@ -15,10 +19,14 @@ namespace ECAR.API.Controllers;
 public class UsuariosController : ControllerBase
 {
     private readonly ECARDbContext _context;
+    private readonly IMotivoCambio _motivoCambio;
+    private readonly SeguridadOptions _seguridad;
 
-    public UsuariosController(ECARDbContext context)
+    public UsuariosController(ECARDbContext context, IMotivoCambio motivoCambio, IOptions<SeguridadOptions> seguridad)
     {
         _context = context;
+        _motivoCambio = motivoCambio;
+        _seguridad = seguridad.Value;
     }
 
     [HttpGet]
@@ -57,7 +65,10 @@ public class UsuariosController : ControllerBase
                 Correo = u.Correo,
                 UsuarioAD = u.UsuarioAD,
                 Activo = u.Activo,
-                Roles = u.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList()
+                Roles = u.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList(),
+                BloqueadoHasta = u.BloqueadoHasta,
+                DebeCambiarPassword = u.DebeCambiarPassword,
+                UltimoAcceso = u.UltimoAcceso
             })
             .ToListAsync();
 
@@ -85,17 +96,7 @@ public class UsuariosController : ControllerBase
             return NotFound(ApiResponse<UsuarioDto>.ErrorResponse("Usuario no encontrado"));
         }
 
-        var usuarioDto = new UsuarioDto
-        {
-            IdUsuario = usuario.IdUsuario,
-            Nombre = usuario.Nombre,
-            Correo = usuario.Correo,
-            UsuarioAD = usuario.UsuarioAD,
-            Activo = usuario.Activo,
-            Roles = usuario.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList()
-        };
-
-        return Ok(ApiResponse<UsuarioDto>.SuccessResponse(usuarioDto));
+        return Ok(ApiResponse<UsuarioDto>.SuccessResponse(MapToDto(usuario)));
     }
 
     [HttpPost]
@@ -139,10 +140,20 @@ public class UsuariosController : ControllerBase
             }
         }
 
+        var tienePasswordLocal = !string.IsNullOrWhiteSpace(createDto.Password);
+        if (tienePasswordLocal)
+        {
+            var errores = PoliticaPassword.Validar(createDto.Password, _seguridad);
+            if (errores.Count > 0)
+            {
+                return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(string.Join(". ", errores), errores));
+            }
+        }
+
         // Los usuarios que solo entran por Active Directory no necesitan hash de contraseña local.
-        var passwordHash = string.IsNullOrWhiteSpace(createDto.Password)
-            ? string.Empty
-            : BCrypt.Net.BCrypt.HashPassword(createDto.Password);
+        var passwordHash = tienePasswordLocal
+            ? BCrypt.Net.BCrypt.HashPassword(createDto.Password)
+            : string.Empty;
 
         var usuario = new Usuario
         {
@@ -150,7 +161,11 @@ public class UsuariosController : ControllerBase
             Correo = createDto.Correo,
             UsuarioAD = createDto.UsuarioAD,
             PasswordHash = passwordHash,
-            Activo = true
+            Activo = true,
+            // La contraseña inicial la conoce el Administrador: el usuario la cambia al entrar
+            // (Parte 11 §11.200(a)(3)).
+            DebeCambiarPassword = tienePasswordLocal,
+            FechaCambioPassword = tienePasswordLocal ? DateTime.UtcNow : null
         };
 
         foreach (var roleId in roleIds)
@@ -168,18 +183,8 @@ public class UsuariosController : ControllerBase
             .ThenInclude(ur => ur.Rol)
             .SingleAsync(u => u.IdUsuario == usuario.IdUsuario);
 
-        var usuarioDto = new UsuarioDto
-        {
-            IdUsuario = usuarioCreado.IdUsuario,
-            Nombre = usuarioCreado.Nombre,
-            Correo = usuarioCreado.Correo,
-            UsuarioAD = usuarioCreado.UsuarioAD,
-            Activo = usuarioCreado.Activo,
-            Roles = usuarioCreado.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList()
-        };
-
         return CreatedAtAction(nameof(GetUsuario), new { id = usuario.IdUsuario },
-            ApiResponse<UsuarioDto>.SuccessResponse(usuarioDto, "Usuario creado exitosamente"));
+            ApiResponse<UsuarioDto>.SuccessResponse(MapToDto(usuarioCreado), "Usuario creado exitosamente"));
     }
 
     [HttpPut("{id}")]
@@ -193,6 +198,28 @@ public class UsuariosController : ControllerBase
         if (usuario == null)
         {
             return NotFound(ApiResponse<UsuarioDto>.ErrorResponse("Usuario no encontrado"));
+        }
+
+        // Fase 4 (Parte 11 §11.200(a)(3)): el Administrador ya no fija contraseñas ajenas; solo las
+        // restablece con una temporal que el usuario cambia al entrar.
+        if (!string.IsNullOrEmpty(updateDto.Password))
+        {
+            return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(
+                "La contraseña no se edita aquí: use «Restablecer contraseña»"));
+        }
+
+        // Parte 11 §11.100(a): una firma no puede «pasar» a otra persona cambiando la identidad
+        // de la cuenta, así que el correo y el usuario AD de quien ya firmó no se modifican.
+        var cambiaCorreo = !string.IsNullOrWhiteSpace(updateDto.Correo) &&
+            !string.Equals(updateDto.Correo.Trim(), usuario.Correo, StringComparison.OrdinalIgnoreCase);
+        var cambiaUsuarioAd = updateDto.UsuarioAD != null &&
+            !string.Equals(string.IsNullOrWhiteSpace(updateDto.UsuarioAD) ? null : updateDto.UsuarioAD.Trim(),
+                usuario.UsuarioAD, StringComparison.OrdinalIgnoreCase);
+        if ((cambiaCorreo || cambiaUsuarioAd) &&
+            await _context.Inspecciones.AnyAsync(i => i.IdUsuario == id && i.FirmaDigital != null))
+        {
+            return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(
+                "El correo y el usuario de Active Directory de quien ya firmó inspecciones no se pueden cambiar"));
         }
 
         List<long>? roleIds = null;
@@ -251,12 +278,6 @@ public class UsuariosController : ControllerBase
         if (updateDto.Activo.HasValue)
             usuario.Activo = updateDto.Activo.Value;
 
-        // Actualizar la contraseña solo si viene en la solicitud
-        if (!string.IsNullOrEmpty(updateDto.Password))
-        {
-            usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updateDto.Password);
-        }
-
         // Reemplazar las asignaciones de roles solo cuando la solicitud incluye RoleIds.
         if (roleIds != null)
         {
@@ -284,17 +305,7 @@ public class UsuariosController : ControllerBase
             .ThenInclude(ur => ur.Rol)
             .SingleAsync(u => u.IdUsuario == id);
 
-        var usuarioDto = new UsuarioDto
-        {
-            IdUsuario = usuarioActualizado.IdUsuario,
-            Nombre = usuarioActualizado.Nombre,
-            Correo = usuarioActualizado.Correo,
-            UsuarioAD = usuarioActualizado.UsuarioAD,
-            Activo = usuarioActualizado.Activo,
-            Roles = usuarioActualizado.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList()
-        };
-
-        return Ok(ApiResponse<UsuarioDto>.SuccessResponse(usuarioDto, "Usuario actualizado exitosamente"));
+        return Ok(ApiResponse<UsuarioDto>.SuccessResponse(MapToDto(usuarioActualizado), "Usuario actualizado exitosamente"));
     }
 
     [HttpDelete("{id}")]
@@ -345,6 +356,85 @@ public class UsuariosController : ControllerBase
 
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Usuario activado exitosamente"));
     }
+
+    /// <summary>
+    /// Endpoint 25 (Parte 11 §11.200(a)(3)). Genera una contraseña temporal que se muestra una sola
+    /// vez al Administrador; el usuario debe cambiarla al entrar, así que el Administrador nunca
+    /// conoce la definitiva. También desbloquea la cuenta.
+    /// </summary>
+    [HttpPost("{id:long}/restablecer-password")]
+    public async Task<ActionResult<ApiResponse<PasswordTemporalDto>>> RestablecerPassword(long id, MotivoDto dto)
+    {
+        var usuario = await _context.Usuarios
+            .Include(u => u.HistorialPasswords)
+            .FirstOrDefaultAsync(u => u.IdUsuario == id);
+        if (usuario == null)
+        {
+            return NotFound(ApiResponse<PasswordTemporalDto>.ErrorResponse("Usuario no encontrado"));
+        }
+
+        if (string.IsNullOrWhiteSpace(usuario.PasswordHash) && !string.IsNullOrWhiteSpace(usuario.UsuarioAD))
+        {
+            return BadRequest(ApiResponse<PasswordTemporalDto>.ErrorResponse(
+                "El usuario entra con Active Directory: su contraseña se restablece en el directorio"));
+        }
+
+        var temporal = PoliticaPassword.GenerarTemporal();
+        var ahora = DateTime.UtcNow;
+        _motivoCambio.Establecer(dto.Motivo);
+        if (!string.IsNullOrWhiteSpace(usuario.PasswordHash))
+        {
+            usuario.HistorialPasswords.Add(new HistorialPassword { PasswordHash = usuario.PasswordHash, Fecha = ahora });
+        }
+
+        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporal);
+        usuario.DebeCambiarPassword = true;
+        usuario.FechaCambioPassword = ahora;
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
+        _context.RegistrarEvento(AuditoriaAcciones.RestablecerPassword, usuario.IdUsuario);
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<PasswordTemporalDto>.SuccessResponse(
+            new PasswordTemporalDto { PasswordTemporal = temporal, DebeCambiarAlEntrar = true },
+            "Contraseña restablecida. Entréguela al usuario: solo se muestra esta vez"));
+    }
+
+    /// <summary>Endpoint 26: quita el bloqueo por intentos fallidos, con motivo.</summary>
+    [HttpPost("{id:long}/desbloquear")]
+    public async Task<ActionResult<ApiResponse<bool>>> DesbloquearUsuario(long id, MotivoDto dto)
+    {
+        var usuario = await _context.Usuarios.FindAsync(id);
+        if (usuario == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Usuario no encontrado"));
+        }
+
+        if (usuario.BloqueadoHasta is null || usuario.BloqueadoHasta <= DateTime.UtcNow)
+        {
+            return Conflict(ApiResponse<bool>.ErrorResponse("La cuenta no está bloqueada"));
+        }
+
+        _motivoCambio.Establecer(dto.Motivo);
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<bool>.SuccessResponse(true, "Cuenta desbloqueada"));
+    }
+
+    private static UsuarioDto MapToDto(Usuario usuario) => new()
+    {
+        IdUsuario = usuario.IdUsuario,
+        Nombre = usuario.Nombre,
+        Correo = usuario.Correo,
+        UsuarioAD = usuario.UsuarioAD,
+        Activo = usuario.Activo,
+        Roles = usuario.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList(),
+        BloqueadoHasta = usuario.BloqueadoHasta,
+        DebeCambiarPassword = usuario.DebeCambiarPassword,
+        UltimoAcceso = usuario.UltimoAcceso
+    };
 
     private Task<bool> HasAnotherActiveAdministrator(long excludedUserId) =>
         _context.UsuarioRoles.AnyAsync(ur =>

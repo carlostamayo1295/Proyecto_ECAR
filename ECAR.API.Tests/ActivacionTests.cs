@@ -23,7 +23,7 @@ public class ActivacionTests
         var usuario = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.com", Activo = true };
         context.Usuarios.Add(usuario);
         await context.SaveChangesAsync();
-        var controller = new UsuariosController(context);
+        var controller = Fabrica.Usuarios(context);
 
         await controller.DeleteUsuario(usuario.IdUsuario);
         Assert.False((await context.Usuarios.FindAsync(usuario.IdUsuario))!.Activo);
@@ -74,7 +74,7 @@ public class ActivacionTests
     {
         await using var context = CreateContext();
 
-        Assert.IsType<NotFoundObjectResult>((await new UsuariosController(context).ActivarUsuario(999)).Result);
+        Assert.IsType<NotFoundObjectResult>((await Fabrica.Usuarios(context).ActivarUsuario(999)).Result);
         Assert.IsType<NotFoundObjectResult>((await CreateEquiposController(context).ActivarEquipo(999)).Result);
         Assert.IsType<NotFoundObjectResult>((await new ChecklistsController(context).ActivarChecklist(999)).Result);
     }

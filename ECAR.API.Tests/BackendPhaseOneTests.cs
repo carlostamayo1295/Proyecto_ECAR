@@ -1,4 +1,4 @@
-using ECAR.API.Controllers;
+﻿using ECAR.API.Controllers;
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
@@ -29,7 +29,7 @@ public class BackendPhaseOneTests
     public async Task ActiveDirectoryUserCanBeCreatedWithoutLocalPassword()
     {
         await using var context = CreateContext();
-        var controller = new UsuariosController(context);
+        var controller = Fabrica.Usuarios(context);
 
         var result = await controller.CreateUsuario(new CreateUsuarioDto
         {
@@ -56,7 +56,7 @@ public class BackendPhaseOneTests
         context.Usuarios.Add(user);
         await context.SaveChangesAsync();
 
-        var controller = new UsuariosController(context);
+        var controller = Fabrica.Usuarios(context);
         var result = await controller.UpdateUsuario(user.IdUsuario, new UpdateUsuarioDto
         {
             Nombre = "Nombre que no debe guardarse",
@@ -84,7 +84,7 @@ public class BackendPhaseOneTests
         context.Usuarios.Add(admin);
         await context.SaveChangesAsync();
 
-        var controller = new UsuariosController(context);
+        var controller = Fabrica.Usuarios(context);
         var result = await controller.UpdateUsuario(admin.IdUsuario, new UpdateUsuarioDto { Activo = false });
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);

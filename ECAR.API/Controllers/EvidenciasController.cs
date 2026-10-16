@@ -22,31 +22,27 @@ public class EvidenciasController : ControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly IEvidenciaStorage _storage;
     private readonly EvidenciasOptions _options;
-    private readonly IInspeccionService _inspeccionService;
+    private readonly IMotivoCambio _motivoCambio;
 
     public EvidenciasController(
         ECARDbContext context,
         ICurrentUser currentUser,
         IEvidenciaStorage storage,
-        IOptions<EvidenciasOptions> options)
-        : this(context, currentUser, storage, options, null!)
-    {
-    }
-    
-    [ActivatorUtilitiesConstructor]
-    public EvidenciasController(
-        ECARDbContext context,
-        ICurrentUser currentUser,
-        IEvidenciaStorage storage,
         IOptions<EvidenciasOptions> options,
-        IInspeccionService inspeccionService)
+        IMotivoCambio motivoCambio)
     {
         _context = context;
         _currentUser = currentUser;
         _storage = storage;
         _options = options.Value;
-        _inspeccionService = inspeccionService;
+        _motivoCambio = motivoCambio;
     }
+
+    /// <summary>
+    /// Las fotos retiradas (§3.6) solo las ven el Administrador y el Auditor, marcadas; para el
+    /// Técnico y en la ejecución desaparecen, aunque se conservan.
+    /// </summary>
+    private bool VeRetiradas => User.IsInRole("Administrador") || User.IsInRole("Auditor");
 
     // GET: api/evidencias O api/inspecciones/{idInspeccion}/evidencias
     [HttpGet]
@@ -63,8 +59,12 @@ public class EvidenciasController : ControllerBase
             .Include(e => e.UsuarioCargaDetalle)
             .Include(e => e.Inspeccion)
                 .ThenInclude(i => i.Equipo)
-            .Where(e => !e.Retirada)
             .AsQueryable();
+
+        if (!VeRetiradas)
+        {
+            query = query.Where(e => !e.Retirada);
+        }
 
         if (idInspeccion.HasValue && idInspeccion.Value > 0)
         {
@@ -102,7 +102,11 @@ public class EvidenciasController : ControllerBase
                 FechaCarga = e.FechaCarga,
                 IdUsuarioCarga = e.IdUsuarioCarga,
                 UsuarioCarga = e.UsuarioCargaDetalle.Nombre,
-                EstadoInspeccion = e.Inspeccion.Estado ?? string.Empty
+                EstadoInspeccion = e.Inspeccion.Estado ?? string.Empty,
+                Retirada = e.Retirada,
+                FechaRetiro = e.FechaRetiro,
+                MotivoRetiro = e.MotivoRetiro,
+                UsuarioRetiro = e.UsuarioRetiro != null ? e.UsuarioRetiro.Nombre : null
             })
             .ToListAsync();
 
@@ -168,6 +172,7 @@ public class EvidenciasController : ControllerBase
     {
         var evidencia = await _context.Evidencias
             .Include(e => e.UsuarioCargaDetalle)
+            .Include(e => e.UsuarioRetiro)
             .Include(e => e.Inspeccion)
                 .ThenInclude(i => i.Equipo)
             .FirstOrDefaultAsync(e => e.IdEvidencia == id);
@@ -182,22 +187,12 @@ public class EvidenciasController : ControllerBase
             return Forbid();
         }
 
-        var evidenciaDto = new EvidenciaDto
+        if (evidencia.Retirada && !VeRetiradas)
         {
-            IdEvidencia = evidencia.IdEvidencia,
-            IdInspeccion = evidencia.IdInspeccion,
-            NombreEquipo = evidencia.Inspeccion?.Equipo?.NombreEquipo,
-            Archivo = evidencia.Archivo,
-            NombreOriginal = evidencia.NombreOriginal,
-            TipoContenido = evidencia.TipoContenido,
-            TamanoBytes = evidencia.TamanoBytes,
-            FechaCarga = evidencia.FechaCarga,
-            IdUsuarioCarga = evidencia.IdUsuarioCarga,
-            UsuarioCarga = evidencia.UsuarioCargaDetalle?.Nombre ?? string.Empty,
-            EstadoInspeccion = evidencia.Inspeccion?.Estado ?? string.Empty
-        };
+            return NotFound(ApiResponse<EvidenciaDto>.ErrorResponse("Evidencia no encontrada"));
+        }
 
-        return Ok(ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto));
+        return Ok(ApiResponse<EvidenciaDto>.SuccessResponse(MapToDto(evidencia)));
     }
 
     // GET: api/evidencias/{id}/archivo
@@ -217,6 +212,11 @@ public class EvidenciasController : ControllerBase
         if (User.IsInRole("Técnico") && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
         {
             return Forbid();
+        }
+
+        if (evidencia.Retirada && !VeRetiradas)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
         }
 
         try
@@ -338,45 +338,33 @@ public class EvidenciasController : ControllerBase
             ApiResponse<EvidenciaDto>.SuccessResponse(evidenciaDto, "Evidencia cargada exitosamente"));
     }
     
+    /// <summary>
+    /// Endpoint 11 (PLAN_FASE4_TAREAS §3.6): una foto quitada antes de firmar se marca como
+    /// retirada, con motivo, y el archivo se conserva. Solo en una inspección en curso, y solo el
+    /// Administrador o el técnico que la subió o ejecuta la inspección. No hay DELETE (405).
+    /// </summary>
     [HttpPost("{id:long}/retirar")]
-    public async Task<IActionResult> RetirarEvidencia(long id, [FromBody] RetirarEvidenciaDto dto)
-    {
-        // Obtener el ID del usuario autenticado desde _currentUser
-        long idUsuario = _currentUser.IdUsuario; 
-
-        try
-        {
-            await _inspeccionService.RetirarEvidenciaAsync(id, dto, idUsuario);
-            return Ok(new { mensaje = "La evidencia fue retirada exitosamente." });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { mensaje = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { mensaje = ex.Message });
-        }
-    }
-
-    // DELETE: api/evidencias/{id}
-    [HttpDelete("{id:long}")]
     [Authorize(Roles = "Administrador,Técnico")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteEvidencia(long id)
+    public async Task<ActionResult<ApiResponse<EvidenciaDto>>> RetirarEvidencia(long id, MotivoDto dto)
     {
         var evidencia = await _context.Evidencias
             .Include(e => e.Inspeccion)
+                .ThenInclude(i => i.Equipo)
+            .Include(e => e.UsuarioCargaDetalle)
             .FirstOrDefaultAsync(e => e.IdEvidencia == id);
 
         if (evidencia == null)
         {
-            return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
+            return NotFound(ApiResponse<EvidenciaDto>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        // Regla 6 del SRS: tampoco se borran las evidencias de una inspección cerrada.
-        if (await _context.ObtenerEstadoEscrituraAsync(evidencia.IdInspeccion) == EstadoEscritura.Cerrada)
+        // Regla 6: las evidencias de una inspección cerrada (o anulada) no se tocan.
+        if (evidencia.Inspeccion.Estado != InspeccionEstados.EnCurso)
         {
-            return Conflict(ApiResponse<bool>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
+            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(
+                evidencia.Inspeccion.Estado == InspeccionEstados.Anulada
+                    ? InmutabilidadInspeccion.MensajeAnulada
+                    : InmutabilidadInspeccion.MensajeCerrada));
         }
 
         if (!User.IsInRole("Administrador")
@@ -386,16 +374,38 @@ public class EvidenciasController : ControllerBase
             return Forbid();
         }
 
-        var rutaRelativa = evidencia.Archivo;
-
-        _context.Evidencias.Remove(evidencia);
-        await _context.SaveChangesAsync();
-
-        if (!string.IsNullOrEmpty(rutaRelativa))
+        if (evidencia.Retirada)
         {
-            await _storage.EliminarAsync(rutaRelativa);
+            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse("La evidencia ya está retirada"));
         }
 
-        return Ok(ApiResponse<bool>.SuccessResponse(true, "Evidencia eliminada exitosamente"));
+        _motivoCambio.Establecer(dto.Motivo);
+        evidencia.Retirada = true;
+        evidencia.FechaRetiro = DateTime.UtcNow;
+        evidencia.IdUsuarioRetiro = _currentUser.IdUsuario;
+        evidencia.MotivoRetiro = dto.Motivo.Trim();
+        await _context.SaveChangesAsync();
+
+        await _context.Entry(evidencia).Reference(e => e.UsuarioRetiro).LoadAsync();
+        return Ok(ApiResponse<EvidenciaDto>.SuccessResponse(MapToDto(evidencia), "Evidencia retirada; el archivo se conserva"));
     }
+
+    private static EvidenciaDto MapToDto(Evidencia evidencia) => new()
+    {
+        IdEvidencia = evidencia.IdEvidencia,
+        IdInspeccion = evidencia.IdInspeccion,
+        NombreEquipo = evidencia.Inspeccion?.Equipo?.NombreEquipo,
+        Archivo = evidencia.Archivo,
+        NombreOriginal = evidencia.NombreOriginal,
+        TipoContenido = evidencia.TipoContenido,
+        TamanoBytes = evidencia.TamanoBytes,
+        FechaCarga = evidencia.FechaCarga,
+        IdUsuarioCarga = evidencia.IdUsuarioCarga,
+        UsuarioCarga = evidencia.UsuarioCargaDetalle?.Nombre ?? string.Empty,
+        EstadoInspeccion = evidencia.Inspeccion?.Estado ?? string.Empty,
+        Retirada = evidencia.Retirada,
+        FechaRetiro = evidencia.FechaRetiro,
+        MotivoRetiro = evidencia.MotivoRetiro,
+        UsuarioRetiro = evidencia.UsuarioRetiro?.Nombre
+    };
 }

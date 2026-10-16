@@ -27,6 +27,9 @@ public static class InmutabilidadInspeccion
     /// <summary>Mensaje único de rechazo, para que el cliente reciba siempre el mismo texto.</summary>
     public const string MensajeCerrada = "La inspección está cerrada y no admite modificaciones";
 
+    /// <summary>Fase 4: una inspección anulada tampoco admite cambios.</summary>
+    public const string MensajeAnulada = "La inspección está anulada y no admite modificaciones";
+
     /// <summary>Lee solo el estado de la inspección, sin traer el resto de la fila.</summary>
     public static async Task<EstadoEscritura> ObtenerEstadoEscrituraAsync(
         this ECARDbContext context, long idInspeccion)
@@ -42,8 +45,9 @@ public static class InmutabilidadInspeccion
             return EstadoEscritura.NoExiste;
         }
 
-        return estado == InspeccionEstados.Cerrada
-            ? EstadoEscritura.Cerrada
-            : EstadoEscritura.EnCurso;
+        // Solo una inspección en curso admite escrituras; una anulada, como una cerrada, ya no.
+        return estado == InspeccionEstados.EnCurso
+            ? EstadoEscritura.EnCurso
+            : EstadoEscritura.Cerrada;
     }
 }

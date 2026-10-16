@@ -105,6 +105,15 @@ builder.Services.AddScoped<IMotivoCambio, MotivoCambio>();
 builder.Services.AddScoped<ECAR.Infrastructure.Data.IContextoAuditoria, ContextoAuditoriaHttp>();
 builder.Services.AddScoped<IInspeccionService, InspeccionService>();
 builder.Services.AddScoped<IReporteService, ReporteService>();
+builder.Services.AddScoped<IHallazgoService, HallazgoService>();
+
+// Fase 4: política de cuentas y firma electrónica (PLAN_FASE4_TAREAS §3.2). Firma:ClaveHmac va
+// en user-secrets o en el almacén de secretos del servidor; sin ella no se puede firmar.
+builder.Services.Configure<ECAR.API.Configuration.SeguridadOptions>(
+    builder.Configuration.GetSection(ECAR.API.Configuration.SeguridadOptions.SectionName));
+builder.Services.Configure<ECAR.API.Configuration.FirmaOptions>(
+    builder.Configuration.GetSection(ECAR.API.Configuration.FirmaOptions.SectionName));
+builder.Services.AddSingleton<IFirmaElectronica, FirmaElectronica>();
 
 // Configurar almacenamiento de evidencias
 builder.Services.Configure<ECAR.API.Configuration.EvidenciasOptions>(builder.Configuration.GetSection("Evidencias"));
@@ -154,6 +163,8 @@ app.UseHttpsRedirection();
 app.UseCors("AllowBlazorClient");
 
 app.UseAuthentication();
+// Con una contraseña temporal o caducada solo se puede usar /api/auth/* hasta cambiarla.
+app.UseMiddleware<CambioPasswordObligatorio>();
 app.UseAuthorization();
 
 // Aplicar las migraciones pendientes y sembrar los datos faltantes al iniciar.

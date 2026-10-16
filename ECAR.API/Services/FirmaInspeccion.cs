@@ -15,6 +15,19 @@ public static class FirmaInspeccion
     /// <summary>Tamaño máximo del PNG ya decodificado (200 KB), igual que el límite del DTO.</summary>
     public const int TamanoMaximoBytes = 200 * 1024;
 
+    /// <summary>Inspecciones cerradas antes de la Fase 4: SHA-256 sin clave.</summary>
+    public const string AlgoritmoSha256V0 = "SHA256-v0";
+
+    /// <summary>
+    /// Fase 4 (Parte 11 §11.70): HMAC-SHA256 con Firma:ClaveHmac sobre el contenido canónico sin
+    /// las evidencias retiradas, más el nombre y el significado de la firma tal como eran al firmar.
+    /// </summary>
+    public const string AlgoritmoHmacV1 = "HMACSHA256-v1";
+
+    /// <summary>Algoritmo con que se firmó; las cerradas antes de la Fase 4 no lo guardaban.</summary>
+    public static string AlgoritmoDe(Inspeccion inspeccion) =>
+        string.IsNullOrWhiteSpace(inspeccion.FirmaAlgoritmo) ? AlgoritmoSha256V0 : inspeccion.FirmaAlgoritmo;
+
     /// <summary>Cabecera obligatoria de todo archivo PNG (RFC 2083).</summary>
     private static readonly byte[] FirmaPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
@@ -86,6 +99,29 @@ public static class FirmaInspeccion
         var canonico = ConstruirContenidoCanonico(
             inspeccion, respuestas, evidencias, fechaCierre, firmaPngBase64);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonico));
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Huella <see cref="AlgoritmoHmacV1"/>. Las evidencias retiradas no forman parte del registro
+    /// firmado (PLAN_FASE4_TAREAS §3.6), así que retirar una foto antes de firmar no altera el sello.
+    /// </summary>
+    public static string CalcularHmac(
+        Inspeccion inspeccion,
+        IEnumerable<RespuestaInspeccion> respuestas,
+        IEnumerable<Evidencia> evidencias,
+        DateTime fechaCierre,
+        string firmaPngBase64,
+        string firmaNombre,
+        string firmaSignificado,
+        byte[] clave)
+    {
+        var canonico = ConstruirContenidoCanonico(
+                inspeccion, respuestas, evidencias.Where(e => !e.Retirada), fechaCierre, firmaPngBase64)
+            + "|firmaNombre=" + Escapar(firmaNombre)
+            + "|firmaSignificado=" + Escapar(firmaSignificado)
+            + "|algoritmo=" + AlgoritmoHmacV1;
+        var hash = HMACSHA256.HashData(clave, Encoding.UTF8.GetBytes(canonico));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 

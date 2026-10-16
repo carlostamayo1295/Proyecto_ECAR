@@ -15,11 +15,12 @@ public static class InspeccionEstados
 
     /// <summary>
     /// Fase 4: una inspección en curso que se descarta con motivo en lugar de borrarse
-    /// (PLAN_FASE4_TAREAS §3.6). BE-1 la añade a EsValido cuando publique POST {id}/anular.
+    /// (POST /api/inspecciones/{id}/anular, PLAN_FASE4_TAREAS §3.6). Conserva respuestas y fotos
+    /// y, como una cerrada, ya no admite cambios.
     /// </summary>
     public const string Anulada = "Anulada";
 
-    public static bool EsValido(string estado) => estado is EnCurso or Cerrada;
+    public static bool EsValido(string estado) => estado is EnCurso or Cerrada or Anulada;
 }
 
 /// <summary>
