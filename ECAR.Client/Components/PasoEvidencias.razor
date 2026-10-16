@@ -29,13 +29,13 @@
 }
 
 <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3 mb-2">
-    @Inspeccion.Evidencias.Count fotografía(s) adjunta(s)
+    @EvidenciasVisibles.Count fotografía(s) adjunta(s)
 </MudText>
 
-@if (Inspeccion.Evidencias.Any())
+@if (EvidenciasVisibles.Any())
 {
     <MudGrid>
-        @foreach (var evidencia in Inspeccion.Evidencias)
+        @foreach (var evidencia in EvidenciasVisibles)
         {
             <MudItem xs="6" sm="4" md="3">
                 <MudCard Outlined="true">
@@ -55,8 +55,8 @@
                     {
                         <MudCardActions Class="pa-2 pt-0">
                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => ConfirmarEliminarAsync(evidencia)">
-                                Eliminar
+                                StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="() => ConfirmarRetirarAsync(evidencia)">
+                                Retirar
                             </MudButton>
                         </MudCardActions>
                     }
@@ -86,6 +86,11 @@
 
     /// <summary>Caché de miniaturas ya descargadas, por IdEvidencia, para no repetir la llamada al API en cada render.</summary>
     private readonly Dictionary<long, string?> miniaturas = new();
+
+    // Fase 4: una foto retirada se conserva (no se borra), pero no se muestra en la galería
+    // de la ejecución. El servidor ya las excluye de GET ejecucion; este filtro es un respaldo
+    // por si llegan en la respuesta de OnEvidenciasCambiadas antes de recargar.
+    private List<EvidenciaDto> EvidenciasVisibles => Inspeccion.Evidencias.Where(e => !e.Retirada).ToList();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -149,27 +154,30 @@
         await OnEvidenciasCambiadas.InvokeAsync();
     }
 
-    /// <summary>Pide confirmación antes de borrar, siguiendo el criterio visual de la Fase 2.</summary>
-    private async Task ConfirmarEliminarAsync(EvidenciaDto evidencia)
+    /// <summary>
+    /// Fase 4: la foto no se borra, se retira con motivo (queda en la auditoría). Pide el motivo
+    /// con el mismo diálogo que usan hallazgos e inspecciones.
+    /// </summary>
+    private async Task ConfirmarRetirarAsync(EvidenciaDto evidencia)
     {
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la fotografía \"{evidencia.NombreOriginal}\"?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
-        var result = await dialog.Result;
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Retirar fotografía",
+            $"\"{evidencia.NombreOriginal}\" dejará de verse en esta inspección, pero el archivo se conserva.",
+            "Retirar", Color.Error);
 
-        if (result is not null && !result.Canceled)
+        if (motivo is not null)
         {
-            await EliminarAsync(evidencia);
+            await RetirarAsync(evidencia, motivo);
         }
     }
 
-    /// <summary>Elimina una evidencia (solo mientras la inspección siga en curso).</summary>
-    protected async Task EliminarAsync(EvidenciaDto evidencia)
+    /// <summary>Retira una evidencia (solo mientras la inspección siga en curso); el archivo se conserva.</summary>
+    protected async Task RetirarAsync(EvidenciaDto evidencia, string motivo)
     {
-        var result = await HttpClientService.DeleteEvidenciaAsync(evidencia.IdEvidencia);
+        var result = await HttpClientService.RetirarEvidenciaAsync(evidencia.IdEvidencia, motivo);
 
-        if (result == null || !result.Success)
+        if (!result.Success)
         {
-            Snackbar.Add(result?.Message ?? "Error al eliminar la fotografía", Severity.Error);
+            Snackbar.Add(result.Message, Severity.Error);
             return;
         }
 
