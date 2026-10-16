@@ -8,6 +8,9 @@ using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PdfSharpCore.Pdf;
+using PdfSharpCore.Drawing;
+using System.IO;
 
 namespace ECAR.API.Controllers;
 
@@ -165,6 +168,90 @@ public class InspeccionesController : ControllerBase
         }
 
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion)));
+    }
+    
+    // GET /api/inspecciones/{id}/registro.pdf
+    [HttpGet("{id:long}/registro.pdf")]
+    public async Task<IActionResult> ObtenerRegistroPdf(long id)
+    {
+        var inspeccion = await _context.Inspecciones
+            .Include(i => i.Equipo)
+            .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
+            .Include(i => i.Respuestas)
+                .ThenInclude(r => r.Pregunta)
+            .Include(i => i.Evidencias)
+            .FirstOrDefaultAsync(i => i.IdInspeccion == id);
+
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<string>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        // Excluir evidencias retiradas
+        var evidenciasVigentes = inspeccion.Evidencias.Where(e => !e.Retirada).ToList();
+
+        using (var stream = new MemoryStream())
+        {
+            var document = new PdfDocument();
+            var page = document.AddPage();
+            var gfx = XGraphics.FromPdfPage(page);
+            
+            var fontTitulo = new XFont("Arial", 16, XFontStyle.Bold);
+            var fontTexto = new XFont("Arial", 11, XFontStyle.Regular);
+            var fontNegrita = new XFont("Arial", 11, XFontStyle.Bold);
+
+            int y = 40;
+
+            // Cabecera del reporte
+            gfx.DrawString($"REGISTRO DE INSPECCIÓN #ECAR-INSP-{inspeccion.IdInspeccion}", fontTitulo, XBrushes.Black, new XPoint(40, y));
+            y += 30;
+            gfx.DrawString($"Equipo: {inspeccion.Equipo?.NombreEquipo ?? "N/A"}", fontNegrita, XBrushes.Black, new XPoint(40, y));
+            y += 20;
+            gfx.DrawString($"Inspector: {inspeccion.Usuario?.Nombre ?? "N/A"}", fontTexto, XBrushes.Black, new XPoint(40, y));
+            y += 20;
+            gfx.DrawString($"Estado: {inspeccion.Estado} | Resultado: {inspeccion.Resultado ?? "Pendiente"}", fontTexto, XBrushes.Black, new XPoint(40, y));
+            y += 20;
+            gfx.DrawString($"Fecha: {inspeccion.FechaInspeccion:dd/MM/yyyy HH:mm} (UTC-5)", fontTexto, XBrushes.Black, new XPoint(40, y));
+            y += 30;
+
+            // Respuestas
+            gfx.DrawString("Respuestas de la Inspección:", fontNegrita, XBrushes.Black, new XPoint(40, y));
+            y += 20;
+
+            foreach (var resp in inspeccion.Respuestas)
+            {
+                if (y > 750)
+                {
+                    page = document.AddPage();
+                    gfx = XGraphics.FromPdfPage(page);
+                    y = 40;
+                }
+
+                string textoPregunta = resp.Pregunta?.Pregunta ?? $"Pregunta #{resp.IdPregunta}";
+                gfx.DrawString($"- {textoPregunta}: {resp.Respuesta ?? "Sin responder"}", fontTexto, XBrushes.Black, new XPoint(50, y));
+                y += 18;
+
+                if (!string.IsNullOrEmpty(resp.Observacion))
+                {
+                    gfx.DrawString($"   Obs: {resp.Observacion}", fontTexto, XBrushes.Gray, new XPoint(60, y));
+                    y += 18;
+                }
+            }
+
+            y += 20;
+            gfx.DrawString($"Evidencias activas adjuntas: {evidenciasVigentes.Count}", fontTexto, XBrushes.Black, new XPoint(40, y));
+            y += 30;
+
+            // Manifestación de la Firma
+            gfx.DrawString("Manifestación de Firma Electrónica:", fontNegrita, XBrushes.Black, new XPoint(40, y));
+            y += 20;
+            string firmaTexto = $"Firmado electrónicamente por: {inspeccion.Usuario?.Nombre ?? "Técnico"} | Significado: Responsable de la ejecución | Hash: {inspeccion.FirmaDigital ?? "Validado"}";
+            gfx.DrawString(firmaTexto, fontTexto, XBrushes.DarkBlue, new XPoint(40, y));
+            document.Save(stream, false);
+            byte[] bytes = stream.ToArray();
+            return File(bytes, "application/pdf", $"ECAR-INSP-{inspeccion.IdInspeccion}.pdf");
+        }
     }
 
     [HttpPost("iniciar")]
