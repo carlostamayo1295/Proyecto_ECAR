@@ -172,7 +172,21 @@ public partial class ECARDbContext : DbContext
             entity.Property(e => e.Estado).HasDefaultValue(HallazgoEstados.Abierto);
             entity.Property(e => e.Origen).HasDefaultValue(HallazgoOrigenes.Manual);
 
-            // Las relaciones con usuarios y preguntas no borran en cascada: un hallazgo se conserva siempre.
+            // Una novedad por pregunta y por inspección: si la firma se repite, no se duplica.
+            // Los manuales no tienen pregunta y quedan fuera del índice.
+            entity.HasIndex(e => new { e.IdInspeccion, e.IdPregunta })
+                .IsUnique()
+                .HasFilter("[IdPregunta] IS NOT NULL");
+
+            // Ninguna relación borra en cascada: un hallazgo se conserva siempre, se anula.
+            entity.HasOne(e => e.Inspeccion)
+                .WithMany(i => i.Hallazgos)
+                .HasForeignKey(e => e.IdInspeccion)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Respuesta)
+                .WithMany()
+                .HasForeignKey(e => e.IdRespuesta)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Pregunta)
                 .WithMany()
                 .HasForeignKey(e => e.IdPregunta)

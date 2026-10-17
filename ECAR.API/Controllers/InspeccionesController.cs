@@ -397,6 +397,13 @@ public class InspeccionesController : ControllerBase
             return Conflict(ApiResponse<bool>.ErrorResponse(MensajeInspeccionCerrada));
         }
 
+        // Los hallazgos nunca se borran (la FK es Restrict): borrar la inspección se los llevaría.
+        if (await _context.Hallazgos.AnyAsync(h => h.IdInspeccion == id))
+        {
+            return Conflict(ApiResponse<bool>.ErrorResponse(
+                "La inspección tiene hallazgos registrados y no puede eliminarse"));
+        }
+
         // Las filas de Evidencias se borran con la inspección (cascada en la base de datos), pero
         // las fotos están en disco: se toman las rutas antes de borrar para eliminarlas después.
         var fotos = await _context.Evidencias
@@ -481,9 +488,27 @@ public class InspeccionesController : ControllerBase
         inspeccion.FirmaHash = FirmaInspeccion.CalcularHash(
             inspeccion, inspeccion.Respuestas, inspeccion.Evidencias, fechaCierre, firmaPng);
 
-        // Un único SaveChanges: estado, resultado, firma y hash se guardan en la misma
-        // transacción, de modo que no puede quedar una inspección cerrada a medias.
-        await _context.SaveChangesAsync();
+        await AgregarHallazgosDeNovedadesAsync(inspeccion, fechaCierre);
+
+        // Un único SaveChanges: estado, resultado, firma, hash y hallazgos se guardan en la misma
+        // transacción, de modo que no puede quedar una inspección cerrada a medias ni una
+        // novedad sin su hallazgo. Si falla cualquiera de ellos, la firma entera se revierte.
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Dos firmas a la vez con novedades: la otra cerró primero y el índice único
+            // (IdInspeccion, IdPregunta) rechazó los hallazgos repetidos de esta. Se responde
+            // como a cualquier firma de una inspección ya cerrada; otro fallo sigue su curso.
+            if (await _context.ObtenerEstadoEscrituraAsync(id) != EstadoEscritura.Cerrada)
+            {
+                throw;
+            }
+
+            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(MensajeInspeccionCerrada));
+        }
 
         return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(
             MapToResultadoDto(inspeccion),
@@ -561,6 +586,44 @@ public class InspeccionesController : ControllerBase
         return inspeccion.Respuestas.Any(respuesta =>
             tipoPorPregunta.TryGetValue(respuesta.IdPregunta, out var tipo)
             && EsNovedad(tipo, respuesta.Respuesta));
+    }
+
+    /// <summary>
+    /// Un hallazgo Abierto por cada respuesta "No" (regla 4 del SRS), a nombre del inspector que
+    /// firma y con la criticidad del equipo. Solo los agrega al contexto: se guardan en el mismo
+    /// SaveChanges que la firma. Una pregunta que ya tenga su hallazgo en esta inspección se
+    /// salta, así que repetir la firma no duplica nada.
+    /// </summary>
+    private async Task AgregarHallazgosDeNovedadesAsync(Inspeccion inspeccion, DateTime fechaCierre)
+    {
+        var preguntas = inspeccion.Checklist.Preguntas.ToDictionary(pregunta => pregunta.IdPregunta);
+        var yaRegistradas = await _context.Hallazgos
+            .Where(h => h.IdInspeccion == inspeccion.IdInspeccion && h.IdPregunta != null)
+            .Select(h => h.IdPregunta!.Value)
+            .ToListAsync();
+
+        foreach (var respuesta in inspeccion.Respuestas.OrderBy(respuesta => respuesta.IdPregunta))
+        {
+            if (!preguntas.TryGetValue(respuesta.IdPregunta, out var pregunta)
+                || !EsNovedad(pregunta.TipoRespuesta, respuesta.Respuesta)
+                || yaRegistradas.Contains(pregunta.IdPregunta))
+            {
+                continue;
+            }
+
+            _context.Hallazgos.Add(new Hallazgo
+            {
+                IdInspeccion = inspeccion.IdInspeccion,
+                IdPregunta = pregunta.IdPregunta,
+                IdRespuesta = respuesta.IdRespuesta,
+                Descripcion = $"{pregunta.Pregunta}: {respuesta.Observacion!.Trim()}",
+                Criticidad = inspeccion.Equipo.Criticidad,
+                Estado = HallazgoEstados.Abierto,
+                Origen = HallazgoOrigenes.Novedad,
+                FechaRegistro = fechaCierre,
+                IdUsuarioRegistro = inspeccion.IdUsuario
+            });
+        }
     }
 
     /// <summary>Una respuesta Sí/No marcada como "No" es una novedad (regla 4 del SRS).</summary>
