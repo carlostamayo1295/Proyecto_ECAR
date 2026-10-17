@@ -109,8 +109,11 @@ public class BorradoInspeccionTests
         new(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Técnico"),
             new InspeccionService(escenario.Context), storage, NullLogger<InspeccionesController>.Instance);
 
+    // Antes DELETE borraba la inspección en curso y sus fotos. Ahora ninguna inspección se borra
+    // físicamente: se anula con POST {id}/anular, y DELETE responde 409 sin tocar nada.
+
     [Fact]
-    public async Task DeleteInspeccion_EnCurso_BorraSusFotosDelDisco()
+    public async Task DeleteInspeccion_EnCurso_Devuelve409YConservaLaInspeccionYSusFotos()
     {
         var escenario = await SeedAsync();
         var inspeccion = await AgregarInspeccionAsync(escenario, InspeccionEstados.EnCurso,
@@ -119,24 +122,21 @@ public class BorradoInspeccionTests
 
         var action = await Controlador(escenario, storage).DeleteInspeccion(inspeccion.IdInspeccion);
 
-        Assert.IsType<OkObjectResult>(action.Result);
-        Assert.Equal(["2026/10/1/a.jpg", "2026/10/1/b.jpg"], storage.Eliminados.Order());
-        Assert.False(await escenario.Context.Inspecciones.AnyAsync(i => i.IdInspeccion == inspeccion.IdInspeccion));
+        var conflict = Assert.IsType<ConflictObjectResult>(action.Result);
+        Assert.Equal(InspeccionesController.MensajeNoSeElimina, Assert.IsType<ApiResponse<bool>>(conflict.Value).Message);
+        Assert.Empty(storage.Eliminados);
+        Assert.True(await escenario.Context.Inspecciones.AnyAsync(i => i.IdInspeccion == inspeccion.IdInspeccion));
+        Assert.Equal(2, await escenario.Context.Evidencias.CountAsync(e => e.IdInspeccion == inspeccion.IdInspeccion));
     }
 
     [Fact]
-    public async Task DeleteInspeccion_UnaFotoQueNoSePuedeBorrar_NoImpideBorrarLaInspeccionNiLasDemas()
+    public async Task DeleteInspeccion_Inexistente_Devuelve404()
     {
         var escenario = await SeedAsync();
-        var inspeccion = await AgregarInspeccionAsync(escenario, InspeccionEstados.EnCurso,
-            "2026/10/1/bloqueada.jpg", "2026/10/1/libre.jpg");
-        var storage = new FakeStorage { FallaAlBorrar = "2026/10/1/bloqueada.jpg" };
 
-        var action = await Controlador(escenario, storage).DeleteInspeccion(inspeccion.IdInspeccion);
+        var action = await Controlador(escenario, new FakeStorage()).DeleteInspeccion(999);
 
-        Assert.IsType<OkObjectResult>(action.Result);
-        Assert.Equal(["2026/10/1/libre.jpg"], storage.Eliminados);
-        Assert.False(await escenario.Context.Inspecciones.AnyAsync(i => i.IdInspeccion == inspeccion.IdInspeccion));
+        Assert.IsType<NotFoundObjectResult>(action.Result);
     }
 
     [Fact]

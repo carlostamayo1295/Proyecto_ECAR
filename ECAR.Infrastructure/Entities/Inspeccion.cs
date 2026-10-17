@@ -76,6 +76,16 @@ public class Inspeccion
     [Column("IdUsuarioAnulacion")]
     public long? IdUsuarioAnulacion { get; set; }
 
+    /// <summary>
+    /// Control de concurrencia: SQL Server lo cambia en cada UPDATE de la fila. Si se firma y se
+    /// anula la misma inspección a la vez, la segunda petición falla en lugar de pisar a la
+    /// primera. El arreglo vacío solo existe para el proveedor en memoria de las pruebas: EF no
+    /// envía este valor en el INSERT (lo genera SQL Server).
+    /// </summary>
+    [Timestamp]
+    [Column("RowVersion")]
+    public byte[] RowVersion { get; set; } = [];
+
     // Propiedades de navegación
     [ForeignKey("IdEquipo")]
     public virtual Equipo Equipo { get; set; } = null!;

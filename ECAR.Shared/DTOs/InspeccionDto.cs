@@ -19,6 +19,12 @@ public class InspeccionDto
     public bool TieneFirma { get; set; }
     public int TotalEvidencias { get; set; }
     public int TotalHallazgos { get; set; }
+
+    // Fase 4 (§3.6): solo en las inspecciones anuladas; null en las demás.
+    public string? MotivoAnulacion { get; set; }
+    public DateTime? FechaAnulacion { get; set; }
+    public long? IdUsuarioAnulacion { get; set; }
+    public string? NombreUsuarioAnulacion { get; set; }
 }
 
 public class CreateInspeccionDto

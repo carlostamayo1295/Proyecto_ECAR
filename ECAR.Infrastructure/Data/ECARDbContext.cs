@@ -102,6 +102,11 @@ public partial class ECARDbContext : DbContext
         {
             entity.HasIndex(e => e.IdChecklist);
             entity.HasIndex(e => e.TipoRespuesta);
+            // Las preguntas son parte de la evidencia de las inspecciones: borrar un checklist no las arrastra.
+            entity.HasOne(e => e.Checklist)
+                .WithMany(c => c.Preguntas)
+                .HasForeignKey(e => e.IdChecklist)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Configuración de Inspeccion
@@ -120,11 +125,16 @@ public partial class ECARDbContext : DbContext
                 .WithMany(c => c.Inspecciones)
                 .HasForeignKey(e => e.IdChecklist)
                 .OnDelete(DeleteBehavior.Restrict);
+            // Una inspección nunca se borra (se anula): ni borrar el equipo ni el inspector la arrastran.
+            entity.HasOne(e => e.Equipo)
+                .WithMany(eq => eq.Inspecciones)
+                .HasForeignKey(e => e.IdEquipo)
+                .OnDelete(DeleteBehavior.Restrict);
             // Dos relaciones con Usuarios: hay que decir cuál es la de Usuario.Inspecciones.
             entity.HasOne(e => e.Usuario)
                 .WithMany(u => u.Inspecciones)
                 .HasForeignKey(e => e.IdUsuario)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.UsuarioAnulacion)
                 .WithMany()
                 .HasForeignKey(e => e.IdUsuarioAnulacion)
@@ -137,6 +147,15 @@ public partial class ECARDbContext : DbContext
             entity.HasIndex(e => e.IdInspeccion);
             entity.HasIndex(e => e.IdPregunta);
             entity.HasIndex(e => new { e.IdInspeccion, e.IdPregunta }).IsUnique();
+            // Las respuestas se conservan con su inspección y con su pregunta: nada las borra en cascada.
+            entity.HasOne(e => e.Inspeccion)
+                .WithMany(i => i.Respuestas)
+                .HasForeignKey(e => e.IdInspeccion)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Pregunta)
+                .WithMany(p => p.Respuestas)
+                .HasForeignKey(e => e.IdPregunta)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Configuración de Evidencia
@@ -146,10 +165,11 @@ public partial class ECARDbContext : DbContext
             entity.HasIndex(e => e.IdUsuarioCarga);
             entity.HasIndex(e => e.FechaCarga);
 
+            // Una inspección nunca se borra (se anula): sus evidencias no se borran con ella.
             entity.HasOne(e => e.Inspeccion)
                 .WithMany(i => i.Evidencias)
                 .HasForeignKey(e => e.IdInspeccion)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.UsuarioCargaDetalle)
                 .WithMany()

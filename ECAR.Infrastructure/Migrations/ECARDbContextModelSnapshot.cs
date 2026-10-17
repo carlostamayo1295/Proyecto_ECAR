@@ -582,6 +582,13 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("Resultado");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("RowVersion");
+
                     b.HasKey("IdInspeccion");
 
                     b.HasIndex("Estado");
@@ -867,7 +874,7 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Evidencias")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCargaDetalle")
@@ -957,13 +964,13 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Equipo", "Equipo")
                         .WithMany("Inspecciones")
                         .HasForeignKey("IdEquipo")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "Usuario")
                         .WithMany("Inspecciones")
                         .HasForeignKey("IdUsuario")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioAnulacion")
@@ -985,7 +992,7 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Checklist", "Checklist")
                         .WithMany("Preguntas")
                         .HasForeignKey("IdChecklist")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Checklist");
@@ -996,13 +1003,13 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Respuestas")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
                         .WithMany("Respuestas")
                         .HasForeignKey("IdPregunta")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Inspeccion");

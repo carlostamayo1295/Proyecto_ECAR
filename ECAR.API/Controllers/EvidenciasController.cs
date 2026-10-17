@@ -270,10 +270,11 @@ public class EvidenciasController : ControllerBase
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección indicada no existe."));
         }
 
-        // Regla 6 del SRS: sobre una inspección cerrada no se añaden evidencias.
+        // Regla 6 del SRS: sobre una inspección cerrada (o anulada) no se añaden evidencias.
         if (inspeccion.Estado != InspeccionEstados.EnCurso)
         {
-            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
+            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(
+                InmutabilidadInspeccion.MensajeSiNoAdmiteCambios(inspeccion.Estado) ?? InmutabilidadInspeccion.MensajeCerrada));
         }
 
         if (User.IsInRole("Técnico") && inspeccion.IdUsuario != _currentUser.IdUsuario)
@@ -338,10 +339,14 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        // Regla 6 del SRS: tampoco se borran las evidencias de una inspección cerrada.
-        if (await _context.ObtenerEstadoEscrituraAsync(evidencia.IdInspeccion) == EstadoEscritura.Cerrada)
+        // Regla 6 del SRS: tampoco se borran las evidencias de una inspección cerrada, ni las de
+        // una anulada, que conserva todos sus datos (§3.6).
+        switch (await _context.ObtenerEstadoEscrituraAsync(evidencia.IdInspeccion))
         {
-            return Conflict(ApiResponse<bool>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
+            case EstadoEscritura.Cerrada:
+                return Conflict(ApiResponse<bool>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
+            case EstadoEscritura.Anulada:
+                return Conflict(ApiResponse<bool>.ErrorResponse(InmutabilidadInspeccion.MensajeAnulada));
         }
 
         if (!User.IsInRole("Administrador")
