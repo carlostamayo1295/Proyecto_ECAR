@@ -10,6 +10,25 @@ horaria de Colombia.
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.
 - Revisión de integración backend con estado de ECAR-209 a ECAR-216.
 
+### Corregido (rama `integracion-fase4`, 18/10/2026, pruebas a fondo)
+
+- Hallazgos: la descripción de una novedad no se edita y editar exige motivo.
+- Criticidad cerrada (Alta, Media, Baja) en equipos y hallazgos.
+- `POST /api/inspecciones` usa la fecha del servidor; la pantalla ya no deja elegirla.
+- No se inicia ni se firma una inspección con un checklist sin preguntas, y esos checklists no se ofrecen.
+- Consulta pública del QR sin sesión: solo nombre, código y ubicación.
+- `PreguntasChecklistController` con DTOs (arregla el 500 de `/openapi/v1.json`), valida el tipo de respuesta
+  y no cambia un checklist que ya tiene respuestas.
+- Cabeceras de seguridad en el API y HSTS fuera de desarrollo.
+
+### Añadido (rama `integracion-fase4`, 18/10/2026)
+
+- **Tablero** de la portada (SRS §6) con `GET /api/dashboard`.
+- **Escáner de QR** en «Iniciar inspección» con html5-qrcode 2.3.8 (Apache-2.0), servido desde el cliente.
+- Cliente: menú y Scalar ocultos sin sesión (Scalar solo para el Administrador en desarrollo), Enter inicia
+  sesión, Sí/No con teclado, «Con novedad», Auditoría sin desborde a 375 px y las pantallas de administración
+  comprueban el rol antes de cargar.
+
 ### Integrado (rama `integracion-fase4`, 18/10/2026)
 
 - Entran las ramas de BE-1 (`feature/anulacion-inspecciones-auditoria-Juandavid`) y BE-3
