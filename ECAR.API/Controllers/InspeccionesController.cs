@@ -495,7 +495,10 @@ public class InspeccionesController : ControllerBase
     [HttpPost("{id}/firmar")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarInspeccion(
-        long id, FirmarInspeccionDto firmarDto)
+        long id,
+        FirmarInspeccionDto firmarDto,
+        [FromServices] IAuthService authService,
+        [FromServices] VerificadorIntegridad verificador)
     {
         var inspeccion = await CargarCierreAsync(id, seguimiento: true);
         if (inspeccion == null)
@@ -528,6 +531,25 @@ public class InspeccionesController : ControllerBase
             return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(errorFirma));
         }
 
+        if (string.IsNullOrEmpty(firmarDto.Password))
+        {
+            return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
+                "Debe ingresar su contraseña para firmar"));
+        }
+
+        try
+        {
+            if (!await authService.VerificarPasswordAsync(_currentUser.IdUsuario, firmarDto.Password, AuthService.OperacionFirma))
+            {
+                return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
+                    "La contraseña es incorrecta; la inspección no se cerró"));
+            }
+        }
+        catch (CuentaBloqueadaException ex)
+        {
+            return StatusCode(StatusCodes.Status423Locked, ApiResponse<InspeccionResultadoDto>.ErrorResponse(ex.Message));
+        }
+
         var fechaCierre = DateTime.UtcNow;
         inspeccion.Estado = InspeccionEstados.Cerrada;
         inspeccion.FechaCierre = fechaCierre;
@@ -541,8 +563,10 @@ public class InspeccionesController : ControllerBase
         }
 
         inspeccion.FirmaDigital = firmaPng;
-        inspeccion.FirmaHash = FirmaInspeccion.CalcularHash(
-            inspeccion, inspeccion.Respuestas, inspeccion.Evidencias, fechaCierre, firmaPng);
+        inspeccion.FirmaNombre = inspeccion.Usuario.Nombre;
+        inspeccion.FirmaSignificado = VerificadorIntegridad.SignificadoEjecucion;
+        inspeccion.FirmaAlgoritmo = VerificadorIntegridad.AlgoritmoHmac;
+        inspeccion.FirmaHash = await verificador.CalcularSelloAsync(inspeccion);
 
         await AgregarHallazgosDeNovedadesAsync(inspeccion, fechaCierre);
 
@@ -570,6 +594,44 @@ public class InspeccionesController : ControllerBase
         return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(
             MapToResultadoDto(inspeccion),
             "Inspección firmada y cerrada exitosamente"));
+    }
+
+    [HttpGet("{id}/integridad")]
+    public async Task<ActionResult<ApiResponse<IntegridadInspeccionDto>>> VerificarIntegridad(
+        long id,
+        [FromServices] VerificadorIntegridad verificador)
+    {
+        var inspeccion = await CargarCierreAsync(id, seguimiento: false);
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<IntegridadInspeccionDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (!PuedeLeer(inspeccion))
+        {
+            return Forbid();
+        }
+
+        if (!EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<IntegridadInspeccionDto>.ErrorResponse(
+                "La inspección aún está en curso: solo se verifica una inspección firmada"));
+        }
+
+        var resultado = new IntegridadInspeccionDto
+        {
+            Integra = await verificador.VerificarAsync(inspeccion),
+            Algoritmo = VerificadorIntegridad.NombreAlgoritmo(inspeccion) ?? string.Empty,
+            VerificadoEn = DateTime.UtcNow
+        };
+
+        await _context.RegistrarEventoAsync(AuditoriaAcciones.VerificacionIntegridad,
+            detalle: new { IdInspeccion = id, resultado.Integra, resultado.Algoritmo });
+
+        return Ok(ApiResponse<IntegridadInspeccionDto>.SuccessResponse(resultado,
+            resultado.Integra
+                ? "La inspección no ha cambiado desde que se firmó"
+                : "La inspección fue alterada después de firmarse"));
     }
 
     /// <summary>Vista de solo lectura de una inspección ya cerrada: resumen, respuestas, evidencias, firma y hash.</summary>
@@ -786,7 +848,10 @@ public class InspeccionesController : ControllerBase
                 .ToList(),
             TieneFirma = !string.IsNullOrEmpty(inspeccion.FirmaDigital),
             FirmaPngBase64 = inspeccion.FirmaDigital,
-            FirmaHash = inspeccion.FirmaHash
+            FirmaHash = inspeccion.FirmaHash,
+            FirmaNombre = inspeccion.FirmaNombre,
+            FirmaSignificado = inspeccion.FirmaSignificado,
+            FirmaAlgoritmo = VerificadorIntegridad.NombreAlgoritmo(inspeccion)
         };
     }
 

@@ -91,7 +91,7 @@ public class HallazgosFirmaTests
         var interceptor = new InterceptorDeHallazgos();
         var context = NuevoContexto(raiz, nombre, interceptor);
 
-        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = "hash", Activo = true };
+        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
         var limpieza = new PreguntaChecklist { Pregunta = "¿Está limpio?", TipoRespuesta = TiposRespuesta.SiNo, Obligatoria = true, Orden = 1 };
         var cables = new PreguntaChecklist { Pregunta = "¿Cables en buen estado?", TipoRespuesta = TiposRespuesta.SiNo, Obligatoria = true, Orden = 2 };
         var etiqueta = new PreguntaChecklist { Pregunta = "¿Tiene etiqueta?", TipoRespuesta = TiposRespuesta.SiNo, Obligatoria = false, Orden = 3 };
@@ -154,7 +154,7 @@ public class HallazgosFirmaTests
         Escenario escenario, long idInspeccion) =>
         new InspeccionesController(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Técnico"),
                 new InspeccionService(escenario.Context), new FakeStorage(), NullLogger<InspeccionesController>.Instance)
-            .FirmarInspeccion(idInspeccion, new FirmarInspeccionDto { FirmaPngBase64 = FirmaPngValida });
+            .FirmarConPassword(escenario.Context, idInspeccion, new FirmarInspeccionDto { FirmaPngBase64 = FirmaPngValida });
 
     [Fact]
     public async Task Firmar_CreaUnHallazgoAbiertoPorCadaRespuestaNo()

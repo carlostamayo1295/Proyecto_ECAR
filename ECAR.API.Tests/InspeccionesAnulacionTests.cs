@@ -106,7 +106,7 @@ public class InspeccionesAnulacionTests
         var context = NuevoContexto(nombre, new ContextoAuditoriaFalso(motivo), interceptor);
 
         var admin = new Usuario { Nombre = "Admin", Correo = "admin@ecar.test", PasswordHash = "hash", Activo = true };
-        var tecnico = new Usuario { Nombre = "Ana Técnica", Correo = "ana@ecar.test", PasswordHash = "hash", Activo = true };
+        var tecnico = new Usuario { Nombre = "Ana Técnica", Correo = "ana@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
         var otro = new Usuario { Nombre = "Otro", Correo = "otro@ecar.test", PasswordHash = "hash", Activo = true };
         var equipo = new Equipo { CodigoInterno = "EQ-001", ActivoFijo = "AF-001", NombreEquipo = "Balanza", Activo = true };
         var pregunta = new PreguntaChecklist { Pregunta = "¿Está limpio?", TipoRespuesta = TiposRespuesta.SiNo, Obligatoria = true };
@@ -323,7 +323,7 @@ public class InspeccionesAnulacionTests
     {
         var e = await AnuladaAsync();
 
-        var action = await Como(e, e.Tecnico).FirmarInspeccion(e.Inspeccion.IdInspeccion,
+        var action = await Como(e, e.Tecnico).FirmarConPassword(e.Context, e.Inspeccion.IdInspeccion,
             new FirmarInspeccionDto { FirmaPngBase64 = FirmaPngValida });
 
         Assert.IsType<ConflictObjectResult>(action.Result);
@@ -588,7 +588,7 @@ public class InspeccionesAnulacionTests
         var e = await SeedAsync();
         e.Interceptor.AlGuardar = OtraPeticionLaDejaEn(e, InspeccionEstados.Anulada);
 
-        var action = await Como(e, e.Tecnico).FirmarInspeccion(e.Inspeccion.IdInspeccion,
+        var action = await Como(e, e.Tecnico).FirmarConPassword(e.Context, e.Inspeccion.IdInspeccion,
             new FirmarInspeccionDto { FirmaPngBase64 = FirmaPngValida });
 
         Assert.IsType<ConflictObjectResult>(action.Result);
