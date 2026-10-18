@@ -48,7 +48,7 @@ public class ReportesFase4Tests
     private static async Task<Datos> SeedAsync()
     {
         var db = new ECARDbContext(new DbContextOptionsBuilder<ECARDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var tecnico = new Usuario { Nombre = "Ana Técnica", Correo = "ana@ecar.test", PasswordHash = "x" };
+        var tecnico = new Usuario { Nombre = "Ana Técnica", Correo = "ana@ecar.test", PasswordHash = FirmaPruebas.PasswordHash };
         var qc = new Ubicacion { Planta = "Planta Principal", Area = "Control de Calidad" };
         var produccion = new Ubicacion { Planta = "Planta Principal", Area = "Producción" };
         var antes = DateTime.UtcNow.AddYears(-1);
@@ -227,8 +227,8 @@ public class ReportesFase4Tests
         await d.Db.SaveChangesAsync();
         d.Db.ChangeTracker.Clear();
         var tecnico = new FakeTecnico(d.Tecnico);
-        await Fabrica.Inspecciones(d.Db, tecnico, new FotoFija()).FirmarInspeccion(inspeccion.IdInspeccion,
-            new FirmarInspeccionDto { Password = Fabrica.ClaveFirma, FirmaPngBase64 = Png });
+        await Fabrica.Inspecciones(d.Db, tecnico, new FotoFija()).FirmarConPassword(d.Db, inspeccion.IdInspeccion,
+            new FirmarInspeccionDto { Password = Fabrica.ClaveFirma, FirmaPngBase64 = Png }, new FotoFija());
         d.Db.ChangeTracker.Clear();
 
         var archivo = Assert.IsType<FileContentResult>(

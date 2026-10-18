@@ -406,6 +406,10 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("IdPregunta");
 
+                    b.Property<long?>("IdRespuesta")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdRespuesta");
+
                     b.Property<long?>("IdUsuarioCierre")
                         .HasColumnType("bigint")
                         .HasColumnName("IdUsuarioCierre");
@@ -431,6 +435,13 @@ namespace ECAR.Infrastructure.Migrations
                         .HasDefaultValue("Manual")
                         .HasColumnName("Origen");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("RowVersion");
+
                     b.HasKey("IdHallazgo");
 
                     b.HasIndex("Criticidad");
@@ -443,11 +454,17 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasIndex("IdPregunta");
 
+                    b.HasIndex("IdRespuesta");
+
                     b.HasIndex("IdUsuarioCierre");
 
                     b.HasIndex("IdUsuarioRegistro");
 
                     b.HasIndex("IdUsuarioResponsable");
+
+                    b.HasIndex("IdInspeccion", "IdPregunta")
+                        .IsUnique()
+                        .HasFilter("[IdPregunta] IS NOT NULL");
 
                     b.ToTable("Hallazgos");
                 });
@@ -564,6 +581,13 @@ namespace ECAR.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("Resultado");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("RowVersion");
 
                     b.HasKey("IdInspeccion");
 
@@ -850,7 +874,7 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Evidencias")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCargaDetalle")
@@ -876,12 +900,17 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Hallazgos")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
                         .WithMany()
                         .HasForeignKey("IdPregunta")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECAR.Infrastructure.Entities.RespuestaInspeccion", "Respuesta")
+                        .WithMany()
+                        .HasForeignKey("IdRespuesta")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCierre")
@@ -903,6 +932,8 @@ namespace ECAR.Infrastructure.Migrations
                     b.Navigation("Inspeccion");
 
                     b.Navigation("Pregunta");
+
+                    b.Navigation("Respuesta");
 
                     b.Navigation("UsuarioCierre");
 
@@ -933,13 +964,13 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Equipo", "Equipo")
                         .WithMany("Inspecciones")
                         .HasForeignKey("IdEquipo")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "Usuario")
                         .WithMany("Inspecciones")
                         .HasForeignKey("IdUsuario")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioAnulacion")
@@ -961,7 +992,7 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Checklist", "Checklist")
                         .WithMany("Preguntas")
                         .HasForeignKey("IdChecklist")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Checklist");
@@ -972,13 +1003,13 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Respuestas")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
                         .WithMany("Respuestas")
                         .HasForeignKey("IdPregunta")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Inspeccion");

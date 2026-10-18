@@ -125,6 +125,7 @@ public class InspeccionService : IInspeccionService
     }
 
     // Punto 2: GET /api/inspecciones/mias?estado=
+    // Sin estado devuelve también las anuladas (se conservan); con estado=EnCurso solo las abiertas.
     public async Task<List<InspeccionDto>> ObtenerMisInspeccionesAsync(long usuarioId, string? estado)
     {
         var query = _context.Inspecciones
@@ -157,7 +158,11 @@ public class InspeccionService : IInspeccionService
                 Observaciones = i.Observaciones,
                 TieneFirma = !string.IsNullOrEmpty(i.FirmaDigital),
                 TotalEvidencias = i.Evidencias.Count(e => !e.Retirada),
-                TotalHallazgos = i.Hallazgos.Count
+                TotalHallazgos = i.Hallazgos.Count,
+                MotivoAnulacion = i.MotivoAnulacion,
+                FechaAnulacion = i.FechaAnulacion,
+                IdUsuarioAnulacion = i.IdUsuarioAnulacion,
+                NombreUsuarioAnulacion = i.UsuarioAnulacion != null ? i.UsuarioAnulacion.Nombre : null
             })
             .ToListAsync();
     }

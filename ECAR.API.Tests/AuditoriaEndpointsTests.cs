@@ -13,8 +13,8 @@ using Xunit;
 namespace ECAR.API.Tests;
 
 /// <summary>
-/// Endpoints 1, 2, 3 (BE-1) y 21 (BE-2): filtros, historial de un registro, verificación de la
-/// cadena y exportación de la auditoría.
+/// Endpoint 21 (BE-2): exportación de la auditoría con los filtros del endpoint 1. Los endpoints
+/// 1 a 3 los prueban AuditoriaConsultaTests, AuditoriaHistorialTests y AuditoriaVerificacionTests (BE-1).
 /// </summary>
 public class AuditoriaEndpointsTests
 {
@@ -52,79 +52,13 @@ public class AuditoriaEndpointsTests
         return (db, nombre);
     }
 
-    private static T Ok<T>(ActionResult<ApiResponse<T>> resultado) =>
-        Assert.IsType<ApiResponse<T>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
-
-    [Fact]
-    public async Task El_listado_filtra_y_trae_ip_motivo_y_hash()
-    {
-        var (db, _) = await BaseConCambiosAsync();
-        var controlador = new AuditoriaController(db, new Auditor());
-
-        var equipos = Ok(await controlador.GetAuditoria(tabla: "Equipos"));
-        var modificaciones = Ok(await controlador.GetAuditoria(accion: AuditoriaAcciones.Modificar));
-        var porTexto = Ok(await controlador.GetAuditoria(search: "Recalibración"));
-
-        Assert.Equal(2, equipos.TotalCount);
-        var fila = Assert.Single(modificaciones.Data);
-        Assert.Equal("10.1.2.3", fila.DireccionIp);
-        Assert.Equal("Recalibración trimestral", fila.Motivo);
-        Assert.Equal(64, fila.Hash!.Length);
-        Assert.Equal(1, fila.IdUsuario);
-        Assert.Equal(1, porTexto.TotalCount);
-    }
-
-    [Fact]
-    public async Task El_historial_de_un_registro_va_en_orden()
-    {
-        var (db, _) = await BaseConCambiosAsync();
-        var idEquipo = (await db.Equipos.SingleAsync()).IdEquipo;
-
-        var historial = Ok(await new AuditoriaController(db, new Auditor()).GetHistorialRegistro("Equipos", idEquipo));
-
-        Assert.Equal([AuditoriaAcciones.Crear, AuditoriaAcciones.Modificar], historial.Select(h => h.Accion));
-    }
-
-    [Fact]
-    public async Task Verificar_dice_que_la_cadena_esta_integra_y_queda_en_la_auditoria()
-    {
-        var (db, _) = await BaseConCambiosAsync();
-
-        var resultado = Ok(await new AuditoriaController(db, new Auditor()).Verificar());
-
-        Assert.True(resultado.Valida);
-        Assert.Equal(3, resultado.FilasRevisadas);
-        Assert.Null(resultado.PrimeraFilaRota);
-        Assert.Equal(AuditoriaAcciones.VerificacionIntegridad, (await db.Auditoria.OrderBy(a => a.IdAuditoria).LastAsync()).Accion);
-    }
-
-    [Fact]
-    public async Task Verificar_detecta_una_fila_alterada()
-    {
-        var (db, nombre) = await BaseConCambiosAsync();
-        // El proveedor en memoria no tiene el trigger: sirve para simular a quien lo desactiva.
-        // ECARDbContext no audita los cambios a la propia tabla Auditoria, así que el cambio pasa.
-        var idAlterada = await db.Auditoria.OrderBy(a => a.IdAuditoria).Skip(1).Select(a => a.IdAuditoria).FirstAsync();
-        await using (var directo = new ECARDbContext(new DbContextOptionsBuilder<ECARDbContext>().UseInMemoryDatabase(nombre).Options))
-        {
-            var alterar = await directo.Auditoria.SingleAsync(a => a.IdAuditoria == idAlterada);
-            alterar.ValorNuevo = "{\"Marca\":\"Otra\"}";
-            await directo.SaveChangesAsync();
-        }
-
-        var resultado = Ok(await new AuditoriaController(db, new Auditor()).Verificar());
-
-        Assert.False(resultado.Valida);
-        Assert.Equal(idAlterada, resultado.PrimeraFilaRota);
-    }
-
     [Fact]
     public async Task Exportar_a_Excel_trae_una_fila_por_cambio_y_queda_en_la_auditoria()
     {
         var (db, _) = await BaseConCambiosAsync();
 
         var archivo = Assert.IsType<FileContentResult>(
-            await new AuditoriaController(db, new Auditor()).Exportar(ReporteFormatos.Excel, tabla: "Equipos"));
+            await new AuditoriaController(db).Exportar(new AuditoriaFiltroDto { Tabla = "Equipos" }, new Auditor(), ReporteFormatos.Excel));
 
         Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", archivo.ContentType);
         using var libro = new XLWorkbook(new MemoryStream(archivo.FileContents));
@@ -143,8 +77,19 @@ public class AuditoriaEndpointsTests
     {
         var (db, _) = await BaseConCambiosAsync();
 
-        var archivo = Assert.IsType<FileContentResult>(await new AuditoriaController(db, new Auditor()).Exportar(ReporteFormatos.Pdf));
+        var archivo = Assert.IsType<FileContentResult>(await new AuditoriaController(db).Exportar(new AuditoriaFiltroDto(), new Auditor(), ReporteFormatos.Pdf));
 
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(archivo.FileContents, 0, 4));
+    }
+
+    [Fact]
+    public async Task Exportar_rechaza_los_mismos_filtros_invalidos_que_el_listado()
+    {
+        var (db, _) = await BaseConCambiosAsync();
+
+        var resultado = await new AuditoriaController(db).Exportar(
+            new AuditoriaFiltroDto { Tabla = "NoExiste" }, new Auditor(), ReporteFormatos.Excel);
+
+        Assert.IsType<BadRequestObjectResult>(resultado);
     }
 }

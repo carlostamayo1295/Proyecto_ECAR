@@ -1,4 +1,6 @@
+using BCrypt.Net;
 using ECAR.API.Configuration;
+using ECAR.API.Exceptions;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
@@ -14,163 +16,136 @@ namespace ECAR.API.Services;
 
 public class AuthService : IAuthService
 {
-    /// <summary>
-    /// Va en el token de quien tiene una contraseña temporal o caducada: con él solo puede usar
-    /// /api/auth/* hasta cambiarla (CambioPasswordObligatorio).
-    /// </summary>
-    public const string ClaimDebeCambiarPassword = "ecar_cambiar_password";
+    public const string OperacionLogin = "InicioSesion";
+    public const string OperacionFirma = "Firma";
+    public const string OperacionCambioPassword = "CambioPassword";
+
+    public const string ClaimCambioPasswordPendiente = "ecar_cambio_password";
 
     private readonly ECARDbContext _context;
     private readonly IConfiguration _configuration;
     private readonly IActiveDirectoryAuthService _activeDirectoryAuthService;
     private readonly EcarAuthenticationOptions _authenticationOptions;
-    private readonly SeguridadOptions _seguridad;
+    private readonly PoliticaPasswords _politica;
 
     public AuthService(
         ECARDbContext context,
         IConfiguration configuration,
         IActiveDirectoryAuthService activeDirectoryAuthService,
-        IOptions<EcarAuthenticationOptions> authenticationOptions)
+        IOptions<EcarAuthenticationOptions> authenticationOptions,
+        PoliticaPasswords? politica = null)
     {
         _context = context;
         _configuration = configuration;
         _activeDirectoryAuthService = activeDirectoryAuthService;
         _authenticationOptions = authenticationOptions.Value;
-        _seguridad = SeguridadOptions.Desde(configuration);
+        _politica = politica ?? new PoliticaPasswords(Options.Create(new SeguridadOptions()));
     }
 
-    public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto) =>
-        (await IniciarSesionAsync(loginDto)).Sesion;
-
-    /// <summary>
-    /// Inicio de sesión con bloqueo por intentos (endpoint 22, Parte 11 §11.300(d)): cada intento
-    /// queda en la auditoría (LoginExitoso, LoginFallido, CuentaBloqueada) con el usuario que se
-    /// tecleó, nunca con la contraseña. El motivo exacto de un fallo no se le dice al cliente.
-    /// </summary>
-    public async Task<ResultadoLogin> IniciarSesionAsync(LoginDto loginDto)
+    public async Task<LoginResponseDto?> LoginAsync(LoginDto loginDto)
     {
-        var identidad = loginDto.CorreoOrUsuarioAD.Trim();
+        var identity = loginDto.CorreoOrUsuarioAD.Trim();
 
         // Un usuario puede iniciar sesión con su correo o con su usuario de Active Directory.
         var usuario = await _context.Usuarios
             .Include(u => u.UsuarioRoles)
             .ThenInclude(ur => ur.Rol)
             .FirstOrDefaultAsync(u =>
-                u.Correo == identidad ||
-                u.UsuarioAD == identidad);
+                u.Correo == identity ||
+                u.UsuarioAD == identity);
 
-        var credencial = await VerificarAsync(usuario, loginDto.Password, identidad, contexto: "Login");
-        if (credencial.Estado != EstadoCredencial.Valida)
+        if (usuario == null || !usuario.Activo)
         {
-            return new ResultadoLogin(credencial.Estado, null, credencial.BloqueadoHasta);
+            await _context.RegistrarEventoAsync(AuditoriaAcciones.LoginFallido, usuario?.IdUsuario ?? 0,
+                new { Operacion = OperacionLogin, Identificador = identity, Detalle = "Usuario inexistente o inactivo" },
+                usuario: identity, idUsuario: usuario?.IdUsuario);
+            return null;
         }
 
-        var ahora = DateTime.UtcNow;
-        usuario!.UltimoAcceso = ahora;
-        if (credencial.Local && usuario.FechaCambioPassword == null)
+        var autenticacion = await VerificarAsync(usuario, loginDto.Password, OperacionLogin, soloLocal: false);
+        if (autenticacion == MetodoAutenticacion.Ninguno)
         {
-            // Cuentas anteriores a la Fase 4: la caducidad empieza a contar desde este acceso.
-            usuario.FechaCambioPassword = ahora;
+            return null;
         }
 
-        var expiraEl = credencial.Local ? PoliticaPassword.ExpiraEl(usuario, _seguridad) : null;
-        var debeCambiar = credencial.Local && (usuario.DebeCambiarPassword || expiraEl <= ahora);
+        var esLocal = autenticacion == MetodoAutenticacion.Local;
+        if (esLocal && usuario.FechaCambioPassword == null)
+        {
+            usuario.FechaCambioPassword = DateTime.UtcNow;
+        }
 
+        var debeCambiarPassword = esLocal && (usuario.DebeCambiarPassword || _politica.EstaCaducada(usuario));
+
+        usuario.UltimoAcceso = DateTime.UtcNow;
         _context.RegistrarEvento(AuditoriaAcciones.LoginExitoso, usuario.IdUsuario,
-            new { Identidad = identidad, DebeCambiarPassword = debeCambiar },
-            usuario: $"{usuario.Nombre} ({usuario.Correo})", idUsuario: usuario.IdUsuario);
+            new { Metodo = autenticacion.ToString(), DebeCambiarPassword = debeCambiarPassword },
+            usuario: Describir(usuario), idUsuario: usuario.IdUsuario);
         await _context.SaveChangesAsync();
 
         // Agregar al token los roles guardados.
         var roles = usuario.UsuarioRoles.Select(ur => ur.Rol.Nombre).ToList();
 
-        return new ResultadoLogin(EstadoCredencial.Valida, new LoginResponseDto
+        // Crear el JWT que se devuelve al cliente.
+        var token = GenerateJwtToken(usuario, roles, debeCambiarPassword);
+
+        return new LoginResponseDto
         {
-            Token = GenerateJwtToken(usuario, roles, debeCambiar),
+            Token = token,
             Correo = usuario.Correo,
             Nombre = usuario.Nombre,
             Roles = roles,
             Expiration = DateTime.UtcNow.AddHours(GetJwtExpirationHours()),
-            DebeCambiarPassword = debeCambiar,
-            PasswordExpiraEl = expiraEl
-        }, null);
+            DebeCambiarPassword = debeCambiarPassword,
+            PasswordExpiraEl = esLocal ? _politica.CalcularExpiracion(usuario) : null
+        };
     }
 
-    /// <summary>
-    /// Reautenticación (endpoint 12 y 23): comprueba la contraseña de un usuario ya autenticado.
-    /// Un fallo cuenta como intento fallido y puede bloquear la cuenta. Si es correcta, los
-    /// cambios (contador a cero) quedan en el contexto y los guarda quien llama, junto con lo suyo.
-    /// </summary>
-    public async Task<ResultadoCredencial> VerificarPasswordAsync(long idUsuario, string? password, string contexto)
+    public async Task<bool> VerificarPasswordAsync(long idUsuario, string? password, string operacion)
     {
         var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
-        return await VerificarAsync(usuario, password ?? string.Empty, usuario?.Correo ?? idUsuario.ToString(), contexto);
-    }
-
-    private async Task<ResultadoCredencial> VerificarAsync(Usuario? usuario, string password, string identidad, string contexto)
-    {
-        var ahora = DateTime.UtcNow;
         if (usuario == null || !usuario.Activo)
         {
-            _context.RegistrarEvento(AuditoriaAcciones.LoginFallido, usuario?.IdUsuario ?? 0,
-                new { Identidad = identidad, Contexto = contexto, Motivo = usuario == null ? "Usuario inexistente" : "Usuario inactivo" },
-                usuario: identidad);
-            await _context.SaveChangesAsync();
-            return new ResultadoCredencial(EstadoCredencial.Invalida);
+            return false;
         }
 
-        if (usuario.BloqueadoHasta > ahora)
-        {
-            _context.RegistrarEvento(AuditoriaAcciones.LoginFallido, usuario.IdUsuario,
-                new { Identidad = identidad, Contexto = contexto, Motivo = "Cuenta bloqueada" }, usuario: identidad);
-            await _context.SaveChangesAsync();
-            return new ResultadoCredencial(EstadoCredencial.Bloqueada, usuario.BloqueadoHasta);
-        }
-
-        var (correcta, local) = await ComprobarCredencialAsync(usuario, password);
-        if (correcta)
-        {
-            usuario.IntentosFallidos = 0;
-            usuario.BloqueadoHasta = null;
-            return new ResultadoCredencial(EstadoCredencial.Valida, Local: local);
-        }
-
-        usuario.IntentosFallidos++;
-        if (usuario.IntentosFallidos >= _seguridad.MaxIntentosFallidos)
-        {
-            usuario.IntentosFallidos = 0;
-            usuario.BloqueadoHasta = ahora.AddMinutes(_seguridad.MinutosBloqueo);
-            _context.RegistrarEvento(AuditoriaAcciones.CuentaBloqueada, usuario.IdUsuario,
-                new { Identidad = identidad, Contexto = contexto, usuario.BloqueadoHasta }, usuario: identidad);
-            await _context.SaveChangesAsync();
-            return new ResultadoCredencial(EstadoCredencial.Bloqueada, usuario.BloqueadoHasta);
-        }
-
-        _context.RegistrarEvento(AuditoriaAcciones.LoginFallido, usuario.IdUsuario,
-            new { Identidad = identidad, Contexto = contexto, Motivo = "Contraseña incorrecta", usuario.IntentosFallidos },
-            usuario: identidad);
-        await _context.SaveChangesAsync();
-        return new ResultadoCredencial(EstadoCredencial.Invalida);
+        return await VerificarAsync(usuario, password, operacion, soloLocal: false) != MetodoAutenticacion.Ninguno;
     }
 
-    /// <summary>Contraseña local (BCrypt) o bind contra Active Directory, según el modo.</summary>
-    private async Task<(bool Correcta, bool Local)> ComprobarCredencialAsync(Usuario usuario, string password)
+    public async Task<List<string>> CambiarPasswordAsync(long idUsuario, CambiarPasswordDto cambio)
     {
-        var mode = _authenticationOptions.GetMode();
-        if (mode is EcarAuthenticationMode.Local or EcarAuthenticationMode.Hybrid &&
-            PoliticaPassword.CoincideSinExcepcion(password, usuario.PasswordHash))
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+        if (usuario == null || !usuario.Activo)
         {
-            return (true, true);
+            return ["Usuario no encontrado"];
         }
 
-        if (mode is EcarAuthenticationMode.ActiveDirectory or EcarAuthenticationMode.Hybrid &&
-            !string.IsNullOrWhiteSpace(usuario.UsuarioAD) &&
-            await _activeDirectoryAuthService.AuthenticateAsync(usuario.UsuarioAD, password))
+        if (string.IsNullOrWhiteSpace(usuario.PasswordHash))
         {
-            return (true, false);
+            return ["La contraseña de esta cuenta la administra Active Directory"];
         }
 
-        return (false, false);
+        if (await VerificarAsync(usuario, cambio.Actual, OperacionCambioPassword, soloLocal: true) ==
+            MetodoAutenticacion.Ninguno)
+        {
+            return ["La contraseña actual es incorrecta"];
+        }
+
+        var errores = _politica.Validar(cambio.Nueva);
+        if (errores.Count > 0)
+        {
+            return errores;
+        }
+
+        if (await _politica.EsRecienteAsync(_context, usuario, cambio.Nueva))
+        {
+            return [$"La nueva contraseña no puede ser la actual ni ninguna de las últimas {_politica.Opciones.PasswordsRecordadas}"];
+        }
+
+        _politica.Establecer(_context, usuario, cambio.Nueva, esTemporal: false);
+        _context.RegistrarEvento(AuditoriaAcciones.CambioPassword, usuario.IdUsuario);
+
+        await _context.SaveChangesAsync();
+        return [];
     }
 
     public Task<bool> ValidateTokenAsync(string token)
@@ -201,6 +176,83 @@ public class AuthService : IAuthService
         }
     }
 
+    private async Task<MetodoAutenticacion> VerificarAsync(Usuario usuario, string? password, string operacion,
+        bool soloLocal)
+    {
+        var ahora = DateTime.UtcNow;
+        if (usuario.BloqueadoHasta is { } bloqueadoHasta && bloqueadoHasta > ahora)
+        {
+            await _context.RegistrarEventoAsync(AuditoriaAcciones.LoginFallido, usuario.IdUsuario,
+                new { Operacion = operacion, Detalle = "Cuenta bloqueada" },
+                usuario: Describir(usuario), idUsuario: usuario.IdUsuario);
+            throw new CuentaBloqueadaException(bloqueadoHasta);
+        }
+
+        var metodo = await AutenticarAsync(usuario, password ?? string.Empty, soloLocal);
+        if (metodo != MetodoAutenticacion.Ninguno)
+        {
+            if (usuario.IntentosFallidos != 0 || usuario.BloqueadoHasta != null)
+            {
+                usuario.IntentosFallidos = 0;
+                usuario.BloqueadoHasta = null;
+                await _context.SaveChangesAsync();
+            }
+
+            return metodo;
+        }
+
+        var opciones = _politica.Opciones;
+        usuario.IntentosFallidos++;
+        _context.RegistrarEvento(AuditoriaAcciones.LoginFallido, usuario.IdUsuario,
+            new { Operacion = operacion, Intento = usuario.IntentosFallidos, Maximo = opciones.MaxIntentosFallidos },
+            usuario: Describir(usuario), idUsuario: usuario.IdUsuario);
+
+        if (usuario.IntentosFallidos < opciones.MaxIntentosFallidos)
+        {
+            await _context.SaveChangesAsync();
+            return MetodoAutenticacion.Ninguno;
+        }
+
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = ahora.AddMinutes(opciones.MinutosBloqueo);
+        _context.RegistrarEvento(AuditoriaAcciones.CuentaBloqueada, usuario.IdUsuario,
+            new { Operacion = operacion, usuario.BloqueadoHasta, Intentos = opciones.MaxIntentosFallidos },
+            usuario: Describir(usuario), idUsuario: usuario.IdUsuario);
+        await _context.SaveChangesAsync();
+        throw new CuentaBloqueadaException(usuario.BloqueadoHasta.Value);
+    }
+
+    private async Task<MetodoAutenticacion> AutenticarAsync(Usuario usuario, string password, bool soloLocal)
+    {
+        var mode = _authenticationOptions.GetMode();
+
+        if (soloLocal || mode is EcarAuthenticationMode.Local or EcarAuthenticationMode.Hybrid)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(usuario.PasswordHash) &&
+                    BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash))
+                {
+                    return MetodoAutenticacion.Local;
+                }
+            }
+            catch (SaltParseException)
+            {
+                // Un hash antiguo dañado debe fallar la autenticación en lugar de devolver HTTP 500.
+            }
+        }
+
+        if (!soloLocal &&
+            mode is EcarAuthenticationMode.ActiveDirectory or EcarAuthenticationMode.Hybrid &&
+            !string.IsNullOrWhiteSpace(usuario.UsuarioAD) &&
+            await _activeDirectoryAuthService.AuthenticateAsync(usuario.UsuarioAD, password))
+        {
+            return MetodoAutenticacion.ActiveDirectory;
+        }
+
+        return MetodoAutenticacion.Ninguno;
+    }
+
     private string GenerateJwtToken(Usuario usuario, List<string> roles, bool debeCambiarPassword)
     {
         var jwtSecret = _configuration["JWT:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
@@ -216,7 +268,7 @@ public class AuthService : IAuthService
 
         if (debeCambiarPassword)
         {
-            claims.Add(new Claim(ClaimDebeCambiarPassword, "1"));
+            claims.Add(new Claim(ClaimCambioPasswordPendiente, "true"));
         }
 
         // ASP.NET lee estos claims cuando un endpoint exige un rol.
@@ -244,5 +296,14 @@ public class AuthService : IAuthService
     {
         // 8 h, un turno (PLAN_FASE4_TAREAS §3.8); el cierre por inactividad lo hace el cliente.
         return int.TryParse(_configuration["JWT:ExpirationHours"], out var hours) ? hours : 8;
+    }
+
+    private static string Describir(Usuario usuario) => $"{usuario.Nombre} ({usuario.Correo})";
+
+    private enum MetodoAutenticacion
+    {
+        Ninguno,
+        Local,
+        ActiveDirectory
     }
 }

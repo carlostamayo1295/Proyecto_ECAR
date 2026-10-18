@@ -12,7 +12,7 @@ using ECAR.Infrastructure.Entities;
 var builder = WebApplication.CreateBuilder(args);
 
 // Registrar los servicios en el contenedor.
-builder.Services.AddControllers()
+builder.Services.AddControllers(options => options.Filters.Add<CambioPasswordPendienteFilter>())
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -105,15 +105,22 @@ builder.Services.AddScoped<IMotivoCambio, MotivoCambio>();
 builder.Services.AddScoped<ECAR.Infrastructure.Data.IContextoAuditoria, ContextoAuditoriaHttp>();
 builder.Services.AddScoped<IInspeccionService, InspeccionService>();
 builder.Services.AddScoped<IReporteService, ReporteService>();
-builder.Services.AddScoped<IHallazgoService, HallazgoService>();
 
-// Fase 4: política de cuentas y firma electrónica (PLAN_FASE4_TAREAS §3.2). Firma:ClaveHmac va
-// en user-secrets o en el almacén de secretos del servidor; sin ella no se puede firmar.
-builder.Services.Configure<ECAR.API.Configuration.SeguridadOptions>(
-    builder.Configuration.GetSection(ECAR.API.Configuration.SeguridadOptions.SectionName));
-builder.Services.Configure<ECAR.API.Configuration.FirmaOptions>(
-    builder.Configuration.GetSection(ECAR.API.Configuration.FirmaOptions.SectionName));
-builder.Services.AddSingleton<IFirmaElectronica, FirmaElectronica>();
+// Fase 4: política de cuentas y firma electrónica (PLAN_FASE4_TAREAS §3.2). El API no arranca sin
+// Firma:ClaveHmac (user-secrets en desarrollo; almacén de secretos o variable Firma__ClaveHmac en el servidor).
+builder.Services.AddOptions<ECAR.API.Configuration.SeguridadOptions>()
+    .Bind(builder.Configuration.GetSection(ECAR.API.Configuration.SeguridadOptions.SectionName))
+    .Validate(options => options.LongitudMinimaPassword > 0 && options.MaxIntentosFallidos > 0 && options.MinutosBloqueo > 0,
+        "Seguridad: la longitud mínima, el máximo de intentos y los minutos de bloqueo deben ser mayores que cero")
+    .ValidateOnStart();
+builder.Services.AddOptions<ECAR.API.Configuration.FirmaOptions>()
+    .Bind(builder.Configuration.GetSection(ECAR.API.Configuration.FirmaOptions.SectionName))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.ClaveHmac) &&
+        options.ClaveHmac.Length >= ECAR.API.Configuration.FirmaOptions.LongitudMinimaClave,
+        "Firma:ClaveHmac debe configurarse fuera de Git (user-secrets o variable de entorno Firma__ClaveHmac) con al menos 32 caracteres")
+    .ValidateOnStart();
+builder.Services.AddSingleton<PoliticaPasswords>();
+builder.Services.AddScoped<VerificadorIntegridad>();
 
 // Configurar almacenamiento de evidencias
 builder.Services.Configure<ECAR.API.Configuration.EvidenciasOptions>(builder.Configuration.GetSection("Evidencias"));
@@ -163,8 +170,6 @@ app.UseHttpsRedirection();
 app.UseCors("AllowBlazorClient");
 
 app.UseAuthentication();
-// Con una contraseña temporal o caducada solo se puede usar /api/auth/* hasta cambiarla.
-app.UseMiddleware<CambioPasswordObligatorio>();
 app.UseAuthorization();
 
 // Aplicar las migraciones pendientes y sembrar los datos faltantes al iniciar.

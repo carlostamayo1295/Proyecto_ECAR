@@ -284,10 +284,11 @@ public class EvidenciasController : ControllerBase
             return BadRequest(ApiResponse<EvidenciaDto>.ErrorResponse("La inspección indicada no existe."));
         }
 
-        // Regla 6 del SRS: sobre una inspección cerrada no se añaden evidencias.
+        // Regla 6 del SRS: sobre una inspección cerrada (o anulada) no se añaden evidencias.
         if (inspeccion.Estado != InspeccionEstados.EnCurso)
         {
-            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(InmutabilidadInspeccion.MensajeCerrada));
+            return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(
+                InmutabilidadInspeccion.MensajeSiNoAdmiteCambios(inspeccion.Estado) ?? InmutabilidadInspeccion.MensajeCerrada));
         }
 
         if (User.IsInRole("Técnico") && inspeccion.IdUsuario != _currentUser.IdUsuario)

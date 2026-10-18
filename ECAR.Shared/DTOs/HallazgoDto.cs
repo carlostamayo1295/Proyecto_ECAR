@@ -52,6 +52,9 @@ public class HallazgoDetalleDto : HallazgoDto
     public long? IdPregunta { get; set; }
     public string? Pregunta { get; set; }
 
+    /// <summary>La respuesta "No" que originó la novedad; null en los manuales.</summary>
+    public long? IdRespuesta { get; set; }
+
     /// <summary>Observación que el técnico escribió en esa respuesta.</summary>
     public string? ObservacionRespuesta { get; set; }
 

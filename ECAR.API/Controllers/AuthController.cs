@@ -1,14 +1,13 @@
-using BCrypt.Net;
+using System.Security.Claims;
 using ECAR.API.Configuration;
+using ECAR.API.Exceptions;
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
-using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ECAR.API.Controllers;
@@ -18,38 +17,35 @@ namespace ECAR.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-    private readonly ECARDbContext _context;
-    private readonly ICurrentUser _currentUser;
-    private readonly SeguridadOptions _seguridad;
 
-    public AuthController(IAuthService authService, ECARDbContext context, ICurrentUser currentUser,
-        IOptions<SeguridadOptions> seguridad)
+    public AuthController(IAuthService authService)
     {
         _authService = authService;
-        _context = context;
-        _currentUser = currentUser;
-        _seguridad = seguridad.Value;
     }
 
-    /// <summary>
-    /// Endpoint 22. 401 con un mensaje genérico si las credenciales no valen y 423 si la cuenta
-    /// está bloqueada; la respuesta dice además si hay que cambiar la contraseña antes de entrar.
-    /// </summary>
     [HttpPost("login")]
     public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login(LoginDto loginDto)
     {
-        var resultado = await _authService.IniciarSesionAsync(loginDto);
-
-        return resultado.Estado switch
+        LoginResponseDto? result;
+        try
         {
-            EstadoCredencial.Valida => Ok(ApiResponse<LoginResponseDto>.SuccessResponse(resultado.Sesion!, "Login exitoso")),
-            EstadoCredencial.Bloqueada => StatusCode(StatusCodes.Status423Locked,
-                ApiResponse<LoginResponseDto>.ErrorResponse(resultado.MensajeBloqueo)),
-            _ => Unauthorized(ApiResponse<LoginResponseDto>.ErrorResponse(MensajesCuenta.CredencialesIncorrectas))
-        };
+            result = await _authService.LoginAsync(loginDto);
+        }
+        catch (CuentaBloqueadaException ex)
+        {
+            return StatusCode(StatusCodes.Status423Locked, ApiResponse<LoginResponseDto>.ErrorResponse(ex.Message));
+        }
+
+        if (result == null)
+        {
+            return Unauthorized(ApiResponse<LoginResponseDto>.ErrorResponse("Credenciales inválidas"));
+        }
+
+        return Ok(ApiResponse<LoginResponseDto>.SuccessResponse(result, "Login exitoso"));
     }
 
     [HttpPost("validate")]
+    [PermitirCambioPasswordPendiente]
     public async Task<ActionResult<ApiResponse<bool>>> ValidateToken([FromBody] string token)
     {
         var isValid = await _authService.ValidateTokenAsync(token);
@@ -62,76 +58,53 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Token válido"));
     }
 
-    /// <summary>Endpoint 24: reglas de contraseña y minutos de inactividad, para la pantalla.</summary>
-    [HttpGet("politica")]
-    [AllowAnonymous]
-    public ActionResult<ApiResponse<PoliticaSeguridadDto>> GetPolitica() =>
-        Ok(ApiResponse<PoliticaSeguridadDto>.SuccessResponse(_seguridad.ComoPolitica()));
-
-    /// <summary>
-    /// Endpoint 23 (Parte 11 §11.300(b)). Exige la contraseña actual, aplica la política y el
-    /// historial y renueva el SecurityStamp: los tokens anteriores, incluido el de esta
-    /// petición, dejan de valer y hay que volver a iniciar sesión.
-    /// </summary>
     [HttpPost("cambiar-password")]
     [Authorize]
-    public async Task<ActionResult<ApiResponse<bool>>> CambiarPassword(CambiarPasswordDto dto)
+    [PermitirCambioPasswordPendiente]
+    public async Task<ActionResult<ApiResponse<bool>>> CambiarPassword(CambiarPasswordDto cambio)
     {
-        var usuario = await _context.Usuarios
-            .Include(u => u.HistorialPasswords)
-            .FirstOrDefaultAsync(u => u.IdUsuario == _currentUser.IdUsuario);
-        if (usuario == null || !usuario.Activo)
+        if (!long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario))
         {
-            return Unauthorized(ApiResponse<bool>.ErrorResponse("Su sesión no es válida"));
+            return Unauthorized(ApiResponse<bool>.ErrorResponse("Token inválido"));
         }
 
-        if (string.IsNullOrWhiteSpace(usuario.PasswordHash))
+        List<string> errores;
+        try
         {
-            return BadRequest(ApiResponse<bool>.ErrorResponse(
-                "Su cuenta entra con Active Directory: la contraseña se cambia en el directorio de ECAR"));
+            errores = await _authService.CambiarPasswordAsync(idUsuario, cambio);
+        }
+        catch (CuentaBloqueadaException ex)
+        {
+            return StatusCode(StatusCodes.Status423Locked, ApiResponse<bool>.ErrorResponse(ex.Message));
         }
 
-        var credencial = await _authService.VerificarPasswordAsync(usuario.IdUsuario, dto.Actual, "CambioPassword");
-        if (credencial.Estado == EstadoCredencial.Bloqueada)
-        {
-            return StatusCode(StatusCodes.Status423Locked, ApiResponse<bool>.ErrorResponse(credencial.MensajeBloqueo));
-        }
-
-        if (credencial.Estado != EstadoCredencial.Valida)
-        {
-            return BadRequest(ApiResponse<bool>.ErrorResponse("La contraseña actual no es correcta"));
-        }
-
-        var errores = PoliticaPassword.Validar(dto.Nueva, _seguridad);
         if (errores.Count > 0)
         {
-            return BadRequest(ApiResponse<bool>.ErrorResponse(string.Join(". ", errores), errores));
+            return BadRequest(ApiResponse<bool>.ErrorResponse("No se pudo cambiar la contraseña", errores));
         }
-
-        if (PoliticaPassword.EstaRepetida(dto.Nueva, usuario, _seguridad))
-        {
-            return BadRequest(ApiResponse<bool>.ErrorResponse(
-                $"La nueva contraseña no puede ser ninguna de sus últimas {_seguridad.PasswordsRecordadas}"));
-        }
-
-        var ahora = DateTime.UtcNow;
-        usuario.HistorialPasswords.Add(new HistorialPassword { PasswordHash = usuario.PasswordHash, Fecha = ahora });
-        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Nueva);
-        usuario.FechaCambioPassword = ahora;
-        usuario.DebeCambiarPassword = false;
-        _context.RegistrarEvento(AuditoriaAcciones.CambioPassword, usuario.IdUsuario);
-        await _context.SaveChangesAsync();
 
         return Ok(ApiResponse<bool>.SuccessResponse(true,
-            "Contraseña cambiada. Inicie sesión de nuevo con la nueva contraseña."));
+            "Contraseña cambiada exitosamente. Inicie sesión de nuevo con la nueva contraseña"));
     }
 
-    /// <summary>Deja constancia del cierre de sesión (evento CierreSesion de §3.3).</summary>
+    [HttpGet("politica")]
+    [AllowAnonymous]
+    [PermitirCambioPasswordPendiente]
+    public ActionResult<ApiResponse<PoliticaSeguridadDto>> GetPolitica([FromServices] IOptions<SeguridadOptions> opciones) =>
+        Ok(ApiResponse<PoliticaSeguridadDto>.SuccessResponse(opciones.Value.ToDto()));
+
+    /// <summary>
+    /// Deja constancia del cierre de sesión (evento CierreSesion de §3.3): el cliente lo llama al
+    /// salir y al cerrar por inactividad. Se admite también con un cambio de contraseña pendiente.
+    /// </summary>
     [HttpPost("logout")]
     [Authorize]
-    public async Task<ActionResult<ApiResponse<bool>>> Logout([FromQuery] bool porInactividad = false)
+    [PermitirCambioPasswordPendiente]
+    public async Task<ActionResult<ApiResponse<bool>>> Logout(
+        [FromServices] ECARDbContext context, [FromServices] ICurrentUser currentUser,
+        [FromQuery] bool porInactividad = false)
     {
-        await _context.RegistrarEventoAsync(AuditoriaAcciones.CierreSesion, _currentUser.IdUsuario,
+        await context.RegistrarEventoAsync(AuditoriaAcciones.CierreSesion, currentUser.IdUsuario,
             new { PorInactividad = porInactividad });
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Sesión cerrada"));
     }

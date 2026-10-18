@@ -15,8 +15,7 @@ public static class InspeccionEstados
 
     /// <summary>
     /// Fase 4: una inspección en curso que se descarta con motivo en lugar de borrarse
-    /// (POST /api/inspecciones/{id}/anular, PLAN_FASE4_TAREAS §3.6). Conserva respuestas y fotos
-    /// y, como una cerrada, ya no admite cambios.
+    /// (PLAN_FASE4_TAREAS §3.6). Conserva todos sus datos y, como la cerrada, ya no admite cambios.
     /// </summary>
     public const string Anulada = "Anulada";
 

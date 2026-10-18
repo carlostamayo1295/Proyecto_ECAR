@@ -188,7 +188,7 @@ public static class RegistroInspeccionPdf
         var huella = seccion.AddParagraph();
         huella.Format.Font.Size = 7.5;
         huella.Format.Font.Color = Colors.DimGray;
-        huella.AddText($"Algoritmo: {FirmaInspeccion.AlgoritmoDe(inspeccion)} · Huella: {inspeccion.FirmaHash}");
+        huella.AddText($"Algoritmo: {VerificadorIntegridad.NombreAlgoritmo(inspeccion)} · Huella: {inspeccion.FirmaHash}");
     }
 
     private static void Titulo(Section seccion, string texto)

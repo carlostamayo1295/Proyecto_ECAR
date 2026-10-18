@@ -17,13 +17,18 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
     private const string Png =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
-    private static readonly FirmaElectronica Firma = new(Options.Create(new FirmaOptions
-    {
-        ClaveHmac = Convert.ToBase64String(Enumerable.Range(10, 32).Select(i => (byte)i).ToArray()),
-        Significado = "Responsable de la ejecución de la inspección"
-    }));
+    private static readonly VerificadorIntegridad Firma = new(
+        Options.Create(new FirmaOptions { ClaveHmac = "clave-hmac-de-las-pruebas-contra-sql-server-32" }), new SinArchivos());
 
-    private async Task<long> InspeccionCerradaAsync(Func<Inspeccion, DateTime, string> sellar, string? algoritmo)
+    /// <summary>Estas inspecciones no tienen fotos: el verificador no llega a abrir ningún archivo.</summary>
+    private sealed class SinArchivos : IEvidenciaStorage
+    {
+        public Task<string> GuardarAsync(Stream stream, string extension, long idInspeccion) => throw new NotSupportedException();
+        public Task<Stream> AbrirAsync(string rutaRelativa) => throw new FileNotFoundException(rutaRelativa);
+        public Task EliminarAsync(string rutaRelativa) => throw new NotSupportedException();
+    }
+
+    private async Task<long> InspeccionCerradaAsync(Func<Inspeccion, DateTime, Task<string>> sellar, string? algoritmo)
     {
         await using var db = compartida.Base.CrearContexto(new ContextoDePrueba());
         var codigo = Guid.NewGuid().ToString("N")[..8];
@@ -48,9 +53,9 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
         inspeccion.FechaCierre = cierre;
         inspeccion.FirmaDigital = Png;
         inspeccion.FirmaNombre = usuario.Nombre;
-        inspeccion.FirmaSignificado = Firma.Significado;
+        inspeccion.FirmaSignificado = VerificadorIntegridad.SignificadoEjecucion;
         inspeccion.FirmaAlgoritmo = algoritmo;
-        inspeccion.FirmaHash = sellar(inspeccion, cierre);
+        inspeccion.FirmaHash = await sellar(inspeccion, cierre);
         await db.SaveChangesAsync();
         return inspeccion.IdInspeccion;
     }
@@ -66,31 +71,29 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
     [Fact]
     public async Task Una_firma_HMAC_leida_de_la_base_se_verifica_integra()
     {
-        var id = await InspeccionCerradaAsync((i, cierre) => Firma.CalcularHuella(i, i.Respuestas, i.Evidencias, cierre, Png,
-            i.FirmaNombre!, i.FirmaSignificado!), FirmaInspeccion.AlgoritmoHmacV1);
+        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmac);
 
         var leida = await LeerAsync(id);
 
         Assert.Equal(DateTimeKind.Unspecified, leida.FechaCierre!.Value.Kind);
-        Assert.True(Firma.EsIntegra(leida));
+        Assert.True(await Firma.VerificarAsync(leida));
     }
 
     [Fact]
     public async Task Una_firma_SHA256_de_la_Fase_3_leida_de_la_base_se_verifica_integra()
     {
         var id = await InspeccionCerradaAsync((i, cierre) =>
-            FirmaInspeccion.CalcularHash(i, i.Respuestas, i.Evidencias, cierre, Png), algoritmo: null);
+            Task.FromResult(FirmaInspeccion.CalcularHash(i, i.Respuestas, i.Evidencias, cierre, Png)), algoritmo: null);
 
-        Assert.True(Firma.EsIntegra(await LeerAsync(id)));
+        Assert.True(await Firma.VerificarAsync(await LeerAsync(id)));
     }
 
     [Fact]
     public async Task Alterar_una_respuesta_en_la_base_rompe_la_firma()
     {
-        var id = await InspeccionCerradaAsync((i, cierre) => Firma.CalcularHuella(i, i.Respuestas, i.Evidencias, cierre, Png,
-            i.FirmaNombre!, i.FirmaSignificado!), FirmaInspeccion.AlgoritmoHmacV1);
+        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmac);
         await compartida.Base.EjecutarAsync($"UPDATE RespuestasInspeccion SET Respuesta = N'No' WHERE IdInspeccion = {id}");
 
-        Assert.False(Firma.EsIntegra(await LeerAsync(id)));
+        Assert.False(await Firma.VerificarAsync(await LeerAsync(id)));
     }
 }

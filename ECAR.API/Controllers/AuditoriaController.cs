@@ -12,171 +12,79 @@ using FilaAuditoria = ECAR.Infrastructure.Entities.Auditoria;
 
 namespace ECAR.API.Controllers;
 
-/// <summary>
-/// Consulta, verificación y exportación de la auditoría (endpoints 1, 2, 3 y 21; Parte 11
-/// §11.10(e): disponible "para revisión y copia"). La auditoría solo se lee aquí: la escribe
-/// ECARDbContext y el trigger impide modificarla.
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Administrador,Auditor")]
 public class AuditoriaController : ControllerBase
 {
-    /// <summary>La verificación recorre la tabla en lotes para no cargarla entera en memoria.</summary>
-    private const int TamanoLote = 1000;
-
     private readonly ECARDbContext _context;
-    private readonly ICurrentUser _currentUser;
 
-    public AuditoriaController(ECARDbContext context, ICurrentUser currentUser)
+    public AuditoriaController(ECARDbContext context)
     {
         _context = context;
-        _currentUser = currentUser;
     }
 
-    /// <summary>Endpoint 1: filtros por tabla, registro, usuario, acción y fechas, y búsqueda libre.</summary>
+    /// <summary>
+    /// GET api/auditoria (endpoint 1). Filtros opcionales y combinables (<see cref="AuditoriaFiltroDto"/>):
+    /// texto libre, tabla, registro, usuario, acción y rango de días. "desde" y "hasta" son días
+    /// locales completos que se convierten a UTC, porque FechaHora se guarda en UTC.
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<AuditoriaDto>>>> GetAuditoria(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null,
-        [FromQuery] string? tabla = null, [FromQuery] long? registroId = null, [FromQuery] long? idUsuario = null,
-        [FromQuery] string? accion = null, [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null)
+        [FromQuery] AuditoriaFiltroDto filtro, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = Filtrar(search, tabla, registroId, idUsuario, accion, desde, hasta);
+        if (ValidarFiltro(filtro) is { } error)
+        {
+            return BadRequest(ApiResponse<PagedResultDto<AuditoriaDto>>.ErrorResponse(error));
+        }
+
+        var query = Filtrar(filtro);
+
         var totalCount = await query.CountAsync();
+
         var registros = await query
-            .OrderByDescending(a => a.IdAuditoria)
+            .OrderByDescending(a => a.FechaHora)
+            .ThenByDescending(a => a.IdAuditoria)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(Proyeccion)
+            .Select(ProyeccionDto)
             .ToListAsync();
 
-        return Ok(ApiResponse<PagedResultDto<AuditoriaDto>>.SuccessResponse(new PagedResultDto<AuditoriaDto>
+        var pagedResult = new PagedResultDto<AuditoriaDto>
         {
             Data = registros,
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
-        }));
-    }
-
-    // {id:long}: sin la restricción, GET api/auditoria/verificar o /exportar entraban
-    // aquí con "verificar" como id y respondían 400 "datos inválidos" en lugar de 404.
-    [HttpGet("{id:long}")]
-    public async Task<ActionResult<ApiResponse<AuditoriaDto>>> GetAuditoriaRegistro(long id)
-    {
-        var registro = await _context.Auditoria.AsNoTracking()
-            .Where(a => a.IdAuditoria == id)
-            .Select(Proyeccion)
-            .FirstOrDefaultAsync();
-
-        return registro == null
-            ? NotFound(ApiResponse<AuditoriaDto>.ErrorResponse("Registro de auditoría no encontrado"))
-            : Ok(ApiResponse<AuditoriaDto>.SuccessResponse(registro));
-    }
-
-    /// <summary>Endpoint 2: el historial completo de un registro, del más antiguo al más reciente.</summary>
-    [HttpGet("registro/{tabla}/{registroId:long}")]
-    public async Task<ActionResult<ApiResponse<List<AuditoriaDto>>>> GetHistorialRegistro(string tabla, long registroId)
-    {
-        var historial = await _context.Auditoria.AsNoTracking()
-            .Where(a => a.Tabla == tabla && a.RegistroId == registroId)
-            .OrderBy(a => a.IdAuditoria)
-            .Select(Proyeccion)
-            .ToListAsync();
-
-        return Ok(ApiResponse<List<AuditoriaDto>>.SuccessResponse(historial));
-    }
-
-    /// <summary>
-    /// Endpoint 3: recorre la cadena de hashes por IdAuditoria (toda o en un rango de fechas) y
-    /// dice si alguna fila fue alterada o falta. Cada verificación queda a su vez en la auditoría.
-    /// </summary>
-    [HttpGet("verificar")]
-    public async Task<ActionResult<ApiResponse<VerificacionAuditoriaDto>>> Verificar(
-        [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null)
-    {
-        var (inicio, fin) = HoraColombia.RangoUtc(desde, hasta);
-        var rango = _context.Auditoria.AsNoTracking().AsQueryable();
-        if (inicio.HasValue)
-            rango = rango.Where(a => a.FechaHora >= inicio.Value);
-        if (fin.HasValue)
-            rango = rango.Where(a => a.FechaHora < fin.Value);
-
-        var primera = await rango.MinAsync(a => (long?)a.IdAuditoria);
-        var ultima = await rango.MaxAsync(a => (long?)a.IdAuditoria);
-        var resultado = new ResultadoCadena(true, 0, null, null);
-
-        if (primera.HasValue && ultima.HasValue)
-        {
-            // La primera fila del rango debe colgar de la fila anterior, aunque esa quede fuera.
-            var esperado = await _context.Auditoria.AsNoTracking()
-                .Where(a => a.IdAuditoria < primera.Value)
-                .OrderByDescending(a => a.IdAuditoria)
-                .Select(a => a.Hash)
-                .FirstOrDefaultAsync();
-
-            var revisadas = 0;
-            var desdeId = primera.Value;
-            while (desdeId <= ultima.Value)
-            {
-                var lote = await _context.Auditoria.AsNoTracking()
-                    .Where(a => a.IdAuditoria >= desdeId && a.IdAuditoria <= ultima.Value)
-                    .OrderBy(a => a.IdAuditoria)
-                    .Take(TamanoLote)
-                    .ToListAsync();
-                if (lote.Count == 0)
-                {
-                    break;
-                }
-
-                var parcial = CadenaAuditoria.Verificar(lote, esperado);
-                revisadas += parcial.FilasRevisadas;
-                if (!parcial.Valida)
-                {
-                    resultado = parcial with { FilasRevisadas = revisadas };
-                    break;
-                }
-
-                esperado = parcial.UltimoHash;
-                desdeId = lote[^1].IdAuditoria + 1;
-                resultado = new ResultadoCadena(true, revisadas, null, esperado);
-            }
-        }
-
-        var dto = new VerificacionAuditoriaDto
-        {
-            Valida = resultado.Valida,
-            FilasRevisadas = resultado.FilasRevisadas,
-            PrimeraFilaRota = resultado.PrimeraFilaRota,
-            VerificadoEn = DateTime.UtcNow
         };
-        await _context.RegistrarEventoAsync(AuditoriaAcciones.VerificacionIntegridad, _currentUser.IdUsuario,
-            new { Objeto = "Auditoria", desde, hasta, dto.Valida, dto.FilasRevisadas, dto.PrimeraFilaRota });
 
-        return Ok(ApiResponse<VerificacionAuditoriaDto>.SuccessResponse(dto, dto.Valida
-            ? $"La cadena de auditoría está íntegra ({dto.FilasRevisadas} filas revisadas)"
-            : $"La cadena de auditoría está rota a partir de la fila {dto.PrimeraFilaRota}"));
+        return Ok(ApiResponse<PagedResultDto<AuditoriaDto>>.SuccessResponse(pagedResult));
     }
 
     /// <summary>
-    /// Endpoint 21: los mismos filtros del endpoint 1 en Excel (una fila por cambio) o PDF. La
-    /// exportación queda en la auditoría con los filtros usados.
+    /// GET api/auditoria/exportar (endpoint 21, Parte 11 §11.10(e): la auditoría disponible "para
+    /// revisión y copia"). Los mismos filtros del endpoint 1, en Excel (una fila por cambio, con
+    /// todos los campos) o PDF. Cada exportación queda en la auditoría con los filtros usados.
     /// </summary>
     [HttpGet("exportar")]
     public async Task<IActionResult> Exportar(
-        [FromQuery] string formato = ReporteFormatos.Excel, [FromQuery] string? search = null,
-        [FromQuery] string? tabla = null, [FromQuery] long? registroId = null, [FromQuery] long? idUsuario = null,
-        [FromQuery] string? accion = null, [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null)
+        [FromQuery] AuditoriaFiltroDto filtro, [FromServices] ICurrentUser currentUser,
+        [FromQuery] string formato = ReporteFormatos.Excel)
     {
         if (formato is not (ReporteFormatos.Excel or ReporteFormatos.Pdf))
         {
             return BadRequest(ApiResponse<bool>.ErrorResponse("El formato debe ser xlsx o pdf"));
         }
 
-        var query = Filtrar(search, tabla, registroId, idUsuario, accion, desde, hasta);
+        if (ValidarFiltro(filtro) is { } error)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(error));
+        }
+
+        var query = Filtrar(filtro);
         var total = await query.CountAsync();
         if (total > ExportadorTabla.MaximoFilas)
         {
@@ -185,31 +93,25 @@ public class AuditoriaController : ControllerBase
         }
 
         var filas = await query.OrderBy(a => a.IdAuditoria).ToListAsync();
-        var filtros = TextoFiltros(search, tabla, registroId, idUsuario, accion, desde, hasta);
-        var pie = new PieDocumento("Auditoría", filtros, _currentUser.Nombre, DateTime.UtcNow);
+        var filtros = TextoFiltros(filtro);
+        var pie = new PieDocumento("Auditoría", filtros, currentUser.Nombre, DateTime.UtcNow);
 
-        byte[] archivo;
-        if (formato == ReporteFormatos.Excel)
-        {
-            archivo = ExportadorTabla.Excel("Auditoría", ColumnasExcel, filas.Select(a => (IReadOnlyList<object?>)
+        var archivo = formato == ReporteFormatos.Excel
+            ? ExportadorTabla.Excel("Auditoría", ColumnasExcel, filas.Select(a => (IReadOnlyList<object?>)
             [
                 a.IdAuditoria, HoraColombia.DesdeUtc(a.FechaHora), a.Tabla, a.RegistroId, a.Accion, a.Usuario,
                 a.IdUsuario, a.Motivo, a.ValorAnterior, a.ValorNuevo, a.DireccionIp, a.AgenteUsuario, a.HashAnterior, a.Hash
-            ]), pie);
-        }
-        else
-        {
-            archivo = ExportadorTabla.Pdf("Auditoría", ColumnasPdf, filas.Select(a => (IReadOnlyList<object?>)
+            ]), pie)
+            : ExportadorTabla.Pdf("Auditoría", ColumnasPdf, filas.Select(a => (IReadOnlyList<object?>)
             [
                 a.IdAuditoria, HoraColombia.DesdeUtc(a.FechaHora), a.Tabla, a.RegistroId, a.Accion, a.Usuario,
                 a.Motivo, Resumir(a.ValorAnterior), Resumir(a.ValorNuevo), a.DireccionIp
             ]), pie);
-        }
 
-        await _context.RegistrarEventoAsync(AuditoriaAcciones.Exportacion, _currentUser.IdUsuario,
+        await _context.RegistrarEventoAsync(AuditoriaAcciones.Exportacion, currentUser.IdUsuario,
             new { Documento = "Auditoría", Formato = formato, Filtros = filtros, Filas = total });
 
-        var nombre = $"ECAR_auditoria_{desde:yyyyMMdd}_{hasta:yyyyMMdd}.{formato}";
+        var nombre = $"ECAR_auditoria_{filtro.Desde:yyyyMMdd}_{filtro.Hasta:yyyyMMdd}.{formato}";
         return File(archivo, formato == ReporteFormatos.Excel ? ExportadorTabla.TipoExcel : ExportadorTabla.TipoPdf, nombre);
     }
 
@@ -229,66 +131,243 @@ public class AuditoriaController : ControllerBase
     private static string? Resumir(string? json) =>
         json is { Length: > 300 } ? json[..300] + "…" : json;
 
-    private IQueryable<FilaAuditoria> Filtrar(string? search, string? tabla, long? registroId, long? idUsuario,
-        string? accion, DateTime? desde, DateTime? hasta)
+    private static string TextoFiltros(AuditoriaFiltroDto filtro)
+    {
+        var partes = new List<string>();
+        if (filtro.Desde.HasValue) partes.Add($"desde {filtro.Desde:dd/MM/yyyy}");
+        if (filtro.Hasta.HasValue) partes.Add($"hasta {filtro.Hasta:dd/MM/yyyy}");
+        if (!string.IsNullOrWhiteSpace(filtro.Tabla)) partes.Add($"tabla {filtro.Tabla}");
+        if (filtro.RegistroId.HasValue) partes.Add($"registro {filtro.RegistroId}");
+        if (filtro.IdUsuario.HasValue) partes.Add($"usuario {filtro.IdUsuario}");
+        if (!string.IsNullOrWhiteSpace(filtro.Accion)) partes.Add($"acción {filtro.Accion}");
+        if (!string.IsNullOrWhiteSpace(filtro.Search)) partes.Add($"texto «{filtro.Search.Trim()}»");
+        return partes.Count == 0 ? "ninguno" : string.Join(", ", partes);
+    }
+
+    /// <summary>Las reglas de los filtros del endpoint 1, compartidas con la exportación (21).</summary>
+    private static string? ValidarFiltro(AuditoriaFiltroDto filtro)
+    {
+        if (!string.IsNullOrWhiteSpace(filtro.Tabla) && !AuditoriaTablas.Todas.Contains(filtro.Tabla))
+        {
+            return $"La tabla debe ser una de: {string.Join(", ", AuditoriaTablas.Todas)}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro.Accion) && !AuditoriaAcciones.Todas.Contains(filtro.Accion))
+        {
+            return $"La acción debe ser una de: {string.Join(", ", AuditoriaAcciones.Todas)}";
+        }
+
+        if (filtro.Desde.HasValue && filtro.Hasta.HasValue && filtro.Desde.Value.Date > filtro.Hasta.Value.Date)
+        {
+            return "La fecha inicial no puede ser posterior a la fecha final";
+        }
+
+        return null;
+    }
+
+    private IQueryable<FilaAuditoria> Filtrar(AuditoriaFiltroDto filtro)
     {
         var query = _context.Auditoria.AsNoTracking().AsQueryable();
-        if (!string.IsNullOrWhiteSpace(tabla))
-            query = query.Where(a => a.Tabla == tabla);
-        if (registroId.HasValue)
-            query = query.Where(a => a.RegistroId == registroId.Value);
-        if (idUsuario.HasValue)
-            query = query.Where(a => a.IdUsuario == idUsuario.Value);
-        if (!string.IsNullOrWhiteSpace(accion))
-            query = query.Where(a => a.Accion == accion);
 
-        var (inicio, fin) = HoraColombia.RangoUtc(desde, hasta);
-        if (inicio.HasValue)
-            query = query.Where(a => a.FechaHora >= inicio.Value);
-        if (fin.HasValue)
-            query = query.Where(a => a.FechaHora < fin.Value);
-
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrEmpty(filtro.Search))
         {
-            var texto = search.Trim();
+            var search = filtro.Search;
             query = query.Where(a =>
-                a.Tabla.Contains(texto) ||
-                a.Accion.Contains(texto) ||
-                a.Usuario.Contains(texto) ||
-                (a.Motivo != null && a.Motivo.Contains(texto)));
+                a.Tabla.Contains(search) ||
+                a.Accion.Contains(search) ||
+                a.Usuario.Contains(search));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro.Tabla))
+        {
+            query = query.Where(a => a.Tabla == filtro.Tabla);
+        }
+
+        if (filtro.RegistroId.HasValue)
+        {
+            query = query.Where(a => a.RegistroId == filtro.RegistroId.Value);
+        }
+
+        if (filtro.IdUsuario.HasValue)
+        {
+            query = query.Where(a => a.IdUsuario == filtro.IdUsuario.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro.Accion))
+        {
+            query = query.Where(a => a.Accion == filtro.Accion);
+        }
+
+        if (filtro.Desde.HasValue)
+        {
+            var desdeUtc = InicioDelDiaEnUtc(filtro.Desde.Value);
+            query = query.Where(a => a.FechaHora >= desdeUtc);
+        }
+
+        if (filtro.Hasta.HasValue)
+        {
+            var hastaUtcExclusivo = InicioDelDiaEnUtc(filtro.Hasta.Value.AddDays(1));
+            query = query.Where(a => a.FechaHora < hastaUtcExclusivo);
         }
 
         return query;
     }
 
-    private static string TextoFiltros(string? search, string? tabla, long? registroId, long? idUsuario,
-        string? accion, DateTime? desde, DateTime? hasta)
+    // {id:long}: sin la restricción, GET api/auditoria/verificar o /exportar (Fase 4) entraban
+    // aquí con "verificar" como id y respondían 400 "datos inválidos" en lugar de 404.
+    [HttpGet("{id:long}")]
+    public async Task<ActionResult<ApiResponse<AuditoriaDto>>> GetAuditoriaRegistro(long id)
     {
-        var partes = new List<string>();
-        if (desde.HasValue) partes.Add($"desde {desde:dd/MM/yyyy}");
-        if (hasta.HasValue) partes.Add($"hasta {hasta:dd/MM/yyyy}");
-        if (!string.IsNullOrWhiteSpace(tabla)) partes.Add($"tabla {tabla}");
-        if (registroId.HasValue) partes.Add($"registro {registroId}");
-        if (idUsuario.HasValue) partes.Add($"usuario {idUsuario}");
-        if (!string.IsNullOrWhiteSpace(accion)) partes.Add($"acción {accion}");
-        if (!string.IsNullOrWhiteSpace(search)) partes.Add($"texto «{search.Trim()}»");
-        return partes.Count == 0 ? "ninguno" : string.Join(", ", partes);
+        var registro = await _context.Auditoria
+            .AsNoTracking()
+            .Where(a => a.IdAuditoria == id)
+            .Select(ProyeccionDto)
+            .FirstOrDefaultAsync();
+
+        if (registro == null)
+        {
+            return NotFound(ApiResponse<AuditoriaDto>.ErrorResponse("Registro de auditoría no encontrado"));
+        }
+
+        return Ok(ApiResponse<AuditoriaDto>.SuccessResponse(registro));
     }
 
-    private static readonly Expression<Func<FilaAuditoria, AuditoriaDto>> Proyeccion = a => new AuditoriaDto
+    /// <summary>
+    /// GET api/auditoria/registro/{tabla}/{registroId} (endpoint 2): el historial completo de un
+    /// registro —por ejemplo Inspecciones/12—, en orden cronológico (de la creación al último
+    /// cambio). Sin paginar: es la lista que espera el cliente y el historial de un registro es
+    /// corto. Un registro sin filas de auditoría devuelve la lista vacía.
+    /// </summary>
+    [HttpGet("registro/{tabla}/{registroId:long}")]
+    public async Task<ActionResult<ApiResponse<List<AuditoriaDto>>>> GetHistorialRegistro(string tabla, long registroId)
     {
-        IdAuditoria = a.IdAuditoria,
-        Tabla = a.Tabla,
-        RegistroId = a.RegistroId,
-        Accion = a.Accion,
-        ValorAnterior = a.ValorAnterior,
-        ValorNuevo = a.ValorNuevo,
-        Usuario = a.Usuario,
-        FechaHora = a.FechaHora,
-        IdUsuario = a.IdUsuario,
-        Motivo = a.Motivo,
-        DireccionIp = a.DireccionIp,
-        AgenteUsuario = a.AgenteUsuario,
-        Hash = a.Hash
-    };
+        if (!AuditoriaTablas.Todas.Contains(tabla))
+        {
+            return BadRequest(ApiResponse<List<AuditoriaDto>>.ErrorResponse(
+                $"La tabla debe ser una de: {string.Join(", ", AuditoriaTablas.Todas)}"));
+        }
+
+        var historial = await _context.Auditoria
+            .AsNoTracking()
+            .Where(a => a.Tabla == tabla && a.RegistroId == registroId)
+            .OrderBy(a => a.FechaHora)
+            .ThenBy(a => a.IdAuditoria)
+            .Select(ProyeccionDto)
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<AuditoriaDto>>.SuccessResponse(historial));
+    }
+
+    /// <summary>Filas que se leen de la base por cada lote de la verificación.</summary>
+    public const int TamanoLoteVerificacion = 1000;
+
+    /// <summary>
+    /// GET api/auditoria/verificar (endpoint 3): recorre la cadena de hashes y dice si alguna fila
+    /// fue alterada o borrada, y cuál es la primera inconsistente. Sin fechas revisa la tabla
+    /// entera; con "desde"/"hasta" (días locales completos) revisa ese tramo. Una cadena rota no
+    /// es un error de la petición: responde 200 con Valida = false. Cada verificación queda a su
+    /// vez en la auditoría como evento VerificacionIntegridad.
+    /// </summary>
+    /// <remarks>
+    /// Truncados: borrar las últimas filas no rompe la cadena. Por eso una verificación válida
+    /// devuelve UltimaFila y UltimoHash, que el auditor guarda fuera de la base; si en la siguiente
+    /// los envía como anclaFila y anclaHash y esa fila ya no está o cambió, la verificación falla
+    /// con PrimeraFilaRota = anclaFila. Sin ancla el comportamiento es el de siempre.
+    /// </remarks>
+    [HttpGet("verificar")]
+    public async Task<ActionResult<ApiResponse<VerificacionAuditoriaDto>>> VerificarCadena(
+        [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null,
+        [FromQuery] long? anclaFila = null, [FromQuery] string? anclaHash = null)
+    {
+        if (desde.HasValue && hasta.HasValue && desde.Value.Date > hasta.Value.Date)
+        {
+            return BadRequest(ApiResponse<VerificacionAuditoriaDto>.ErrorResponse(
+                "La fecha inicial no puede ser posterior a la fecha final"));
+        }
+
+        var conAncla = anclaFila.HasValue || !string.IsNullOrWhiteSpace(anclaHash);
+        if (conAncla && (!anclaFila.HasValue || !EsHashValido(anclaHash)))
+        {
+            return BadRequest(ApiResponse<VerificacionAuditoriaDto>.ErrorResponse(
+                "El ancla necesita anclaFila y anclaHash (64 caracteres hexadecimales), los dos juntos"));
+        }
+
+        var resultado = await CadenaAuditoria.VerificarTablaAsync(_context,
+            desde.HasValue ? InicioDelDiaEnUtc(desde.Value) : null,
+            hasta.HasValue ? InicioDelDiaEnUtc(hasta.Value.AddDays(1)) : null,
+            TamanoLoteVerificacion);
+
+        // La cadena se revisa primero: si está rota, esa es la primera inconsistencia. Si está
+        // íntegra, el ancla dice si además le faltan filas por el final o se reescribió.
+        bool? anclaIntacta = null;
+        if (conAncla && resultado.Valida)
+        {
+            anclaIntacta = await CadenaAuditoria.AnclaIntactaAsync(_context, anclaFila!.Value, anclaHash!);
+        }
+
+        var valida = resultado.Valida && anclaIntacta != false;
+        var verificacion = new VerificacionAuditoriaDto
+        {
+            Valida = valida,
+            FilasRevisadas = resultado.FilasRevisadas,
+            PrimeraFilaRota = anclaIntacta == false ? anclaFila : resultado.PrimeraFilaRota,
+            VerificadoEn = DateTime.UtcNow,
+            UltimaFila = valida ? resultado.UltimaFila : null,
+            UltimoHash = valida && resultado.UltimaFila.HasValue ? resultado.UltimoHash : null
+        };
+
+        // Después de verificar: la fila del evento se encadena al final y no entra en el recorrido.
+        // El ancla queda también aquí como rastro, pero el control lo da la copia que se guarda fuera.
+        await _context.RegistrarEventoAsync(AuditoriaAcciones.VerificacionIntegridad, detalle: new
+        {
+            verificacion.Valida,
+            verificacion.FilasRevisadas,
+            verificacion.PrimeraFilaRota,
+            verificacion.UltimaFila,
+            verificacion.UltimoHash,
+            AnclaFila = anclaFila,
+            AnclaIntacta = anclaIntacta,
+            Desde = desde?.Date,
+            Hasta = hasta?.Date
+        });
+
+        var mensaje = (resultado.Valida, anclaIntacta) switch
+        {
+            (false, _) => $"La cadena de auditoría está rota: la primera fila inconsistente es la {verificacion.PrimeraFilaRota}",
+            (true, false) => $"La fila ancla {anclaFila} ya no está en la auditoría o cambió: la tabla fue truncada o alterada",
+            (true, true) => "La cadena de auditoría está íntegra y conserva la fila ancla",
+            _ => "La cadena de auditoría está íntegra"
+        };
+
+        return Ok(ApiResponse<VerificacionAuditoriaDto>.SuccessResponse(verificacion, mensaje));
+    }
+
+    private static bool EsHashValido(string? hash) =>
+        hash?.Trim() is { Length: 64 } limpio && limpio.All(Uri.IsHexDigit);
+
+    /// <summary>
+    /// Medianoche de ese día en hora de Colombia, en UTC. No depende de la zona del servidor: en
+    /// producción puede estar en UTC y los días se correrían cinco horas.
+    /// </summary>
+    private static DateTime InicioDelDiaEnUtc(DateTime dia) =>
+        DateTime.SpecifyKind(dia.Date, DateTimeKind.Utc) - HoraColombia.Desfase;
+
+    /// <summary>Todos los campos de la fila, también los de la Fase 4 (usuario, motivo, IP, agente y hash).</summary>
+    private static readonly Expression<Func<FilaAuditoria, AuditoriaDto>> ProyeccionDto =
+        a => new AuditoriaDto
+        {
+            IdAuditoria = a.IdAuditoria,
+            Tabla = a.Tabla,
+            RegistroId = a.RegistroId,
+            Accion = a.Accion,
+            ValorAnterior = a.ValorAnterior,
+            ValorNuevo = a.ValorNuevo,
+            Usuario = a.Usuario,
+            FechaHora = a.FechaHora,
+            IdUsuario = a.IdUsuario,
+            Motivo = a.Motivo,
+            DireccionIp = a.DireccionIp,
+            AgenteUsuario = a.AgenteUsuario,
+            Hash = a.Hash
+        };
 }

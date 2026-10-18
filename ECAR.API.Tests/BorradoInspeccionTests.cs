@@ -57,7 +57,7 @@ public class BorradoInspeccionTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = "hash", Activo = true };
+        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
         var equipo = new Equipo
         {
             CodigoInterno = "EQ-001",
@@ -110,6 +110,9 @@ public class BorradoInspeccionTests
 
     private static readonly MotivoDto Motivo = new() { Motivo = "Se abrió sobre el equipo equivocado" };
 
+    // Antes DELETE borraba la inspección en curso y sus fotos. Ahora ninguna inspección se borra
+    // físicamente: se anula con POST {id}/anular, y DELETE responde 409 sin tocar nada.
+
     [Fact]
     public async Task AnularInspeccion_EnCurso_LaConservaConSusFotosYElMotivo()
     {
@@ -154,7 +157,7 @@ public class BorradoInspeccionTests
         var controlador = Controlador(escenario, new FakeStorage());
 
         var respuestas = await controlador.GuardarRespuestas(inspeccion.IdInspeccion, new GuardarRespuestasDto());
-        var firma = await controlador.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var firma = await controlador.FirmarConPassword(escenario.Context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = "iVBORw0KGgo="

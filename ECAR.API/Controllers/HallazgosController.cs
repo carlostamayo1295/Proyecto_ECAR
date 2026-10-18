@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
@@ -11,21 +10,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ECAR.API.Controllers;
 
-/// <summary>
-/// Hallazgos de la Fase 4 (endpoints 4 a 9, PLAN_FASE4_TAREAS §3.4 y §3.5). Un hallazgo nunca se
-/// borra: se cierra con su acción correctiva o se anula con motivo, y cada cambio queda en la
-/// auditoría. No hay DELETE: la ruta responde 405.
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Administrador,Técnico,Auditor")]
 public class HallazgosController : ControllerBase
 {
-    private static readonly string[] CriticidadesValidas = ["Alta", "Media", "Baja"];
-
     private readonly ECARDbContext _context;
     private readonly ICurrentUser _currentUser;
     private readonly IMotivoCambio _motivoCambio;
+
+    public const string MensajeInspeccionAnulada = "La inspección está anulada y no admite hallazgos";
+    public const string MensajeResponsableInvalido =
+        "El responsable indicado no existe, no está activo o no tiene rol Técnico ni Administrador";
+    public const string MensajeFechaCompromisoPasada = "La fecha de compromiso no puede ser anterior a hoy";
+    public const string MensajeEstadoFinal = "Un hallazgo cerrado o anulado no admite modificaciones";
+    public const string MensajeEstadoPorPut = "El estado se cambia con POST api/hallazgos/{id}/estado";
+    public const string MensajeAnularPorEstado = "Para anular un hallazgo use POST api/hallazgos/{id}/anular";
+    public const string MensajeAccionCorrectivaRequerida = "La acción correctiva es obligatoria para cerrar el hallazgo";
+    public const string MensajeMotivoRequerido = "El motivo es requerido y debe tener entre 10 y 500 caracteres";
+    public const string MensajeConcurrencia = "El hallazgo cambió mientras se procesaba la solicitud; vuelva a cargarlo";
 
     public HallazgosController(ECARDbContext context, ICurrentUser currentUser, IMotivoCambio motivoCambio)
     {
@@ -34,119 +37,143 @@ public class HallazgosController : ControllerBase
         _motivoCambio = motivoCambio;
     }
 
-    /// <summary>Endpoint 4: filtros, paginado, con equipo, área y responsable.</summary>
+    /// <summary>
+    /// GET api/hallazgos (endpoint 4). Filtros opcionales y combinables: estado, criticidad,
+    /// equipo, inspección y rango de fechas de registro (desde y hasta incluyen el día entero).
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<HallazgoDto>>>> GetHallazgos(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null,
-        [FromQuery] string? estado = null, [FromQuery] string? criticidad = null, [FromQuery] long? idEquipo = null,
-        [FromQuery] long? idInspeccion = null, [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null)
+        [FromQuery] HallazgoFiltroDto filtro, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
+        // Máximo 100 por página, como en el resto de listados: sin límite, pageSize=100000 devolvía la tabla entera.
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = _context.Hallazgos.AsNoTracking().AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(estado))
-            query = query.Where(h => h.Estado == estado);
-        if (!string.IsNullOrWhiteSpace(criticidad))
-            query = query.Where(h => h.Criticidad == criticidad);
-        if (idEquipo.HasValue)
-            query = query.Where(h => h.Inspeccion.IdEquipo == idEquipo.Value);
-        if (idInspeccion.HasValue)
-            query = query.Where(h => h.IdInspeccion == idInspeccion.Value);
-
-        var (inicio, fin) = HoraColombia.RangoUtc(desde, hasta);
-        if (inicio.HasValue)
-            query = query.Where(h => h.FechaRegistro >= inicio.Value);
-        if (fin.HasValue)
-            query = query.Where(h => h.FechaRegistro < fin.Value);
-
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(filtro.Estado) && !HallazgoEstados.EsValido(filtro.Estado))
         {
-            var texto = search.Trim();
+            return BadRequest(ApiResponse<PagedResultDto<HallazgoDto>>.ErrorResponse(
+                $"El estado debe ser uno de: {string.Join(", ", HallazgoEstados.Todos)}"));
+        }
+
+        if (filtro.Desde.HasValue && filtro.Hasta.HasValue && filtro.Desde.Value.Date > filtro.Hasta.Value.Date)
+        {
+            return BadRequest(ApiResponse<PagedResultDto<HallazgoDto>>.ErrorResponse(
+                "La fecha inicial no puede ser posterior a la fecha final"));
+        }
+
+        var query = ConDetalle().AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(filtro.Estado))
+        {
+            query = query.Where(h => h.Estado == filtro.Estado);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro.Criticidad))
+        {
+            var criticidad = filtro.Criticidad.Trim();
+            query = query.Where(h => h.Criticidad == criticidad);
+        }
+
+        if (filtro.IdEquipo.HasValue)
+        {
+            query = query.Where(h => h.Inspeccion.IdEquipo == filtro.IdEquipo.Value);
+        }
+
+        if (filtro.IdInspeccion.HasValue)
+        {
+            query = query.Where(h => h.IdInspeccion == filtro.IdInspeccion.Value);
+        }
+
+        if (filtro.Desde.HasValue)
+        {
+            var desde = filtro.Desde.Value.Date;
+            query = query.Where(h => h.FechaRegistro >= desde);
+        }
+
+        if (filtro.Hasta.HasValue)
+        {
+            // Hasta el final del día indicado: el cliente envía solo la fecha (yyyy-MM-dd).
+            var hastaExclusivo = filtro.Hasta.Value.Date.AddDays(1);
+            query = query.Where(h => h.FechaRegistro < hastaExclusivo);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro.Search))
+        {
+            var search = filtro.Search.Trim();
             query = query.Where(h =>
-                h.Descripcion.Contains(texto) ||
-                h.Inspeccion.Equipo.NombreEquipo.Contains(texto) ||
-                h.Inspeccion.Equipo.CodigoInterno.Contains(texto) ||
-                (h.Criticidad != null && h.Criticidad.Contains(texto)) ||
-                (h.UsuarioResponsable != null && h.UsuarioResponsable.Nombre.Contains(texto)));
+                h.Descripcion.Contains(search) ||
+                h.Inspeccion.Equipo.NombreEquipo.Contains(search) ||
+                h.Inspeccion.Equipo.CodigoInterno.Contains(search) ||
+                (h.Criticidad != null && h.Criticidad.Contains(search)));
         }
 
         var totalCount = await query.CountAsync();
+
         var hallazgos = await query
             .OrderByDescending(h => h.FechaRegistro)
             .ThenByDescending(h => h.IdHallazgo)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(Proyeccion)
             .ToListAsync();
 
-        return Ok(ApiResponse<PagedResultDto<HallazgoDto>>.SuccessResponse(new PagedResultDto<HallazgoDto>
+        var pagedResult = new PagedResultDto<HallazgoDto>
         {
-            Data = hallazgos,
+            Data = hallazgos.Select(MapToDto).ToList(),
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
-        }));
+        };
+
+        return Ok(ApiResponse<PagedResultDto<HallazgoDto>>.SuccessResponse(pagedResult));
     }
 
-    /// <summary>Endpoint 5: el hallazgo y de dónde salió (inspección, pregunta y observación).</summary>
+    /// <summary>GET api/hallazgos/{id} (endpoint 5): el hallazgo y la novedad o inspección de la que salió.</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ApiResponse<HallazgoDetalleDto>>> GetHallazgo(long id)
     {
-        var detalle = await _context.Hallazgos.AsNoTracking()
-            .Where(h => h.IdHallazgo == id)
-            .Select(h => new HallazgoDetalleDto
-            {
-                IdHallazgo = h.IdHallazgo,
-                IdInspeccion = h.IdInspeccion,
-                NombreEquipo = h.Inspeccion.Equipo.NombreEquipo,
-                Descripcion = h.Descripcion,
-                Criticidad = h.Criticidad,
-                Estado = h.Estado,
-                FechaRegistro = h.FechaRegistro,
-                Origen = h.Origen,
-                IdEquipo = h.Inspeccion.IdEquipo,
-                CodigoInterno = h.Inspeccion.Equipo.CodigoInterno,
-                Area = h.Inspeccion.Equipo.Ubicacion != null
-                    ? h.Inspeccion.Equipo.Ubicacion.Planta + " - " + h.Inspeccion.Equipo.Ubicacion.Area
-                    : null,
-                IdUsuarioRegistro = h.IdUsuarioRegistro,
-                NombreUsuarioRegistro = h.UsuarioRegistro.Nombre,
-                IdUsuarioResponsable = h.IdUsuarioResponsable,
-                NombreResponsable = h.UsuarioResponsable != null ? h.UsuarioResponsable.Nombre : null,
-                FechaCompromiso = h.FechaCompromiso,
-                AccionCorrectiva = h.AccionCorrectiva,
-                FechaCierre = h.FechaCierre,
-                NombreUsuarioCierre = h.UsuarioCierre != null ? h.UsuarioCierre.Nombre : null,
-                MotivoAnulacion = h.MotivoAnulacion,
-                IdPregunta = h.IdPregunta,
-                Pregunta = h.Pregunta != null ? h.Pregunta.Pregunta : null,
-                ObservacionRespuesta = h.IdPregunta == null
-                    ? null
-                    : h.Inspeccion.Respuestas
-                        .Where(r => r.IdPregunta == h.IdPregunta)
-                        .Select(r => r.Observacion)
-                        .FirstOrDefault(),
-                FechaInspeccion = h.Inspeccion.FechaInspeccion,
-                EstadoInspeccion = h.Inspeccion.Estado,
-                NombreInspector = h.Inspeccion.Usuario.Nombre
-            })
-            .FirstOrDefaultAsync();
+        var hallazgo = await ConDetalle()
+            .AsNoTracking()
+            .Include(h => h.Inspeccion)
+                .ThenInclude(i => i.Usuario)
+            .Include(h => h.Pregunta)
+            .Include(h => h.Respuesta)
+            .FirstOrDefaultAsync(h => h.IdHallazgo == id);
 
-        return detalle == null
-            ? NotFound(ApiResponse<HallazgoDetalleDto>.ErrorResponse("Hallazgo no encontrado"))
-            : Ok(ApiResponse<HallazgoDetalleDto>.SuccessResponse(detalle));
+        if (hallazgo == null)
+        {
+            return NotFound(ApiResponse<HallazgoDetalleDto>.ErrorResponse("Hallazgo no encontrado"));
+        }
+
+        return Ok(ApiResponse<HallazgoDetalleDto>.SuccessResponse(MapToDetalleDto(hallazgo)));
     }
 
-    /// <summary>Endpoint 6: hallazgo Manual sobre una inspección existente, en curso o cerrada.</summary>
+    /// <summary>
+    /// Registro manual de un hallazgo sobre una inspección existente (en curso o cerrada; una
+    /// anulada no admite hallazgos). Nace Abierto, con origen Manual y a nombre de quien lo
+    /// registra. El responsable y la fecha de compromiso son opcionales aquí y se validan igual
+    /// que en la asignación.
+    /// </summary>
     [HttpPost]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<HallazgoDto>>> CreateHallazgo(CreateHallazgoDto createDto)
     {
+        // [Required] ya lo rechaza en la validación del modelo; esto cubre a quien llame sin ella.
+        if (string.IsNullOrWhiteSpace(createDto.Descripcion))
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse("La descripción es requerida"));
+        }
+
+        var usuario = await _context.Usuarios.FindAsync(_currentUser.IdUsuario);
+        if (usuario == null || !usuario.Activo)
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(
+                "El usuario autenticado no existe o no está habilitado en ECAR"));
+        }
+
         var inspeccion = await _context.Inspecciones
             .Include(i => i.Equipo)
             .FirstOrDefaultAsync(i => i.IdInspeccion == createDto.IdInspeccion);
+
         if (inspeccion == null)
         {
             return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse("La inspección indicada no existe"));
@@ -154,202 +181,147 @@ public class HallazgosController : ControllerBase
 
         if (inspeccion.Estado == InspeccionEstados.Anulada)
         {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse("La inspección está anulada"));
+            return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(MensajeInspeccionAnulada));
         }
 
-        if (!EsAdministrador && inspeccion.IdUsuario != _currentUser.IdUsuario)
+        var errorAsignacion = await ValidarAsignacionAsync(createDto.IdUsuarioResponsable, createDto.FechaCompromiso);
+        if (errorAsignacion != null)
         {
-            return Forbid();
-        }
-
-        var descripcion = createDto.Descripcion?.Trim() ?? string.Empty;
-        if (descripcion.Length == 0)
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse("La descripción es requerida"));
-        }
-
-        var error = ValidarCriticidad(createDto.Criticidad)
-                    ?? ValidarFechaCompromiso(createDto.FechaCompromiso)
-                    ?? await ValidarResponsableAsync(createDto.IdUsuarioResponsable);
-        if (error != null)
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(error));
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(errorAsignacion));
         }
 
         var hallazgo = new Hallazgo
         {
             IdInspeccion = inspeccion.IdInspeccion,
-            Descripcion = descripcion,
-            Criticidad = string.IsNullOrWhiteSpace(createDto.Criticidad) ? inspeccion.Equipo.Criticidad : createDto.Criticidad,
+            Descripcion = createDto.Descripcion.Trim(),
+            Criticidad = string.IsNullOrWhiteSpace(createDto.Criticidad) ? null : createDto.Criticidad.Trim(),
             Estado = HallazgoEstados.Abierto,
+            FechaRegistro = DateTime.UtcNow,
             Origen = HallazgoOrigenes.Manual,
-            IdUsuarioRegistro = _currentUser.IdUsuario,
+            IdUsuarioRegistro = usuario.IdUsuario,
             IdUsuarioResponsable = createDto.IdUsuarioResponsable,
-            FechaCompromiso = NormalizarFecha(createDto.FechaCompromiso),
-            FechaRegistro = DateTime.UtcNow
+            FechaCompromiso = createDto.FechaCompromiso
         };
 
         _context.Hallazgos.Add(hallazgo);
         await _context.SaveChangesAsync();
 
+        var creado = await ConDetalle().AsNoTracking().SingleAsync(h => h.IdHallazgo == hallazgo.IdHallazgo);
+
         return CreatedAtAction(nameof(GetHallazgo), new { id = hallazgo.IdHallazgo },
-            ApiResponse<HallazgoDto>.SuccessResponse((await CargarDtoAsync(hallazgo.IdHallazgo))!,
-                "Hallazgo registrado exitosamente"));
+            ApiResponse<HallazgoDto>.SuccessResponse(MapToDto(creado), "Hallazgo registrado exitosamente"));
     }
 
     /// <summary>
-    /// Endpoint 7: criticidad, responsable y fecha de compromiso, con motivo. Solo en Abierto o
-    /// EnProceso; la descripción de un hallazgo de origen Novedad es la de la inspección firmada
-    /// y no se edita. El estado se cambia con POST {id}/estado.
+    /// PUT api/hallazgos/{id} (endpoint 7). Edita la descripción y la criticidad y asigna el
+    /// responsable y la fecha de compromiso: cada campo se cambia solo si viene en el cuerpo. Un
+    /// hallazgo Cerrado o Anulado no admite modificaciones (409). El estado no se cambia aquí:
+    /// si llega distinto del actual se rechaza (400); igual al actual se ignora, porque el
+    /// formulario de edición lo envía siempre.
     /// </summary>
-    [HttpPut("{id:long}")]
+    [HttpPut("{id}")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<HallazgoDto>>> UpdateHallazgo(long id, UpdateHallazgoDto updateDto)
     {
-        var hallazgo = await CargarParaEditarAsync(id);
+        var hallazgo = await _context.Hallazgos.FirstOrDefaultAsync(h => h.IdHallazgo == id);
+
         if (hallazgo == null)
         {
             return NotFound(ApiResponse<HallazgoDto>.ErrorResponse("Hallazgo no encontrado"));
         }
 
-        if (!PuedeGestionar(hallazgo))
+        if (!string.IsNullOrWhiteSpace(updateDto.Estado) && updateDto.Estado != hallazgo.Estado)
         {
-            return Forbid();
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(MensajeEstadoPorPut));
         }
 
-        if (!EstaAbiertoOEnProceso(hallazgo))
+        var modificaAlgo = !string.IsNullOrWhiteSpace(updateDto.Descripcion)
+            || updateDto.Criticidad != null
+            || updateDto.IdUsuarioResponsable.HasValue
+            || updateDto.FechaCompromiso.HasValue;
+        if (modificaAlgo && TransicionesHallazgo.EsFinal(hallazgo.Estado))
         {
-            return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(
-                $"Un hallazgo {Etiqueta(hallazgo.Estado)} no se modifica"));
+            return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(MensajeEstadoFinal));
         }
 
-        if (!string.IsNullOrWhiteSpace(updateDto.Estado))
+        // La asignación se valida antes de tocar nada, para no dejar la edición a medias.
+        if (updateDto.IdUsuarioResponsable.HasValue || updateDto.FechaCompromiso.HasValue)
         {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(
-                "El estado se cambia con POST /api/hallazgos/{id}/estado"));
-        }
-
-        var errorMotivo = ValidarMotivo(updateDto.Motivo);
-        if (errorMotivo != null)
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(errorMotivo));
-        }
-
-        var descripcion = updateDto.Descripcion?.Trim();
-        if (!string.IsNullOrEmpty(descripcion) && descripcion != hallazgo.Descripcion)
-        {
-            if (hallazgo.Origen == HallazgoOrigenes.Novedad)
+            var errorAsignacion = await ValidarAsignacionAsync(updateDto.IdUsuarioResponsable, updateDto.FechaCompromiso);
+            if (errorAsignacion != null)
             {
-                return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(
-                    "La descripción de un hallazgo generado al firmar no se edita"));
+                return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(errorAsignacion));
             }
 
-            hallazgo.Descripcion = descripcion;
+            if (updateDto.IdUsuarioResponsable.HasValue)
+                hallazgo.IdUsuarioResponsable = updateDto.IdUsuarioResponsable;
+
+            if (updateDto.FechaCompromiso.HasValue)
+                hallazgo.FechaCompromiso = updateDto.FechaCompromiso;
         }
 
-        var error = ValidarCriticidad(updateDto.Criticidad)
-                    ?? (updateDto.FechaCompromiso?.Date != hallazgo.FechaCompromiso?.Date ? ValidarFechaCompromiso(updateDto.FechaCompromiso) : null)
-                    ?? await ValidarResponsableAsync(updateDto.IdUsuarioResponsable);
-        if (error != null)
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(error));
-        }
+        if (!string.IsNullOrWhiteSpace(updateDto.Descripcion))
+            hallazgo.Descripcion = updateDto.Descripcion;
+
+        if (updateDto.Criticidad != null)
+            hallazgo.Criticidad = updateDto.Criticidad;
 
         _motivoCambio.Establecer(updateDto.Motivo);
-        if (!string.IsNullOrWhiteSpace(updateDto.Criticidad))
-            hallazgo.Criticidad = updateDto.Criticidad;
-        // PUT reemplaza el seguimiento: un responsable o una fecha en null los quitan.
-        hallazgo.IdUsuarioResponsable = updateDto.IdUsuarioResponsable;
-        hallazgo.FechaCompromiso = NormalizarFecha(updateDto.FechaCompromiso);
-        await _context.SaveChangesAsync();
 
-        return Ok(ApiResponse<HallazgoDto>.SuccessResponse((await CargarDtoAsync(id))!, "Hallazgo actualizado exitosamente"));
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(MensajeConcurrencia));
+        }
+
+        // Se relee para que el nombre del responsable sea el del recién asignado.
+        var actualizado = await ConDetalle().AsNoTracking().SingleAsync(h => h.IdHallazgo == id);
+
+        return Ok(ApiResponse<HallazgoDto>.SuccessResponse(MapToDto(actualizado), "Hallazgo actualizado exitosamente"));
     }
 
     /// <summary>
-    /// Endpoint 8 (§3.5): Abierto → EnProceso → Cerrado (con acción correctiva) y, solo el
-    /// Administrador, Cerrado → Abierto. Cualquier otra transición responde 409. Siempre con motivo.
+    /// POST api/hallazgos/{id}/estado (endpoint 8): mueve el hallazgo según la matriz de
+    /// <see cref="TransicionesHallazgo"/>. Cerrar exige acción correctiva y reabrir exige motivo.
+    /// Para anular se usa POST {id}/anular.
     /// </summary>
     [HttpPost("{id:long}/estado")]
     [Authorize(Roles = "Administrador,Técnico")]
-    public async Task<ActionResult<ApiResponse<HallazgoDto>>> CambiarEstado(long id, CambiarEstadoHallazgoDto dto)
+    public async Task<ActionResult<ApiResponse<HallazgoDto>>> CambiarEstado(long id, CambiarEstadoHallazgoDto cambioDto)
     {
-        var hallazgo = await CargarParaEditarAsync(id);
-        if (hallazgo == null)
-        {
-            return NotFound(ApiResponse<HallazgoDto>.ErrorResponse("Hallazgo no encontrado"));
-        }
-
-        if (!PuedeGestionar(hallazgo))
-        {
-            return Forbid();
-        }
-
-        if (!HallazgoEstados.EsValido(dto.Estado))
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse("El estado indicado no existe"));
-        }
-
-        if (dto.Estado == HallazgoEstados.Anulado)
+        if (!HallazgoEstados.EsValido(cambioDto.Estado))
         {
             return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(
-                "Para anular un hallazgo use POST /api/hallazgos/{id}/anular"));
+                $"El estado debe ser uno de: {string.Join(", ", HallazgoEstados.Todos)}"));
         }
 
-        var permitida = (hallazgo.Estado, dto.Estado) switch
+        if (cambioDto.Estado == HallazgoEstados.Anulado)
         {
-            (HallazgoEstados.Abierto, HallazgoEstados.EnProceso) => true,
-            (HallazgoEstados.EnProceso, HallazgoEstados.Cerrado) => true,
-            (HallazgoEstados.Cerrado, HallazgoEstados.Abierto) => true,
-            _ => false
-        };
-        if (!permitida)
-        {
-            return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(
-                $"Un hallazgo {Etiqueta(hallazgo.Estado)} no puede pasar a {Etiqueta(dto.Estado)}"));
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(MensajeAnularPorEstado));
         }
 
-        if (hallazgo.Estado == HallazgoEstados.Cerrado && !EsAdministrador)
-        {
-            return Forbid();
-        }
-
-        var errorMotivo = ValidarMotivo(dto.Motivo);
-        if (errorMotivo != null)
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(errorMotivo));
-        }
-
-        if (dto.Estado == HallazgoEstados.Cerrado && string.IsNullOrWhiteSpace(dto.AccionCorrectiva))
-        {
-            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(
-                "Para cerrar el hallazgo hay que describir la acción correctiva"));
-        }
-
-        _motivoCambio.Establecer(dto.Motivo);
-        hallazgo.Estado = dto.Estado;
-        if (dto.Estado == HallazgoEstados.Cerrado)
-        {
-            hallazgo.AccionCorrectiva = dto.AccionCorrectiva!.Trim();
-            hallazgo.FechaCierre = DateTime.UtcNow;
-            hallazgo.IdUsuarioCierre = _currentUser.IdUsuario;
-        }
-        else if (dto.Estado == HallazgoEstados.Abierto)
-        {
-            // Reabrir: el cierre anterior queda en la auditoría.
-            hallazgo.FechaCierre = null;
-            hallazgo.IdUsuarioCierre = null;
-        }
-
-        await _context.SaveChangesAsync();
-        return Ok(ApiResponse<HallazgoDto>.SuccessResponse((await CargarDtoAsync(id))!,
-            $"El hallazgo pasó a {Etiqueta(dto.Estado)}"));
+        return await AplicarTransicionAsync(id, cambioDto.Estado, cambioDto.AccionCorrectiva, cambioDto.Motivo);
     }
 
-    /// <summary>Endpoint 9: solo el Administrador, con motivo, desde Abierto o EnProceso.</summary>
+    /// <summary>POST api/hallazgos/{id}/anular (endpoint 9): solo Administrador y siempre con motivo.</summary>
     [HttpPost("{id:long}/anular")]
-    [Authorize(Roles = "Administrador")]
-    public async Task<ActionResult<ApiResponse<HallazgoDto>>> AnularHallazgo(long id, MotivoDto dto)
+    [Authorize(Roles = "Administrador,Técnico")]
+    public Task<ActionResult<ApiResponse<HallazgoDto>>> AnularHallazgo(long id, MotivoDto motivoDto)
+    {
+        // El rol lo decide la matriz (403 para un Técnico), igual que en reabrir.
+        return AplicarTransicionAsync(id, HallazgoEstados.Anulado, accionCorrectiva: null, motivoDto.Motivo);
+    }
+
+    /// <summary>
+    /// Aplica una transición en este orden: 404 si no existe, 409 si la matriz no la permite,
+    /// 403 si exige Administrador, 400 si falta la acción correctiva o el motivo. Guarda el
+    /// motivo en la auditoría y responde 409 si otra petición cambió el hallazgo a la vez.
+    /// </summary>
+    private async Task<ActionResult<ApiResponse<HallazgoDto>>> AplicarTransicionAsync(
+        long id, string destino, string? accionCorrectiva, string? motivo)
     {
         var hallazgo = await _context.Hallazgos.FirstOrDefaultAsync(h => h.IdHallazgo == id);
         if (hallazgo == null)
@@ -357,111 +329,147 @@ public class HallazgosController : ControllerBase
             return NotFound(ApiResponse<HallazgoDto>.ErrorResponse("Hallazgo no encontrado"));
         }
 
-        if (!EstaAbiertoOEnProceso(hallazgo))
+        var regla = TransicionesHallazgo.Buscar(hallazgo.Estado, destino);
+        if (regla == null)
         {
             return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(
-                $"Un hallazgo {Etiqueta(hallazgo.Estado)} no se puede anular"));
+                $"Un hallazgo en estado {hallazgo.Estado} no puede pasar a {destino}"));
         }
 
-        _motivoCambio.Establecer(dto.Motivo);
-        hallazgo.Estado = HallazgoEstados.Anulado;
-        hallazgo.MotivoAnulacion = dto.Motivo.Trim();
-        await _context.SaveChangesAsync();
+        if (regla.SoloAdministrador && !_currentUser.IsInRole("Administrador"))
+        {
+            return Forbid();
+        }
 
-        return Ok(ApiResponse<HallazgoDto>.SuccessResponse((await CargarDtoAsync(id))!, "Hallazgo anulado"));
+        var accion = accionCorrectiva?.Trim();
+        if (regla.ExigeAccionCorrectiva && string.IsNullOrEmpty(accion))
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(MensajeAccionCorrectivaRequerida));
+        }
+
+        var motivoLimpio = motivo?.Trim();
+        if (regla.ExigeMotivo
+            && (motivoLimpio == null || motivoLimpio.Length is < MotivoDto.LongitudMinima or > MotivoDto.LongitudMaxima))
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(MensajeMotivoRequerido));
+        }
+
+        var estadoAnterior = hallazgo.Estado;
+        hallazgo.Estado = destino;
+        switch (destino)
+        {
+            case HallazgoEstados.Cerrado:
+                hallazgo.AccionCorrectiva = accion;
+                hallazgo.FechaCierre = DateTime.UtcNow;
+                hallazgo.IdUsuarioCierre = _currentUser.IdUsuario;
+                break;
+            case HallazgoEstados.Anulado:
+                hallazgo.MotivoAnulacion = motivoLimpio;
+                break;
+            case HallazgoEstados.Abierto when estadoAnterior == HallazgoEstados.Cerrado:
+                // Reabrir: la última acción correctiva se conserva; el historial queda en Auditoria.
+                hallazgo.FechaCierre = null;
+                hallazgo.IdUsuarioCierre = null;
+                break;
+        }
+
+        _motivoCambio.Establecer(motivoLimpio);
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(MensajeConcurrencia));
+        }
+
+        var actualizado = await ConDetalle().AsNoTracking().SingleAsync(h => h.IdHallazgo == id);
+        return Ok(ApiResponse<HallazgoDto>.SuccessResponse(MapToDto(actualizado),
+            $"Hallazgo {DescribirTransicion(estadoAnterior, destino)} exitosamente"));
     }
 
-    private static readonly Expression<Func<Hallazgo, HallazgoDto>> Proyeccion = h => new HallazgoDto
+    private static string DescribirTransicion(string desde, string hacia) => hacia switch
     {
-        IdHallazgo = h.IdHallazgo,
-        IdInspeccion = h.IdInspeccion,
-        NombreEquipo = h.Inspeccion.Equipo.NombreEquipo,
-        Descripcion = h.Descripcion,
-        Criticidad = h.Criticidad,
-        Estado = h.Estado,
-        FechaRegistro = h.FechaRegistro,
-        Origen = h.Origen,
-        IdEquipo = h.Inspeccion.IdEquipo,
-        CodigoInterno = h.Inspeccion.Equipo.CodigoInterno,
-        Area = h.Inspeccion.Equipo.Ubicacion != null
-            ? h.Inspeccion.Equipo.Ubicacion.Planta + " - " + h.Inspeccion.Equipo.Ubicacion.Area
-            : null,
-        IdUsuarioRegistro = h.IdUsuarioRegistro,
-        NombreUsuarioRegistro = h.UsuarioRegistro.Nombre,
-        IdUsuarioResponsable = h.IdUsuarioResponsable,
-        NombreResponsable = h.UsuarioResponsable != null ? h.UsuarioResponsable.Nombre : null,
-        FechaCompromiso = h.FechaCompromiso,
-        AccionCorrectiva = h.AccionCorrectiva,
-        FechaCierre = h.FechaCierre,
-        NombreUsuarioCierre = h.UsuarioCierre != null ? h.UsuarioCierre.Nombre : null,
-        MotivoAnulacion = h.MotivoAnulacion
-    };
-
-    private Task<HallazgoDto?> CargarDtoAsync(long id) =>
-        _context.Hallazgos.AsNoTracking().Where(h => h.IdHallazgo == id).Select(Proyeccion).FirstOrDefaultAsync();
-
-    private Task<Hallazgo?> CargarParaEditarAsync(long id) =>
-        _context.Hallazgos.Include(h => h.Inspeccion).FirstOrDefaultAsync(h => h.IdHallazgo == id);
-
-    private bool EsAdministrador => _currentUser.IsInRole("Administrador");
-
-    /// <summary>
-    /// El Administrador gestiona cualquier hallazgo; un Técnico, los que registró, los que tiene
-    /// asignados y los de sus propias inspecciones.
-    /// </summary>
-    private bool PuedeGestionar(Hallazgo hallazgo) =>
-        EsAdministrador ||
-        (_currentUser.IsInRole("Técnico") &&
-         (hallazgo.IdUsuarioRegistro == _currentUser.IdUsuario ||
-          hallazgo.IdUsuarioResponsable == _currentUser.IdUsuario ||
-          hallazgo.Inspeccion.IdUsuario == _currentUser.IdUsuario));
-
-    private static bool EstaAbiertoOEnProceso(Hallazgo hallazgo) =>
-        hallazgo.Estado is HallazgoEstados.Abierto or HallazgoEstados.EnProceso;
-
-    private static string Etiqueta(string? estado) => estado switch
-    {
-        HallazgoEstados.Abierto => "abierto",
         HallazgoEstados.EnProceso => "en proceso",
         HallazgoEstados.Cerrado => "cerrado",
         HallazgoEstados.Anulado => "anulado",
-        _ => estado ?? "-"
+        HallazgoEstados.Abierto when desde == HallazgoEstados.Cerrado => "reabierto",
+        _ => "actualizado"
     };
 
-    private static string? ValidarMotivo(string? motivo) =>
-        string.IsNullOrWhiteSpace(motivo) || motivo.Trim().Length < MotivoDto.LongitudMinima ||
-        motivo.Trim().Length > MotivoDto.LongitudMaxima
-            ? $"El motivo es obligatorio y debe tener entre {MotivoDto.LongitudMinima} y {MotivoDto.LongitudMaxima} caracteres"
-            : null;
-
-    private static string? ValidarCriticidad(string? criticidad) =>
-        string.IsNullOrWhiteSpace(criticidad) || CriticidadesValidas.Contains(criticidad)
-            ? null
-            : "La criticidad debe ser Alta, Media o Baja";
-
-    private static string? ValidarFechaCompromiso(DateTime? fecha) =>
-        fecha.HasValue && fecha.Value.Date < HoraColombia.DesdeUtc(DateTime.UtcNow).Date
-            ? "La fecha de compromiso no puede ser anterior a hoy"
-            : null;
-
-    /// <summary>El responsable debe ser un usuario activo con rol Técnico o Administrador.</summary>
-    private async Task<string?> ValidarResponsableAsync(long? idUsuario)
+    /// <summary>
+    /// Reglas del responsable y la fecha de compromiso, compartidas por el alta y la asignación:
+    /// el responsable debe ser un usuario activo con rol Técnico o Administrador (plan §5, BE-1
+    /// tarea 2) y la fecha no puede ser anterior a hoy en hora de Colombia. Devuelve el mensaje de
+    /// error, o null si todo es válido.
+    /// </summary>
+    private async Task<string?> ValidarAsignacionAsync(long? idUsuarioResponsable, DateTime? fechaCompromiso)
     {
-        if (!idUsuario.HasValue)
+        if (idUsuarioResponsable.HasValue
+            && !await _context.Usuarios.AnyAsync(u => u.IdUsuario == idUsuarioResponsable.Value && u.Activo
+                && u.UsuarioRoles.Any(ur => ur.Rol.Nombre == "Técnico" || ur.Rol.Nombre == "Administrador")))
         {
-            return null;
+            return MensajeResponsableInvalido;
         }
 
-        var valido = await _context.Usuarios.AnyAsync(u =>
-            u.IdUsuario == idUsuario.Value && u.Activo &&
-            u.UsuarioRoles.Any(ur => ur.Rol.Nombre == "Técnico" || ur.Rol.Nombre == "Administrador"));
-        return valido ? null : "El responsable debe ser un usuario activo con rol Técnico o Administrador";
+        if (fechaCompromiso.HasValue && fechaCompromiso.Value.Date < HoraColombia.DesdeUtc(DateTime.UtcNow).Date)
+        {
+            return MensajeFechaCompromisoPasada;
+        }
+
+        return null;
     }
 
-    /// <summary>
-    /// Una fecha de compromiso es un día, no un instante: se guarda a las 12:00 UTC para que la
-    /// conversión a hora local de cualquier zona de América siga cayendo en el mismo día.
-    /// </summary>
-    private static DateTime? NormalizarFecha(DateTime? fecha) =>
-        fecha.HasValue ? DateTime.SpecifyKind(fecha.Value.Date.AddHours(12), DateTimeKind.Utc) : null;
+    /// <summary>Todo lo que muestra una fila del listado: equipo con su ubicación y los tres usuarios.</summary>
+    private IQueryable<Hallazgo> ConDetalle() => _context.Hallazgos
+        .Include(h => h.Inspeccion)
+            .ThenInclude(i => i.Equipo)
+                .ThenInclude(e => e.Ubicacion)
+        .Include(h => h.UsuarioRegistro)
+        .Include(h => h.UsuarioResponsable)
+        .Include(h => h.UsuarioCierre);
+
+    private static HallazgoDto MapToDto(Hallazgo h) => Completar(new HallazgoDto(), h);
+
+    private static HallazgoDetalleDto MapToDetalleDto(Hallazgo h)
+    {
+        var dto = Completar(new HallazgoDetalleDto(), h);
+        dto.IdPregunta = h.IdPregunta;
+        dto.Pregunta = h.Pregunta?.Pregunta;
+        dto.IdRespuesta = h.IdRespuesta;
+        dto.ObservacionRespuesta = h.Respuesta?.Observacion;
+        dto.FechaInspeccion = h.Inspeccion.FechaInspeccion;
+        dto.EstadoInspeccion = h.Inspeccion.Estado;
+        dto.NombreInspector = h.Inspeccion.Usuario?.Nombre;
+        return dto;
+    }
+
+    /// <summary>Campos comunes al listado y al detalle; las navegaciones que no se cargaron quedan en null.</summary>
+    private static T Completar<T>(T dto, Hallazgo h) where T : HallazgoDto
+    {
+        var equipo = h.Inspeccion?.Equipo;
+
+        dto.IdHallazgo = h.IdHallazgo;
+        dto.IdInspeccion = h.IdInspeccion;
+        dto.Descripcion = h.Descripcion;
+        dto.Criticidad = h.Criticidad;
+        dto.Estado = h.Estado;
+        dto.FechaRegistro = h.FechaRegistro;
+        dto.Origen = h.Origen;
+        dto.IdEquipo = h.Inspeccion?.IdEquipo ?? 0;
+        dto.NombreEquipo = equipo?.NombreEquipo;
+        dto.CodigoInterno = equipo?.CodigoInterno;
+        dto.Area = equipo?.Ubicacion == null ? null : $"{equipo.Ubicacion.Planta} - {equipo.Ubicacion.Area}";
+        dto.IdUsuarioRegistro = h.IdUsuarioRegistro;
+        dto.NombreUsuarioRegistro = h.UsuarioRegistro?.Nombre;
+        dto.IdUsuarioResponsable = h.IdUsuarioResponsable;
+        dto.NombreResponsable = h.UsuarioResponsable?.Nombre;
+        dto.FechaCompromiso = h.FechaCompromiso;
+        dto.AccionCorrectiva = h.AccionCorrectiva;
+        dto.FechaCierre = h.FechaCierre;
+        dto.NombreUsuarioCierre = h.UsuarioCierre?.Nombre;
+        dto.MotivoAnulacion = h.MotivoAnulacion;
+        return dto;
+    }
 }

@@ -45,6 +45,10 @@ public class Hallazgo
     [Column("IdPregunta")]
     public long? IdPregunta { get; set; }
 
+    /// <summary>La respuesta "No" concreta que lo originó; null en los manuales.</summary>
+    [Column("IdRespuesta")]
+    public long? IdRespuesta { get; set; }
+
     [Required]
     [Column("IdUsuarioRegistro")]
     public long IdUsuarioRegistro { get; set; }
@@ -69,12 +73,25 @@ public class Hallazgo
     [Column("MotivoAnulacion")]
     public string? MotivoAnulacion { get; set; }
 
+    /// <summary>
+    /// Control de concurrencia: SQL Server lo cambia en cada UPDATE, y si dos peticiones cambian
+    /// el mismo hallazgo a la vez la segunda falla en lugar de pisar a la primera. El arreglo
+    /// vacío solo existe para el proveedor en memoria de las pruebas: EF no envía este valor en
+    /// el INSERT (lo genera SQL Server) y lo reemplaza por el real al guardar.
+    /// </summary>
+    [Timestamp]
+    [Column("RowVersion")]
+    public byte[] RowVersion { get; set; } = [];
+
     // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;
 
     [ForeignKey("IdPregunta")]
     public virtual PreguntaChecklist? Pregunta { get; set; }
+
+    [ForeignKey("IdRespuesta")]
+    public virtual RespuestaInspeccion? Respuesta { get; set; }
 
     [ForeignKey("IdUsuarioRegistro")]
     public virtual Usuario UsuarioRegistro { get; set; } = null!;

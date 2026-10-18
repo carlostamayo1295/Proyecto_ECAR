@@ -30,7 +30,7 @@ public partial class ECARDbContext
     private const string Sistema = "Sistema";
 
     // Nunca se guardan: el sello invalida tokens y UltimoAcceso cambia en cada inicio de sesión.
-    private static readonly HashSet<string> CamposExcluidos = [nameof(Usuario.SecurityStamp), nameof(Usuario.UltimoAcceso)];
+    private static readonly HashSet<string> CamposExcluidos = [nameof(Usuario.SecurityStamp), nameof(Usuario.UltimoAcceso), nameof(Usuario.IntentosFallidos)];
 
     private static readonly JsonSerializerOptions OpcionesJson = new()
     {

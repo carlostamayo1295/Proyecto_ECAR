@@ -19,14 +19,14 @@ namespace ECAR.API.Controllers;
 public class UsuariosController : ControllerBase
 {
     private readonly ECARDbContext _context;
+    private readonly PoliticaPasswords _politica;
     private readonly IMotivoCambio _motivoCambio;
-    private readonly SeguridadOptions _seguridad;
 
-    public UsuariosController(ECARDbContext context, IMotivoCambio motivoCambio, IOptions<SeguridadOptions> seguridad)
+    public UsuariosController(ECARDbContext context, PoliticaPasswords? politica = null, IMotivoCambio? motivoCambio = null)
     {
         _context = context;
-        _motivoCambio = motivoCambio;
-        _seguridad = seguridad.Value;
+        _politica = politica ?? new PoliticaPasswords(Options.Create(new SeguridadOptions()));
+        _motivoCambio = motivoCambio ?? new MotivoCambio();
     }
 
     [HttpGet]
@@ -110,6 +110,8 @@ public class UsuariosController : ControllerBase
         if (string.IsNullOrWhiteSpace(createDto.Password) && createDto.UsuarioAD == null)
             return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(
                 "Debe indicar una contraseña local o un usuario de Active Directory"));
+        if (!string.IsNullOrWhiteSpace(createDto.Password) && _politica.Validar(createDto.Password) is { Count: > 0 } erroresPassword)
+            return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse("La contraseña no cumple la política", erroresPassword));
 
         // El correo y el usuario de Active Directory deben ser únicos.
         var existingUsuario = await _context.Usuarios
@@ -143,7 +145,7 @@ public class UsuariosController : ControllerBase
         var tienePasswordLocal = !string.IsNullOrWhiteSpace(createDto.Password);
         if (tienePasswordLocal)
         {
-            var errores = PoliticaPassword.Validar(createDto.Password, _seguridad);
+            var errores = _politica.Validar(createDto.Password);
             if (errores.Count > 0)
             {
                 return BadRequest(ApiResponse<UsuarioDto>.ErrorResponse(string.Join(". ", errores), errores));
@@ -385,70 +387,70 @@ public class UsuariosController : ControllerBase
         return Ok(ApiResponse<bool>.SuccessResponse(true, "Usuario activado exitosamente"));
     }
 
-    /// <summary>
-    /// Endpoint 25 (Parte 11 §11.200(a)(3)). Genera una contraseña temporal que se muestra una sola
-    /// vez al Administrador; el usuario debe cambiarla al entrar, así que el Administrador nunca
-    /// conoce la definitiva. También desbloquea la cuenta.
-    /// </summary>
-    [HttpPost("{id:long}/restablecer-password")]
-    public async Task<ActionResult<ApiResponse<PasswordTemporalDto>>> RestablecerPassword(long id, MotivoDto dto)
+    [HttpPost("{id}/restablecer-password")]
+    public async Task<ActionResult<ApiResponse<PasswordTemporalDto>>> RestablecerPassword(
+        long id,
+        MotivoDto motivoDto,
+        [FromServices] IMotivoCambio motivoCambio)
     {
-        var usuario = await _context.Usuarios
-            .Include(u => u.HistorialPasswords)
-            .FirstOrDefaultAsync(u => u.IdUsuario == id);
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id);
         if (usuario == null)
         {
             return NotFound(ApiResponse<PasswordTemporalDto>.ErrorResponse("Usuario no encontrado"));
         }
 
+        if (!usuario.Activo)
+        {
+            return BadRequest(ApiResponse<PasswordTemporalDto>.ErrorResponse(
+                "No se puede restablecer la contraseña de un usuario inactivo"));
+        }
+
+        // Una cuenta que solo entra por Active Directory no tiene contraseña local: darle una
+        // temporal le abriría una segunda forma de entrar que el directorio no controla.
         if (string.IsNullOrWhiteSpace(usuario.PasswordHash) && !string.IsNullOrWhiteSpace(usuario.UsuarioAD))
         {
             return BadRequest(ApiResponse<PasswordTemporalDto>.ErrorResponse(
                 "El usuario entra con Active Directory: su contraseña se restablece en el directorio"));
         }
 
-        var temporal = PoliticaPassword.GenerarTemporal();
-        var ahora = DateTime.UtcNow;
-        _motivoCambio.Establecer(dto.Motivo);
-        if (!string.IsNullOrWhiteSpace(usuario.PasswordHash))
-        {
-            usuario.HistorialPasswords.Add(new HistorialPassword { PasswordHash = usuario.PasswordHash, Fecha = ahora });
-        }
-
-        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporal);
-        usuario.DebeCambiarPassword = true;
-        usuario.FechaCambioPassword = ahora;
-        usuario.IntentosFallidos = 0;
-        usuario.BloqueadoHasta = null;
-        _context.RegistrarEvento(AuditoriaAcciones.RestablecerPassword, usuario.IdUsuario);
+        var temporal = _politica.GenerarTemporal();
+        _politica.Establecer(_context, usuario, temporal, esTemporal: true);
+        motivoCambio.Establecer(motivoDto.Motivo);
+        _context.RegistrarEvento(AuditoriaAcciones.RestablecerPassword, usuario.IdUsuario,
+            new { Usuario = usuario.Correo, DebeCambiarAlEntrar = true });
         await _context.SaveChangesAsync();
+
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers.Pragma = "no-cache";
 
         return Ok(ApiResponse<PasswordTemporalDto>.SuccessResponse(
             new PasswordTemporalDto { PasswordTemporal = temporal, DebeCambiarAlEntrar = true },
-            "Contraseña restablecida. Entréguela al usuario: solo se muestra esta vez"));
+            "Contraseña restablecida. Entréguela al usuario: no se volverá a mostrar"));
     }
 
-    /// <summary>Endpoint 26: quita el bloqueo por intentos fallidos, con motivo.</summary>
-    [HttpPost("{id:long}/desbloquear")]
-    public async Task<ActionResult<ApiResponse<bool>>> DesbloquearUsuario(long id, MotivoDto dto)
+    [HttpPost("{id}/desbloquear")]
+    public async Task<ActionResult<ApiResponse<bool>>> DesbloquearUsuario(
+        long id,
+        MotivoDto motivoDto,
+        [FromServices] IMotivoCambio motivoCambio)
     {
-        var usuario = await _context.Usuarios.FindAsync(id);
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id);
         if (usuario == null)
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Usuario no encontrado"));
         }
 
-        if (usuario.BloqueadoHasta is null || usuario.BloqueadoHasta <= DateTime.UtcNow)
+        if (usuario.BloqueadoHasta is not { } bloqueadoHasta || bloqueadoHasta <= DateTime.UtcNow)
         {
-            return Conflict(ApiResponse<bool>.ErrorResponse("La cuenta no está bloqueada"));
+            return BadRequest(ApiResponse<bool>.ErrorResponse("La cuenta no está bloqueada"));
         }
 
-        _motivoCambio.Establecer(dto.Motivo);
-        usuario.IntentosFallidos = 0;
         usuario.BloqueadoHasta = null;
+        usuario.IntentosFallidos = 0;
+        motivoCambio.Establecer(motivoDto.Motivo);
         await _context.SaveChangesAsync();
 
-        return Ok(ApiResponse<bool>.SuccessResponse(true, "Cuenta desbloqueada"));
+        return Ok(ApiResponse<bool>.SuccessResponse(true, "Cuenta desbloqueada exitosamente"));
     }
 
     private static UsuarioDto MapToDto(Usuario usuario) => new()

@@ -73,14 +73,14 @@ public class BackendPhaseThreeFirmaTests
         {
             Nombre = "Técnico Uno",
             Correo = "tecnico1@ecar.test",
-            PasswordHash = "hash",
+            PasswordHash = FirmaPruebas.PasswordHash,
             Activo = true
         };
         var otroTecnico = new Usuario
         {
             Nombre = "Técnico Dos",
             Correo = "tecnico2@ecar.test",
-            PasswordHash = "hash",
+            PasswordHash = FirmaPruebas.PasswordHash,
             Activo = true
         };
         var equipo = new Equipo
@@ -176,7 +176,7 @@ public class BackendPhaseThreeFirmaTests
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida,
@@ -214,7 +214,7 @@ public class BackendPhaseThreeFirmaTests
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -239,7 +239,7 @@ public class BackendPhaseThreeFirmaTests
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = "data:image/png;base64," + FirmaPngValida
@@ -262,7 +262,7 @@ public class BackendPhaseThreeFirmaTests
         var inspeccion = await CrearInspeccionAsync(escenario);
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -292,7 +292,7 @@ public class BackendPhaseThreeFirmaTests
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -324,7 +324,7 @@ public class BackendPhaseThreeFirmaTests
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = firma
@@ -364,7 +364,7 @@ public class BackendPhaseThreeFirmaTests
         // Ni siquiera un Administrador firma por otro: la firma es personal.
         var controller = ControladorDe(escenario, escenario.OtroTecnico, "Administrador");
 
-        var action = await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -383,7 +383,7 @@ public class BackendPhaseThreeFirmaTests
         var escenario = await SeedAsync(context);
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
-        var action = await controller.FirmarInspeccion(9999, new FirmarInspeccionDto
+        var action = await controller.FirmarConPassword(context, 9999, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -405,7 +405,7 @@ public class BackendPhaseThreeFirmaTests
             Respuesta = "Si"
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
-        await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -417,44 +417,15 @@ public class BackendPhaseThreeFirmaTests
             .Include(i => i.Evidencias)
             .SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion);
 
-        // Fase 4: la huella es HMAC-SHA256 con la clave y la manifestación (§11.70).
-        Assert.Equal(FirmaInspeccion.AlgoritmoHmacV1, cerrada.FirmaAlgoritmo);
-        Assert.Equal(escenario.Tecnico.Nombre, cerrada.FirmaNombre);
-        Assert.Equal("Responsable de la ejecución de la inspección", cerrada.FirmaSignificado);
-
-        // Recalcular con los mismos datos y la misma clave reproduce exactamente la huella guardada.
-        var clave = Convert.FromBase64String(Fabrica.ClaveHmac);
-        var recalculado = FirmaInspeccion.CalcularHmac(
-            cerrada, cerrada.Respuestas, cerrada.Evidencias,
-            cerrada.FechaCierre!.Value, cerrada.FirmaDigital!, cerrada.FirmaNombre!, cerrada.FirmaSignificado!, clave);
-        Assert.Equal(cerrada.FirmaHash, recalculado);
-        Assert.True(Fabrica.Firma().EsIntegra(cerrada));
-
-        // Sin la clave no se puede volver a sellar: con otra clave la huella no coincide.
-        var otraClave = Convert.ToBase64String(Enumerable.Repeat((byte)7, 32).ToArray());
-        Assert.False(Fabrica.Firma(otraClave).EsIntegra(cerrada));
-
-        // Cambiar el nombre de la manifestación también rompe la huella.
-        cerrada.FirmaNombre = "Otra persona";
-        Assert.False(Fabrica.Firma().EsIntegra(cerrada));
-        cerrada.FirmaNombre = escenario.Tecnico.Nombre;
+        // Recalcular con los mismos datos reproduce exactamente el hash guardado.
+        var verificador = FirmaPruebas.CrearVerificador(new FakeEvidenciaStorage());
+        Assert.Equal(cerrada.FirmaHash, await verificador.CalcularSelloAsync(cerrada));
 
         // Alterar una respuesta rompe la coincidencia: el registro quedaría delatado.
-        var alteradas = cerrada.Respuestas
-            .Select(r => new RespuestaInspeccion
-            {
-                IdRespuesta = r.IdRespuesta,
-                IdInspeccion = r.IdInspeccion,
-                IdPregunta = r.IdPregunta,
-                Respuesta = "No",
-                Observacion = r.Observacion
-            })
-            .ToList();
-        var hashAlterado = FirmaInspeccion.CalcularHmac(
-            cerrada, alteradas, cerrada.Evidencias,
-            cerrada.FechaCierre.Value, cerrada.FirmaDigital!, cerrada.FirmaNombre!, cerrada.FirmaSignificado!, clave);
+        cerrada.Respuestas.First().Respuesta = "No";
 
-        Assert.NotEqual(cerrada.FirmaHash, hashAlterado);
+        Assert.NotEqual(cerrada.FirmaHash, await verificador.CalcularSelloAsync(cerrada));
+        Assert.False(await verificador.VerificarAsync(cerrada));
     }
 
     // ---------------------------------------------------------------- inmutabilidad
@@ -472,12 +443,12 @@ public class BackendPhaseThreeFirmaTests
         var controller = ControladorDe(escenario, escenario.Tecnico);
         var dto = new FirmarInspeccionDto { Password = Fabrica.ClaveFirma, FirmaPngBase64 = FirmaPngValida };
 
-        var primera = await controller.FirmarInspeccion(inspeccion.IdInspeccion, dto);
+        var primera = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, dto);
         Assert.IsType<OkObjectResult>(primera.Result);
         var hashOriginal = (await context.Inspecciones.AsNoTracking()
             .SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion)).FirmaHash;
 
-        var segunda = await controller.FirmarInspeccion(inspeccion.IdInspeccion, dto);
+        var segunda = await controller.FirmarConPassword(context, inspeccion.IdInspeccion, dto);
 
         var conflicto = Assert.IsType<ConflictObjectResult>(segunda.Result);
         var response = Assert.IsType<ApiResponse<InspeccionResultadoDto>>(conflicto.Value);
@@ -498,7 +469,7 @@ public class BackendPhaseThreeFirmaTests
             Respuesta = "Si"
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
-        await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -529,7 +500,7 @@ public class BackendPhaseThreeFirmaTests
             Respuesta = "Si"
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
-        await controller.FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+        await controller.FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
         {
             Password = Fabrica.ClaveFirma,
             FirmaPngBase64 = FirmaPngValida
@@ -557,7 +528,7 @@ public class BackendPhaseThreeFirmaTests
         var currentUser = new FakeCurrentUser(
             escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico");
         await ControladorDe(escenario, escenario.Tecnico)
-            .FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+            .FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
                 Password = Fabrica.ClaveFirma,
                 FirmaPngBase64 = FirmaPngValida
@@ -603,7 +574,7 @@ public class BackendPhaseThreeFirmaTests
             escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico");
         context.ChangeTracker.Clear();
         await ControladorDe(escenario, escenario.Tecnico)
-            .FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+            .FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
                 Password = Fabrica.ClaveFirma,
                 FirmaPngBase64 = FirmaPngValida
@@ -632,7 +603,7 @@ public class BackendPhaseThreeFirmaTests
             Observacion = "Fuga en el sello"
         });
         await ControladorDe(escenario, escenario.Tecnico)
-            .FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+            .FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
                 Password = Fabrica.ClaveFirma,
                 FirmaPngBase64 = FirmaPngValida
@@ -680,7 +651,7 @@ public class BackendPhaseThreeFirmaTests
             Respuesta = "Si"
         });
         await ControladorDe(escenario, escenario.Tecnico)
-            .FirmarInspeccion(inspeccion.IdInspeccion, new FirmarInspeccionDto
+            .FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
                 Password = Fabrica.ClaveFirma,
                 FirmaPngBase64 = FirmaPngValida

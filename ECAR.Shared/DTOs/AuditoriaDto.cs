@@ -70,4 +70,13 @@ public class VerificacionAuditoriaDto
     public long? PrimeraFilaRota { get; set; }
 
     public DateTime VerificadoEn { get; set; }
+
+    /// <summary>
+    /// Ancla contra truncados: la última fila revisada y su hash, solo si la cadena es válida. El
+    /// auditor los guarda fuera de la base (informe, PDF) y en la próxima verificación los envía
+    /// como anclaFila/anclaHash: si esa fila ya no está o cambió, la auditoría fue truncada o alterada.
+    /// </summary>
+    public long? UltimaFila { get; set; }
+
+    public string? UltimoHash { get; set; }
 }
