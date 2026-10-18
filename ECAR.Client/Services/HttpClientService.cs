@@ -799,11 +799,13 @@ public class HttpClientService
         return bytes == null ? null : $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
     }
 
-    // Consulta pública: es la que se abre al escanear el QR, sin sesión iniciada.
+    // Consulta pública: es la que se abre al escanear el QR, con o sin sesión iniciada. Sin
+    // sesión el API devuelve solo nombre, código y ubicación; con sesión, la ficha completa.
     public async Task<ApiResponse<ConsultaQrDto>?> GetEquipoByQrAsync(string token)
     {
         try
         {
+            await AddAuthorizationHeaderAsync();
             var response = await _httpClient.GetAsync($"api/equipos/qr/{Uri.EscapeDataString(token)}");
             var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ConsultaQrDto>>();
             return apiResponse;
@@ -1689,6 +1691,10 @@ public class HttpClientService
     /// <summary>Sustituye a DeleteEvidenciaAsync: la foto se marca como retirada y el archivo se conserva.</summary>
     public Task<ApiResponse<EvidenciaDto>> RetirarEvidenciaAsync(long id, string motivo) =>
         EnviarAsync<EvidenciaDto>(HttpMethod.Post, $"api/evidencias/{id}/retirar", new MotivoDto { Motivo = motivo });
+
+    /// <summary>Indicadores de la portada (SRS §6 "Dashboard"); nunca devuelve null.</summary>
+    public Task<ApiResponse<DashboardDto>> GetDashboardAsync() =>
+        EnviarAsync<DashboardDto>(HttpMethod.Get, "api/dashboard");
 
     public Task<ApiResponse<IntegridadInspeccionDto>> VerificarIntegridadInspeccionAsync(long id) =>
         EnviarAsync<IntegridadInspeccionDto>(HttpMethod.Get, $"api/inspecciones/{id}/integridad");

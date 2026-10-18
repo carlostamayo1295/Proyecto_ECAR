@@ -28,6 +28,8 @@ public class HallazgosController : ControllerBase
     public const string MensajeAnularPorEstado = "Para anular un hallazgo use POST api/hallazgos/{id}/anular";
     public const string MensajeAccionCorrectivaRequerida = "La acción correctiva es obligatoria para cerrar el hallazgo";
     public const string MensajeMotivoRequerido = "El motivo es requerido y debe tener entre 10 y 500 caracteres";
+    public const string MensajeDescripcionNovedad =
+        "La descripción de un hallazgo generado por una novedad no se edita: viene de la inspección firmada";
     public const string MensajeConcurrencia = "El hallazgo cambió mientras se procesaba la solicitud; vuelva a cargarlo";
 
     public HallazgosController(ECARDbContext context, ICurrentUser currentUser, IMotivoCambio motivoCambio)
@@ -184,6 +186,11 @@ public class HallazgosController : ControllerBase
             return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(MensajeInspeccionAnulada));
         }
 
+        if (!Criticidades.EsValida(createDto.Criticidad))
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(Criticidades.Mensaje));
+        }
+
         var errorAsignacion = await ValidarAsignacionAsync(createDto.IdUsuarioResponsable, createDto.FechaCompromiso);
         if (errorAsignacion != null)
         {
@@ -217,7 +224,8 @@ public class HallazgosController : ControllerBase
     /// responsable y la fecha de compromiso: cada campo se cambia solo si viene en el cuerpo. Un
     /// hallazgo Cerrado o Anulado no admite modificaciones (409). El estado no se cambia aquí:
     /// si llega distinto del actual se rechaza (400); igual al actual se ignora, porque el
-    /// formulario de edición lo envía siempre.
+    /// formulario de edición lo envía siempre. Toda modificación exige motivo (§3.4), y la
+    /// descripción de un hallazgo de origen Novedad no se cambia: es la de la inspección firmada.
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Roles = "Administrador,Técnico")]
@@ -244,6 +252,25 @@ public class HallazgosController : ControllerBase
             return Conflict(ApiResponse<HallazgoDto>.ErrorResponse(MensajeEstadoFinal));
         }
 
+        // El formulario reenvía la descripción aunque no cambie: solo se rechaza si es distinta.
+        if (hallazgo.Origen == HallazgoOrigenes.Novedad
+            && !string.IsNullOrWhiteSpace(updateDto.Descripcion)
+            && updateDto.Descripcion.Trim() != hallazgo.Descripcion)
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(MensajeDescripcionNovedad));
+        }
+
+        if (!Criticidades.EsValida(updateDto.Criticidad))
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(Criticidades.Mensaje));
+        }
+
+        var motivo = updateDto.Motivo?.Trim();
+        if (modificaAlgo && (motivo == null || motivo.Length is < MotivoDto.LongitudMinima or > MotivoDto.LongitudMaxima))
+        {
+            return BadRequest(ApiResponse<HallazgoDto>.ErrorResponse(MensajeMotivoRequerido));
+        }
+
         // La asignación se valida antes de tocar nada, para no dejar la edición a medias.
         if (updateDto.IdUsuarioResponsable.HasValue || updateDto.FechaCompromiso.HasValue)
         {
@@ -261,12 +288,12 @@ public class HallazgosController : ControllerBase
         }
 
         if (!string.IsNullOrWhiteSpace(updateDto.Descripcion))
-            hallazgo.Descripcion = updateDto.Descripcion;
+            hallazgo.Descripcion = updateDto.Descripcion.Trim();
 
         if (updateDto.Criticidad != null)
-            hallazgo.Criticidad = updateDto.Criticidad;
+            hallazgo.Criticidad = string.IsNullOrWhiteSpace(updateDto.Criticidad) ? null : updateDto.Criticidad.Trim();
 
-        _motivoCambio.Establecer(updateDto.Motivo);
+        _motivoCambio.Establecer(motivo);
 
         try
         {

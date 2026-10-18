@@ -1,57 +1,180 @@
 ﻿@page "/"
 @inject NavigationManager NavigationManager
+@inject AuthService AuthService
+@inject HttpClientService HttpClientService
 
+@using ECAR.Client.Services
+@using ECAR.Shared
+@using ECAR.Shared.DTOs
 @using MudBlazor
 
+@*
+  Portada. Sin sesión: bienvenida y acceso al login. Con sesión: el tablero de indicadores del
+  SRS §6 (equipos, inspecciones y hallazgos), calculado por GET api/dashboard.
+*@
 <MudContainer MaxWidth="MaxWidth.Large" Class="home-container">
-    <MudCard Class="welcome-card">
-        <MudCardContent>
-            <MudText Typo="Typo.h3" Class="welcome-title">Bienvenido al Sistema de Auditoría de Equipos</MudText>
-            <MudText Typo="Typo.body1" Class="welcome-subtitle">Sistema de gestión de equipos e inspecciones para Laboratorios ECAR S.A.</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="login-button" OnClick="GoToLogin">
-                Iniciar Sesión
-            </MudButton>
-        </MudCardContent>
-    </MudCard>
+    @if (cargando)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+    }
+    else if (!autenticado)
+    {
+        <MudCard Class="welcome-card">
+            <MudCardContent>
+                <MudText Typo="Typo.h3" Class="welcome-title">Bienvenido al Sistema de Auditoría de Equipos</MudText>
+                <MudText Typo="Typo.body1" Class="welcome-subtitle">Sistema de gestión de equipos e inspecciones para Laboratorios ECAR S.A.</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="login-button" OnClick="GoToLogin">
+                    Iniciar Sesión
+                </MudButton>
+            </MudCardContent>
+        </MudCard>
 
-    <MudGrid Spacing="6" Class="features-grid">
-        <MudItem xs="12" sm="6" md="4">
-            <MudCard Class="feature-card">
-                <MudCardContent>
-                    <MudIcon Icon="@Icons.Material.Filled.Devices" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
-                    <MudText Typo="Typo.h5" Class="feature-title">Equipos</MudText>
-                    <MudText Typo="Typo.body2" Class="feature-description">Gestión completa del inventario de equipos y sus ubicaciones.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
+        <MudGrid Spacing="6" Class="features-grid">
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Class="feature-card">
+                    <MudCardContent>
+                        <MudIcon Icon="@Icons.Material.Filled.Devices" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
+                        <MudText Typo="Typo.h5" Class="feature-title">Equipos</MudText>
+                        <MudText Typo="Typo.body2" Class="feature-description">Gestión completa del inventario de equipos y sus ubicaciones.</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
 
-        <MudItem xs="12" sm="6" md="4">
-            <MudCard Class="feature-card">
-                <MudCardContent>
-                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" Class="feature-icon" />
-                    <MudText Typo="Typo.h5" Class="feature-title">Inspecciones</MudText>
-                    <MudText Typo="Typo.body2" Class="feature-description">Programación y ejecución de inspecciones periódicas de equipos.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Class="feature-card">
+                    <MudCardContent>
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" Class="feature-icon" />
+                        <MudText Typo="Typo.h5" Class="feature-title">Inspecciones</MudText>
+                        <MudText Typo="Typo.body2" Class="feature-description">Programación y ejecución de inspecciones periódicas de equipos.</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
 
-        <MudItem xs="12" sm="6" md="4">
-            <MudCard Class="feature-card">
-                <MudCardContent>
-                    <MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
-                    <MudText Typo="Typo.h5" Class="feature-title">Reportes</MudText>
-                    <MudText Typo="Typo.body2" Class="feature-description">Generación de reportes de cumplimiento y auditoría regulatoria.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-    </MudGrid>
-
-    <div class="api-link">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="https://localhost:7296/scalar/v1" Target="_blank" Class="api-button">
-            <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
-            Probar API con Scalar
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Class="feature-card">
+                    <MudCardContent>
+                        <MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
+                        <MudText Typo="Typo.h5" Class="feature-title">Reportes</MudText>
+                        <MudText Typo="Typo.body2" Class="feature-description">Generación de reportes de cumplimiento y auditoría regulatoria.</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+    else if (tablero == null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="my-4">@mensajeError</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CargarAsync" StartIcon="@Icons.Material.Filled.Refresh">
+            Reintentar
         </MudButton>
-    </div>
+    }
+    else
+    {
+        <div class="tablero-cabecera">
+            <div>
+                <MudText Typo="Typo.h4" Class="welcome-title">Tablero</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Indicadores de @tablero.Periodo · actualizado a las @tablero.GeneradoEn.ToLocalTime().ToString("HH:mm")
+                </MudText>
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CargarAsync" StartIcon="@Icons.Material.Filled.Refresh"
+                       title="Actualizar indicadores">
+                Actualizar
+            </MudButton>
+        </div>
+
+        <MudGrid Spacing="3" Class="mb-2">
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="indicador" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Devices" Color="Color.Primary" />
+                    <div>
+                        <MudText Typo="Typo.h4">@tablero.TotalEquipos</MudText>
+                        <MudText Typo="Typo.body2">Equipos activos</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="indicador" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Color="Color.Success" />
+                    <div>
+                        <MudText Typo="Typo.h4">@tablero.InspeccionesRealizadasMes</MudText>
+                        <MudText Typo="Typo.body2">Inspecciones realizadas en @tablero.Periodo</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@tablero.InspeccionesRealizadas firmadas en total</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="indicador" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.PendingActions" Color="Color.Warning" />
+                    <div>
+                        <MudText Typo="Typo.h4">@tablero.InspeccionesPendientes</MudText>
+                        <MudText Typo="Typo.body2">Inspecciones pendientes del periodo</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            de @tablero.EquiposProgramados equipos programados · @tablero.InspeccionesEnCurso en curso
+                        </MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="indicador" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Color="Color.Error" />
+                    <div>
+                        <MudText Typo="Typo.h4">@tablero.HallazgosAbiertos</MudText>
+                        <MudText Typo="Typo.body2">Hallazgos abiertos</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@tablero.HallazgosEnProceso de ellos en proceso</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="indicador" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Verified" Color="Color.Success" />
+                    <div>
+                        <MudText Typo="Typo.h4">@tablero.HallazgosCerrados</MudText>
+                        <MudText Typo="Typo.body2">Hallazgos cerrados</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-3">Equipos por criticidad</MudText>
+                    @foreach (var fila in tablero.EquiposPorCriticidad)
+                    {
+                        <div class="barra-fila">
+                            <div class="barra-etiqueta">
+                                <MudText Typo="Typo.body2">@fila.Etiqueta</MudText>
+                                <MudText Typo="Typo.body2"><b>@fila.Cantidad</b></MudText>
+                            </div>
+                            <MudProgressLinear Color="@ColorCriticidad(fila.Etiqueta)" Value="@Porcentaje(fila.Cantidad)" Rounded="true" Size="Size.Medium"
+                                               aria-label="@($"{fila.Etiqueta}: {fila.Cantidad} equipos")" />
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-3">Equipos por área</MudText>
+                    @if (tablero.EquiposPorArea.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No hay equipos activos.</MudText>
+                    }
+                    @foreach (var fila in tablero.EquiposPorArea)
+                    {
+                        <div class="barra-fila">
+                            <div class="barra-etiqueta">
+                                <MudText Typo="Typo.body2" Class="texto-area">@fila.Etiqueta</MudText>
+                                <MudText Typo="Typo.body2"><b>@fila.Cantidad</b></MudText>
+                            </div>
+                            <MudProgressLinear Color="Color.Primary" Value="@Porcentaje(fila.Cantidad)" Rounded="true" Size="Size.Medium"
+                                               aria-label="@($"{fila.Etiqueta}: {fila.Cantidad} equipos")" />
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
 </MudContainer>
 
 <style>
@@ -131,28 +254,87 @@
     transform: translateY(-2px);
 }
 
-.api-link {
-    text-align: center;
-    margin-top: 2rem;
+.tablero-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
 }
 
-.api-button {
-    font-weight: 500;
-    background-color: #397FDE !important;
-    color: white !important;
-    border-radius: 12px !important;
-    border: none !important;
-    transition: all 0.3s ease;
+.indicador {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.25rem;
+    height: 100%;
+    background: white;
 }
 
-.api-button:hover {
-    background-color: #2A5FB8 !important;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(57, 127, 222, 0.3);
+.indicador .mud-icon-root {
+    font-size: 2.5rem;
+    flex-shrink: 0;
+}
+
+.barra-fila {
+    margin-bottom: 0.9rem;
+}
+
+.barra-etiqueta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.texto-area {
+    overflow-wrap: anywhere;
+}
+
+@@media (max-width: 600px) {
+    .home-container {
+        padding: 1rem 0.5rem;
+    }
 }
 </style>
 
 @code {
+    private bool cargando = true;
+    private bool autenticado;
+    private DashboardDto? tablero;
+    private string mensajeError = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        autenticado = await AuthService.IsAuthenticated();
+        if (autenticado)
+        {
+            await CargarAsync();
+        }
+
+        cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        var respuesta = await HttpClientService.GetDashboardAsync();
+        tablero = respuesta.Success ? respuesta.Data : null;
+        mensajeError = respuesta.Message;
+    }
+
+    /// <summary>Largo de la barra: proporción sobre el total de equipos activos.</summary>
+    private double Porcentaje(int cantidad) =>
+        tablero is { TotalEquipos: > 0 } t ? 100.0 * cantidad / t.TotalEquipos : 0;
+
+    private static Color ColorCriticidad(string criticidad) => criticidad switch
+    {
+        Criticidades.Alta => Color.Error,
+        Criticidades.Media => Color.Warning,
+        Criticidades.Baja => Color.Success,
+        _ => Color.Default
+    };
+
     private void GoToLogin()
     {
         NavigationManager.NavigateTo("/login");

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 
@@ -77,64 +78,85 @@ namespace ECAR.API.Controllers
         // 1. GET: api/PreguntasChecklist/checklist/{idChecklist}
         // Listar preguntas por IdChecklist ordenadas por posición (Requerimiento Jira #1)
         [HttpGet("checklist/{idChecklist}")]
-        public async Task<ActionResult<ApiResponse<IEnumerable<PreguntaChecklist>>>> GetPreguntasPorChecklist(long idChecklist)
+        public async Task<ActionResult<ApiResponse<List<PreguntaChecklistDto>>>> GetPreguntasPorChecklist(long idChecklist)
         {
             var checklistExiste = await _context.Checklists.AnyAsync(c => c.IdChecklist == idChecklist);
             if (!checklistExiste)
             {
-                return NotFound(ApiResponse<IEnumerable<PreguntaChecklist>>.ErrorResponse("El checklist especificado no existe."));
+                return NotFound(ApiResponse<List<PreguntaChecklistDto>>.ErrorResponse("El checklist especificado no existe."));
             }
 
             var preguntas = await _context.PreguntasChecklist
+                .AsNoTracking()
                 .Where(p => p.IdChecklist == idChecklist)
                 .OrderBy(p => p.Orden)
+                .Select(p => new PreguntaChecklistDto
+                {
+                    IdPregunta = p.IdPregunta,
+                    IdChecklist = p.IdChecklist,
+                    Pregunta = p.Pregunta,
+                    TipoRespuesta = p.TipoRespuesta,
+                    Obligatoria = p.Obligatoria,
+                    Orden = p.Orden
+                })
                 .ToListAsync();
 
-            return Ok(ApiResponse<IEnumerable<PreguntaChecklist>>.SuccessResponse(preguntas));
+            return Ok(ApiResponse<List<PreguntaChecklistDto>>.SuccessResponse(preguntas));
         }
 
         // 2. POST: api/PreguntasChecklist
         // Crear pregunta con validación de existencia, orden único y roles (Requerimientos Jira #2, #3, #4, #6)
         [HttpPost]
         [Authorize(Roles = "Administrador")]
-        public async Task<ActionResult<ApiResponse<PreguntaChecklist>>> CrearPregunta([FromBody] PreguntaChecklist nuevaPregunta)
+        public async Task<ActionResult<ApiResponse<PreguntaChecklistDto>>> CrearPregunta([FromBody] CreatePreguntaChecklistDto dto)
         {
-            var checklistExiste = await _context.Checklists.AnyAsync(c => c.IdChecklist == nuevaPregunta.IdChecklist);
+            var checklistExiste = await _context.Checklists.AnyAsync(c => c.IdChecklist == dto.IdChecklist);
             if (!checklistExiste)
             {
-                return NotFound(ApiResponse<PreguntaChecklist>.ErrorResponse("El checklist al que intentas asociar la pregunta no existe."));
+                return NotFound(ApiResponse<PreguntaChecklistDto>.ErrorResponse("El checklist al que intentas asociar la pregunta no existe."));
             }
 
-            if (string.IsNullOrWhiteSpace(nuevaPregunta.Pregunta) || string.IsNullOrWhiteSpace(nuevaPregunta.TipoRespuesta))
+            if (ValidarContenido(dto.Pregunta, dto.TipoRespuesta) is { } error)
             {
-                return BadRequest(ApiResponse<PreguntaChecklist>.ErrorResponse("El texto de la pregunta y el tipo de respuesta son obligatorios."));
+                return BadRequest(ApiResponse<PreguntaChecklistDto>.ErrorResponse(error));
+            }
+
+            if (await ChecklistUsadoAsync(dto.IdChecklist))
+            {
+                return Conflict(ApiResponse<PreguntaChecklistDto>.ErrorResponse(MensajeChecklistUsado));
             }
 
             // El orden lo asigna el servidor: siempre al final del checklist
             var ultimoOrden = await _context.PreguntasChecklist
-                .Where(p => p.IdChecklist == nuevaPregunta.IdChecklist)
+                .Where(p => p.IdChecklist == dto.IdChecklist)
                 .Select(p => (int?)p.Orden)
                 .MaxAsync();
 
-            nuevaPregunta.Orden = (ultimoOrden ?? 0) + 1;
-            nuevaPregunta.Checklist = null;
+            var nuevaPregunta = new PreguntaChecklist
+            {
+                IdChecklist = dto.IdChecklist,
+                Pregunta = dto.Pregunta.Trim(),
+                TipoRespuesta = dto.TipoRespuesta.Trim(),
+                Obligatoria = dto.Obligatoria,
+                Orden = (ultimoOrden ?? 0) + 1
+            };
 
             _context.PreguntasChecklist.Add(nuevaPregunta);
             await _context.SaveChangesAsync();
 
-            return Ok(ApiResponse<PreguntaChecklist>.SuccessResponse(nuevaPregunta, "Pregunta creada exitosamente"));
+            return Ok(ApiResponse<PreguntaChecklistDto>.SuccessResponse(MapToDto(nuevaPregunta), "Pregunta creada exitosamente"));
         }
 
         // 3. PUT: api/PreguntasChecklist/{id}
         // Editar pregunta bloqueando modificación si ya fue usada en inspecciones (Requerimientos Jira #2, #4, #5, #6)
         [HttpPut("{id}")]
         [Authorize(Roles = "Administrador")]
-        public async Task<ActionResult<ApiResponse<PreguntaChecklist>>> EditarPregunta(long id, [FromBody] PreguntaChecklist preguntaDto)
+        public async Task<ActionResult<ApiResponse<PreguntaChecklistDto>>> EditarPregunta(long id, [FromBody] UpdatePreguntaChecklistDto dto)
         {
             var preguntaExistente = await _context.PreguntasChecklist.FindAsync(id);
             if (preguntaExistente == null)
             {
-                return NotFound(ApiResponse<PreguntaChecklist>.ErrorResponse("La pregunta especificada no existe."));
+                return NotFound(ApiResponse<PreguntaChecklistDto>.ErrorResponse("La pregunta especificada no existe."));
             }
 
             var yaUsadaEnInspeccion = await _context.RespuestasInspeccion
@@ -142,22 +164,22 @@ namespace ECAR.API.Controllers
 
             if (yaUsadaEnInspeccion)
             {
-                return Conflict(ApiResponse<PreguntaChecklist>.ErrorResponse("No se puede editar la pregunta porque ya fue respondida en una inspección histórica."));
+                return Conflict(ApiResponse<PreguntaChecklistDto>.ErrorResponse("No se puede editar la pregunta porque ya fue respondida en una inspección histórica."));
             }
 
-            if (string.IsNullOrWhiteSpace(preguntaDto.Pregunta) || string.IsNullOrWhiteSpace(preguntaDto.TipoRespuesta))
+            if (ValidarContenido(dto.Pregunta, dto.TipoRespuesta) is { } error)
             {
-                return BadRequest(ApiResponse<PreguntaChecklist>.ErrorResponse("El texto de la pregunta y el tipo de respuesta son obligatorios."));
+                return BadRequest(ApiResponse<PreguntaChecklistDto>.ErrorResponse(error));
             }
 
-            // El orden no se edita desde aquí: se conserva el que ya tiene la pregunta
-            preguntaExistente.Pregunta = preguntaDto.Pregunta;
-            preguntaExistente.TipoRespuesta = preguntaDto.TipoRespuesta;
-            preguntaExistente.Obligatoria = preguntaDto.Obligatoria;
+            // El orden y el checklist no se editan desde aquí: se conservan los que ya tiene la pregunta
+            preguntaExistente.Pregunta = dto.Pregunta.Trim();
+            preguntaExistente.TipoRespuesta = dto.TipoRespuesta.Trim();
+            preguntaExistente.Obligatoria = dto.Obligatoria;
 
             await _context.SaveChangesAsync();
 
-            return Ok(ApiResponse<PreguntaChecklist>.SuccessResponse(preguntaExistente, "Pregunta actualizada exitosamente"));
+            return Ok(ApiResponse<PreguntaChecklistDto>.SuccessResponse(MapToDto(preguntaExistente), "Pregunta actualizada exitosamente"));
         }
 
         // 4. DELETE: api/PreguntasChecklist/{id}
@@ -185,5 +207,33 @@ namespace ECAR.API.Controllers
 
             return Ok(ApiResponse<bool>.SuccessResponse(true, "Pregunta eliminada exitosamente"));
         }
+
+        private const string MensajeChecklistUsado =
+            "Este checklist ya se usó en inspecciones. Para cambiar sus preguntas cree una versión nueva.";
+
+        private static string? ValidarContenido(string? pregunta, string? tipoRespuesta)
+        {
+            if (string.IsNullOrWhiteSpace(pregunta) || string.IsNullOrWhiteSpace(tipoRespuesta))
+            {
+                return "El texto de la pregunta y el tipo de respuesta son obligatorios.";
+            }
+
+            return TiposRespuesta.EsValido(tipoRespuesta.Trim())
+                ? null
+                : $"El tipo de respuesta '{tipoRespuesta}' no es válido. Valores permitidos: {TiposRespuesta.ValoresPermitidos}";
+        }
+
+        private Task<bool> ChecklistUsadoAsync(long idChecklist) =>
+            _context.RespuestasInspeccion.AnyAsync(r => r.Pregunta.IdChecklist == idChecklist);
+
+        private static PreguntaChecklistDto MapToDto(PreguntaChecklist p) => new()
+        {
+            IdPregunta = p.IdPregunta,
+            IdChecklist = p.IdChecklist,
+            Pregunta = p.Pregunta,
+            TipoRespuesta = p.TipoRespuesta,
+            Obligatoria = p.Obligatoria,
+            Orden = p.Orden
+        };
     }
 }

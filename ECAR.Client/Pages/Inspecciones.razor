@@ -71,7 +71,7 @@
                         <MudTd DataLabel="Resultado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                 Color="@ResultadoColor(context.Resultado)"
-                                Text="@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)" />
+                                Text="@InspeccionResultados.Texto(context.Resultado)" />
                         </MudTd>
                         <MudTd DataLabel="Firma">
                             <MudIcon Icon="@(context.TieneFirma ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"

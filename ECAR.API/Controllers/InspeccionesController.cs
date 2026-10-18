@@ -208,6 +208,11 @@ public class InspeccionesController : ControllerBase
                 "El checklist indicado no existe o no está activo"));
         }
 
+        if (!await _context.PreguntasChecklist.AnyAsync(p => p.IdChecklist == iniciarDto.IdChecklist))
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(MensajeChecklistSinPreguntas));
+        }
+
         var existente = await _context.Inspecciones
             .Where(i => i.IdEquipo == iniciarDto.IdEquipo
                 && i.IdUsuario == usuario.IdUsuario
@@ -288,12 +293,19 @@ public class InspeccionesController : ControllerBase
                 "El checklist indicado no existe o no está activo"));
         }
 
+        if (!await _context.PreguntasChecklist.AnyAsync(p => p.IdChecklist == checklist.IdChecklist))
+        {
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse(MensajeChecklistSinPreguntas));
+        }
+
+        // La fecha es la del servidor, como en iniciar (plan §8; ALCOA+ contemporáneo): la que
+        // mande el cliente se ignora, para que nadie registre una inspección con fecha pasada.
         var inspeccion = new Inspeccion
         {
             IdEquipo = createDto.IdEquipo,
             IdUsuario = usuario.IdUsuario,
             IdChecklist = checklist.IdChecklist,
-            FechaInspeccion = createDto.FechaInspeccion,
+            FechaInspeccion = DateTime.UtcNow,
             Observaciones = createDto.Observaciones,
             Estado = InspeccionEstados.EnCurso
         };
@@ -707,11 +719,20 @@ public class InspeccionesController : ControllerBase
     /// Comprueba las reglas 3 y 4 del SRS y devuelve todos los incumplimientos de una vez,
     /// para que la pantalla de firma pueda listarle al técnico qué le falta sin ir de uno en uno.
     /// </summary>
+    public const string MensajeChecklistSinPreguntas =
+        "El checklist no tiene preguntas: agréguelas antes de usarlo en una inspección";
+
     private static List<string> ValidarContenidoParaCierre(Inspeccion inspeccion)
     {
         var respuestasPorPregunta = inspeccion.Respuestas
             .ToDictionary(respuesta => respuesta.IdPregunta);
         var faltantes = new List<string>();
+
+        // Una inspección sin preguntas no registra nada: no se firma.
+        if (inspeccion.Checklist.Preguntas.Count == 0)
+        {
+            faltantes.Add(MensajeChecklistSinPreguntas);
+        }
 
         foreach (var pregunta in inspeccion.Checklist.Preguntas
             .OrderBy(pregunta => pregunta.Orden)

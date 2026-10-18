@@ -15,7 +15,7 @@
                MensajeNoAutorizado="Solo administradores y auditores pueden consultar la auditoría.">
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
-        <MudCardHeader>
+        <MudCardHeader Class="cabecera-auditoria">
             <CardHeaderContent>
                 <MudText Typo="Typo.h5">Auditoría</MudText>
                 <MudText Typo="Typo.body2">Registro inalterable de cambios, firmas, inicios de sesión y exportaciones</MudText>
@@ -267,6 +267,17 @@
 }
 
 <style>
+/* A 375 px los botones bajan debajo del título en lugar de ensanchar la página. */
+.cabecera-auditoria {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cabecera-auditoria .mud-card-header-actions {
+    margin: 0;
+    max-width: 100%;
+}
+
 .motivo-corto {
     display: inline-block;
     max-width: 260px;

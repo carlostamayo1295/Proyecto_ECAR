@@ -77,9 +77,13 @@ public class HallazgosAsignacionTests
         return new Escenario(context, admin, ana, luis, inactivo, hallazgo);
     }
 
-    private static Task<ActionResult<ApiResponse<HallazgoDto>>> AsignarAsync(Escenario e, UpdateHallazgoDto dto, long? id = null) =>
-        new HallazgosController(e.Context, new FakeCurrentUser(e.Admin.IdUsuario, "Administrador"), new MotivoCambio())
+    private static Task<ActionResult<ApiResponse<HallazgoDto>>> AsignarAsync(Escenario e, UpdateHallazgoDto dto, long? id = null)
+    {
+        // Editar un hallazgo exige motivo (§3.4, endpoint 7).
+        dto.Motivo ??= "Asignación del responsable del hallazgo";
+        return new HallazgosController(e.Context, new FakeCurrentUser(e.Admin.IdUsuario, "Administrador"), new MotivoCambio())
             .UpdateHallazgo(id ?? e.Hallazgo.IdHallazgo, dto);
+    }
 
     private static Task<Hallazgo> GuardadoAsync(Escenario e) =>
         e.Context.Hallazgos.AsNoTracking().SingleAsync(h => h.IdHallazgo == e.Hallazgo.IdHallazgo);

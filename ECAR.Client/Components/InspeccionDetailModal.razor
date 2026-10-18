@@ -21,7 +21,7 @@
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.caption">Resultado</MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                        Color="@ResultadoColor(Inspeccion.Resultado)" Text="@(string.IsNullOrEmpty(Inspeccion.Resultado) ? "Sin registrar" : Inspeccion.Resultado)" />
+                        Color="@ResultadoColor(Inspeccion.Resultado)" Text="@InspeccionResultados.Texto(Inspeccion.Resultado)" />
                 </MudItem>
                 <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Estado</MudText>

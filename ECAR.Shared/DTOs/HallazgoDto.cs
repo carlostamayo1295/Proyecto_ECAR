@@ -93,8 +93,8 @@ public class CreateHallazgoDto
 
 /// <summary>
 /// PUT /api/hallazgos/{id} (endpoint 7). En la Fase 4 el estado se cambia con
-/// POST {id}/estado y la descripción de un hallazgo de origen "Novedad" no se edita:
-/// BE-1 retira Estado y Descripcion de aquí cuando publique esos endpoints.
+/// POST {id}/estado y la descripción de un hallazgo de origen "Novedad" no se edita (400 si
+/// cambia). Motivo es obligatorio (10 a 500 caracteres) en cuanto se modifica algo.
 /// </summary>
 public class UpdateHallazgoDto
 {

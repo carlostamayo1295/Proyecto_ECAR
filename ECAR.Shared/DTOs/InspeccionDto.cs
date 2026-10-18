@@ -38,7 +38,7 @@ public class CreateInspeccionDto
     [Range(1, long.MaxValue, ErrorMessage = "El checklist es requerido")]
     public long IdChecklist { get; set; }
 
-    [Required(ErrorMessage = "La fecha de inspección es requerida")]
+    // Se conserva para compatibilidad y se ignora: la fecha la pone el servidor al crearla.
     public DateTime FechaInspeccion { get; set; }
 
     [MaxLength(50, ErrorMessage = "El resultado no puede exceder 50 caracteres")]

@@ -157,6 +157,11 @@ public class EquiposController : ControllerBase
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(MensajeFrecuencia));
         }
 
+        if (!Criticidades.EsValida(createDto.Criticidad))
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(Criticidades.Mensaje));
+        }
+
         if (createDto.IdUbicacion.HasValue &&
             !await _context.Ubicaciones.AnyAsync(u => u.IdUbicacion == createDto.IdUbicacion.Value))
         {
@@ -211,6 +216,11 @@ public class EquiposController : ControllerBase
             !FrecuenciasInspeccion.EsValida(updateDto.FrecuenciaInspeccion.Trim()))
         {
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(MensajeFrecuencia));
+        }
+
+        if (!Criticidades.EsValida(updateDto.Criticidad))
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(Criticidades.Mensaje));
         }
 
         _motivoCambio.Establecer(updateDto.Motivo);
@@ -448,8 +458,9 @@ public class EquiposController : ControllerBase
         return File(png, "image/png", $"QR-{equipo.CodigoInterno}.png");
     }
 
-    // Consulta pública: la abre quien escanea la etiqueta, sin sesión. Solo expone la ficha
-    // básica y los checklists activos; nunca datos de usuarios ni de inspecciones.
+    // Consulta pública: la abre quien escanea la etiqueta, a veces sin sesión. Sin sesión solo
+    // expone lo necesario para reconocer el equipo (nombre, código interno y ubicación) y los
+    // checklists activos; con sesión, la ficha completa. Nunca datos de usuarios ni de inspecciones.
     [HttpGet("qr/{token}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ConsultaQrDto>>> GetByQr(string token)
@@ -470,8 +481,9 @@ public class EquiposController : ControllerBase
         }
 
         // El MVP no asocia checklists a equipos ni categorías: aplican todas las versiones activas
+        // que tienen preguntas (con uno vacío no se puede inspeccionar).
         var checklists = await _context.Checklists
-            .Where(c => c.Activo)
+            .Where(c => c.Activo && c.Preguntas.Any())
             .OrderBy(c => c.Nombre)
             .Select(c => new ChecklistDto
             {
@@ -483,9 +495,20 @@ public class EquiposController : ControllerBase
             })
             .ToListAsync();
 
+        var ficha = MapToDto(equipo);
         var dto = new ConsultaQrDto
         {
-            Equipo = MapToDto(equipo),
+            Equipo = HttpContext?.User.Identity?.IsAuthenticated == true
+                ? ficha
+                : new EquipoDto
+                {
+                    IdEquipo = ficha.IdEquipo,
+                    CodigoInterno = ficha.CodigoInterno,
+                    NombreEquipo = ficha.NombreEquipo,
+                    IdUbicacion = ficha.IdUbicacion,
+                    UbicacionNombre = ficha.UbicacionNombre,
+                    Activo = ficha.Activo
+                },
             ChecklistsActivos = checklists
         };
         // El token no se devuelve en la respuesta pública

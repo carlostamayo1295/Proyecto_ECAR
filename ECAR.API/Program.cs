@@ -164,8 +164,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
+
+// Cabeceras de seguridad en todas las respuestas del API. La política de contenido estricta no se
+// aplica a la documentación (Scalar, solo en desarrollo), que necesita cargar sus scripts.
+app.Use(async (context, next) =>
+{
+    var cabeceras = context.Response.Headers;
+    cabeceras["X-Content-Type-Options"] = "nosniff";
+    cabeceras["X-Frame-Options"] = "DENY";
+    cabeceras["Referrer-Policy"] = "no-referrer";
+    if (!context.Request.Path.StartsWithSegments("/scalar") && !context.Request.Path.StartsWithSegments("/openapi"))
+    {
+        cabeceras["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    }
+
+    await next();
+});
 
 app.UseCors("AllowBlazorClient");
 

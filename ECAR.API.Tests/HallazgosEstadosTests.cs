@@ -428,7 +428,8 @@ public class HallazgosEstadosTests
         var e = await SeedAsync(HallazgoEstados.EnProceso);
 
         var action = await Como(e, "Técnico").UpdateHallazgo(e.Hallazgo.IdHallazgo,
-            new UpdateHallazgoDto { Descripcion = "Fuga de aceite en la base", Estado = HallazgoEstados.EnProceso });
+            new UpdateHallazgoDto { Descripcion = "Fuga de aceite en la base", Estado = HallazgoEstados.EnProceso,
+                Motivo = "Se precisa la descripción del hallazgo" });
 
         Assert.IsType<OkObjectResult>(action.Result);
         Assert.Equal("Fuga de aceite en la base", (await GuardadoAsync(e)).Descripcion);

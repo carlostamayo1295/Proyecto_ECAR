@@ -77,7 +77,7 @@
                             Color="@(context.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
                             Text="@(context.Estado == InspeccionEstados.Cerrada ? "Cerrada" : "En curso")" />
                     </MudTd>
-                    <MudTd DataLabel="Resultado">@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)</MudTd>
+                    <MudTd DataLabel="Resultado">@InspeccionResultados.Texto(context.Resultado)</MudTd>
                     <MudTd DataLabel="Evid. / Hall.">@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
                     <MudTd DataLabel="">
                         @if (context.Estado == InspeccionEstados.Cerrada)

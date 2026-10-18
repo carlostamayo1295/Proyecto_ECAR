@@ -34,4 +34,12 @@ public static class InspeccionResultados
     public const string ConNovedad = "ConNovedad";
 
     public static bool EsValido(string resultado) => resultado is Conforme or ConNovedad;
+
+    /// <summary>Texto para pantalla: "Con novedad" en lugar del valor interno "ConNovedad".</summary>
+    public static string Texto(string? resultado) => resultado switch
+    {
+        null or "" => "Sin registrar",
+        ConNovedad => "Con novedad",
+        _ => resultado
+    };
 }

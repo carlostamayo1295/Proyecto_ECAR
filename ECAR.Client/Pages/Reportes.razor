@@ -69,7 +69,7 @@
                                 <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ResultadoColor(context.Resultado)"
-                                        Text="@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)" />
+                                        Text="@InspeccionResultados.Texto(context.Resultado)" />
                                 </MudTd>
                                 <MudTd DataLabel="Observaciones">@(context.Observaciones ?? "—")</MudTd>
                                 <MudTd DataLabel="Inspector">@context.Inspector</MudTd>
@@ -136,7 +136,7 @@
                                 <MudTd DataLabel="Fecha">@context.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ResultadoColor(context.Resultado)"
-                                        Text="@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)" />
+                                        Text="@InspeccionResultados.Texto(context.Resultado)" />
                                 </MudTd>
                                 <MudTd DataLabel="Responsable">@context.Responsable</MudTd>
                             </RowTemplate>
@@ -190,7 +190,7 @@
                                 <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ResultadoColor(context.Resultado)"
-                                        Text="@(string.IsNullOrEmpty(context.Resultado) ? "Sin registrar" : context.Resultado)" />
+                                        Text="@InspeccionResultados.Texto(context.Resultado)" />
                                 </MudTd>
                                 <MudTd DataLabel="Observaciones">@(context.Observaciones ?? "—")</MudTd>
                             </RowTemplate>

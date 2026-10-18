@@ -33,18 +33,31 @@
                     </MudText>
                 </CardHeaderContent>
                 <CardHeaderActions>
-                    <MudChip T="string" Color="@CriticidadColor(equipo.Equipo.Criticidad)" Size="Size.Small">
-                        @(equipo.Equipo.Criticidad ?? "Sin criticidad")
-                    </MudChip>
+                    @* Sin sesión el API no envía la criticidad ni la ficha técnica. *@
+                    @if (!string.IsNullOrEmpty(equipo.Equipo.Criticidad))
+                    {
+                        <MudChip T="string" Color="@CriticidadColor(equipo.Equipo.Criticidad)" Size="Size.Small">
+                            @equipo.Equipo.Criticidad
+                        </MudChip>
+                    }
                 </CardHeaderActions>
             </MudCardHeader>
 
             <MudCardContent>
                 <MudSimpleTable Dense="true" Elevation="0">
                     <tbody>
-                        <tr><td>Marca</td><td>@equipo.Equipo.Marca</td></tr>
-                        <tr><td>Modelo</td><td>@equipo.Equipo.Modelo</td></tr>
-                        <tr><td>Categoría</td><td>@equipo.Equipo.CategoriaNombre</td></tr>
+                        @if (!string.IsNullOrEmpty(equipo.Equipo.Marca))
+                        {
+                            <tr><td>Marca</td><td>@equipo.Equipo.Marca</td></tr>
+                        }
+                        @if (!string.IsNullOrEmpty(equipo.Equipo.Modelo))
+                        {
+                            <tr><td>Modelo</td><td>@equipo.Equipo.Modelo</td></tr>
+                        }
+                        @if (!string.IsNullOrEmpty(equipo.Equipo.CategoriaNombre))
+                        {
+                            <tr><td>Categoría</td><td>@equipo.Equipo.CategoriaNombre</td></tr>
+                        }
                         <tr><td>Ubicación</td><td>@equipo.Equipo.UbicacionNombre</td></tr>
                     </tbody>
                 </MudSimpleTable>

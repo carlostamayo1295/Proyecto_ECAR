@@ -98,7 +98,7 @@ public class BackendPhaseTwoTests
         var checklist = await SeedChecklistAsync(context, "Inspección Preventiva", "1.0", preguntas: 2);
         var controller = new PreguntasChecklistController(context);
 
-        var result = await controller.CrearPregunta(new PreguntaChecklist
+        var result = await controller.CrearPregunta(new CreatePreguntaChecklistDto
         {
             IdChecklist = checklist.IdChecklist,
             Pregunta = "¿Tercera?",
@@ -107,7 +107,7 @@ public class BackendPhaseTwoTests
         });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var creada = Assert.IsType<ApiResponse<PreguntaChecklist>>(ok.Value).Data!;
+        var creada = Assert.IsType<ApiResponse<PreguntaChecklistDto>>(ok.Value).Data!;
         Assert.Equal(3, creada.Orden);
     }
 
