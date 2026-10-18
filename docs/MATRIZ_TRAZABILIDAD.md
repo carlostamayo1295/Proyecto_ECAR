@@ -1,7 +1,7 @@
 # Matriz de trazabilidad — ECAR MVP
 
-**Corte:** 16 de octubre de 2026  
-**Rama:** `fase_4_prueba` (sobre `develop` `ea2c464`)  
+**Corte:** 18 de octubre de 2026  
+**Rama:** `integracion-fase4` (`fase_4_prueba` + ramas de BE-1 y BE-3)  
 **Alcance revisado:** reglas de negocio del SRS MVP y controles técnicos de la Fase 4.
 
 Esta matriz relaciona cada requisito con su implementación y su evidencia automatizada. Un estado
@@ -16,8 +16,8 @@ que no está integrada en `develop`.
 | RN-02 | La inspección pertenece al usuario autenticado | `CurrentUser`, `InspeccionesController`, `InspeccionService` | `BackendPhaseThreeTests` | Cumple |
 | RN-03 | Obligatorias respondidas antes del cierre | `InspeccionService`, `InspeccionesController.FirmarInspeccion` | `BackendPhaseThreeFirmaTests` | Cumple |
 | RN-04 | Una novedad exige observación | `InspeccionService`, validación de firma | `BackendPhaseThreeFirmaTests.Firmar_RechazaNovedadSinObservacion` | Cumple |
-| RN-05 | Toda acción queda en auditoría | `ECARDbContext.Auditoria`, `ContextoAuditoriaHttp`, `CadenaAuditoria`, `IMotivoCambio` en cada acción con motivo | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `AuditoriaEndpointsTests` | Cumple |
-| RN-06 | Los históricos no se modifican | Inmutabilidad de cerradas y anuladas, trigger `TR_Auditoria_SoloInsercion`, sin `DELETE` de inspecciones, evidencias ni hallazgos | `BackendPhaseThreeFirmaTests`, `BorradoInspeccionTests`, `AuditoriaSqlServerTests.El_trigger_impide_modificar_o_borrar_la_auditoria_incluso_por_SQL` | Cumple |
+| RN-05 | Toda acción queda en auditoría | `ECARDbContext.Auditoria`, `ContextoAuditoriaHttp`, `CadenaAuditoria`, `IMotivoCambio` en cada acción con motivo | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `AuditoriaConsultaTests`, `AuditoriaHistorialTests` | Cumple |
+| RN-06 | Los históricos no se modifican | Inmutabilidad de cerradas y anuladas, trigger `TR_Auditoria_SoloInsercion`, sin `DELETE` de inspecciones, evidencias ni hallazgos | `BackendPhaseThreeFirmaTests`, `BorradoInspeccionTests`, `InspeccionesAnulacionTests`, `AuditoriaSqlServerTests.El_trigger_impide_modificar_o_borrar_la_auditoria_incluso_por_SQL` | Cumple |
 | RN-07 | Un usuario puede tener varios roles | `UsuarioRol`, `UsuariosController`, claims JWT múltiples | `BackendPhaseOneTests`, `AuthServiceTests` | Cumple |
 | RN-08 | Solo Administrador modifica equipos | Autorización por rol en `EquiposController` | `BackendPhaseOneTests` | Cumple |
 | RN-09 | Fotografías desde dispositivo móvil | `EvidenciasController`, `EvidenciaStorageDisco`, cliente de evidencias | `EvidenciasControllerTests` | Cumple en código; falta prueba final en teléfono real |
@@ -27,26 +27,26 @@ que no está integrada en `develop`.
 
 | Referencia | Control técnico | Implementación o dueño | Prueba / evidencia | Estado |
 |---|---|---|---|---|
-| §11.10(a) | Validación del sistema | Esta matriz, pruebas unitarias y proyecto `ECAR.IntegrationTests` | 143 pruebas API + 11 de integración y 62 comprobaciones de punta a punta el 16/10 | Cumple; IQ/OQ/PQ en la Fase 6 |
+| §11.10(a) | Validación del sistema | Esta matriz, pruebas unitarias y proyecto `ECAR.IntegrationTests` | 346 pruebas API + 28 de integración y 67 comprobaciones de punta a punta el 18/10 | Cumple; IQ/OQ/PQ en la Fase 6 |
 | §11.10(b) | Copias legibles y electrónicas | `RegistroInspeccionPdf`, `ReportesController` (PDF/Excel), `AuditoriaController.Exportar` | `ReportesFase4Tests`, `AuditoriaEndpointsTests.Exportar_*` | Cumple |
-| §11.10(c) | Conservación sin borrado físico | Anular inspecciones y hallazgos, retirar evidencias; `DELETE` retirados (405) | `BorradoInspeccionTests`, `HallazgosFase4Tests`, `EvidenciasControllerTests.Retirar_*` | Cumple |
-| §11.10(d) | Acceso limitado y revocación inmediata | JWT por roles; claim `ecar_sello`; `SelloSeguridad.ValidarTokenAsync` | `SelloSeguridadTests`, `SeguridadCuentasTests.Con_una_contrasena_temporal_solo_se_puede_usar_api_auth` | Cumple |
-| §11.10(e) | Auditoría automática, segura e inmutable | `ECARDbContext.Auditoria`, hashes encadenados, trigger; consulta, historial y verificación por API | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `MigracionFase4Tests`, `AuditoriaEndpointsTests.Verificar_detecta_una_fila_alterada` | Cumple |
-| §11.10(f) | Secuencia operativa controlada | EnCurso → Cerrada/Anulada; Abierto → EnProceso → Cerrado → (Admin) Abierto | `BackendPhaseThreeFirmaTests`, `HallazgosFase4Tests.Abierto_a_Cerrado_sin_pasar_por_EnProceso_es_409` | Cumple |
-| §11.10(g) | Comprobación de autoridad | Roles y propiedad; reabrir, anular, restablecer y desbloquear solo el Administrador | `HallazgosFase4Tests.Reabrir_es_solo_del_Administrador`, `SeguridadCuentasTests` | Cumple |
+| §11.10(c) | Conservación sin borrado físico | Anular inspecciones y hallazgos, retirar evidencias; `DELETE` retirados (405) | `BorradoInspeccionTests`, `HallazgosModeloTests.Ninguna_ruta_borra_inspecciones_hallazgos_ni_evidencias`, `InspeccionesSqlServerTests`, `EvidenciasControllerTests.Retirar_*` | Cumple |
+| §11.10(d) | Acceso limitado y revocación inmediata | JWT por roles; claim `ecar_sello`; `SelloSeguridad.ValidarTokenAsync` | `SelloSeguridadTests`, `SeguridadCuentasTests.ConPasswordPendiente_SoloSePermiteCambiarla`, `SeguridadCuentasTests.Desactivar_InvalidaLasSesionesAnteriores` | Cumple |
+| §11.10(e) | Auditoría automática, segura e inmutable | `ECARDbContext.Auditoria`, hashes encadenados, trigger; consulta, historial y verificación por API | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `MigracionFase4Tests`, `AuditoriaVerificacionTests.UnaFilaAlterada_SeDetectaYSeIndicaCual`, `AuditoriaVerificacionSqlServerTests` | Cumple |
+| §11.10(f) | Secuencia operativa controlada | EnCurso → Cerrada/Anulada; Abierto → EnProceso → Cerrado → (Admin) Abierto | `BackendPhaseThreeFirmaTests`, `HallazgosEstadosTests.Matriz_SoloPermiteLasCincoTransicionesAcordadas` | Cumple |
+| §11.10(g) | Comprobación de autoridad | Roles y propiedad; reabrir, anular, restablecer y desbloquear solo el Administrador | `HallazgosEstadosTests.Reabrir_ElAdministradorConMotivo_LimpiaElCierreYConservaLaAccion`, `InspeccionesAnulacionTests.Anular_UnTecnicoQueNoEsElInspector_Devuelve403`, `IntegracionFase4Tests.Verificar_la_integridad_es_solo_de_Administrador_y_Auditor`, `SeguridadCuentasTests` | Cumple |
 | §11.10(h) | Origen de los datos | `ContextoAuditoriaHttp`: usuario, IP y agente; validación binaria de imágenes | `SelloSeguridadTests`, `AuditoriaSqlServerTests.Cada_cambio_queda_en_la_auditoria_con_su_cadena` | Cumple |
 | §11.10(i) | Personal capacitado | Procedimiento y capacitación de ECAR | No corresponde únicamente al software | Fuera de código |
 | §11.10(j) | Responsabilidad por firma | Declaración legal antes de firmar y manifestación visible | `PasoFirma.TextoLegal`, revisión en pantalla 16/10 | Cumple en el sistema; falta el SOP de ECAR |
 | §11.10(k) | Control de documentación | Git, PR, este archivo y `CHANGELOG.md` | Revisión de repositorio | Cumple desde este corte |
-| §11.50 | Nombre, fecha y significado de la firma | `FirmaNombre`, `FirmaSignificado` guardados al firmar; pantalla, impresión y PDF con zona horaria | `SeguridadCuentasTests.Firmar_guarda_la_manifestacion_*` | Cumple |
-| §11.70 | Firma vinculada al registro | HMAC-SHA256 con `Firma:ClaveHmac` fuera de la base; `GET …/integridad` | `BackendPhaseThreeFirmaTests.Hash_*`, `FirmaSqlServerTests` | Cumple |
-| §11.100(a) | Firma única por persona | Cuentas únicas; correo y usuario AD fijos tras firmar | `SeguridadCuentasTests.Editar_un_usuario_*` | Cumple |
+| §11.50 | Nombre, fecha y significado de la firma | `FirmaNombre`, `FirmaSignificado` guardados al firmar; pantalla, impresión y PDF con zona horaria | `FirmaIntegridadTests.Firmar_GuardaNombreFechaSignificadoYAlgoritmo` | Cumple |
+| §11.70 | Firma vinculada al registro | HMAC-SHA256 con `Firma:ClaveHmac` fuera de la base, sobre el contenido, la manifestación y la huella de cada foto vigente; `GET …/integridad` | `FirmaIntegridadTests.Integridad_*`, `IntegracionFase4Tests.La_huella_no_incluye_las_evidencias_retiradas`, `FirmaSqlServerTests` | Cumple |
+| §11.100(a) | Firma única por persona | Cuentas únicas; correo y usuario AD fijos tras firmar | `IntegracionFase4Tests.Editar_un_usuario_no_fija_contrasenas_ni_cambia_el_correo_de_quien_firmo` | Cumple |
 | §11.100(b) | Identidad verificada antes de habilitar firma | Alta de usuario atribuible y auditada | `AuditoriaTransaccionalTests` | Control técnico parcial; requiere procedimiento ECAR |
-| §11.200(a) | Reautenticación al firmar | Contraseña en cada firma (400 errónea, 423 bloqueada); restablecer ≠ fijar | `SeguridadCuentasTests.Firmar_*`, `SeguridadCuentasTests.Restablecer_*` | Cumple |
+| §11.200(a) | Reautenticación al firmar | Contraseña en cada firma (400 errónea, 423 bloqueada); restablecer ≠ fijar | `FirmaIntegridadTests.Firmar_*`, `SeguridadCuentasTests.Restablecer_*`, `IntegracionFase4Tests.Restablecer_no_da_contrasena_local_a_una_cuenta_solo_de_Active_Directory` | Cumple |
 | §11.300(a) | Identificación y contraseña únicas | Índices únicos de correo/usuario AD, BCrypt | Pruebas de Fase 1 | Cumple |
-| §11.300(b) | Caducidad e historial de contraseña | 90 días, últimas 5, mínimo 10 con letras y números; cambio obligatorio | `SeguridadCuentasTests.Cambiar_la_contrasena_*`, `…caducada_*` | Cumple |
+| §11.300(b) | Caducidad e historial de contraseña | 90 días, últimas 5, mínimo 10 con letras y números; cambio obligatorio | `SeguridadCuentasTests.CambiarPassword_*`, `SeguridadCuentasTests.PasswordCaducada_ObligaACambiarla` | Cumple |
 | §11.300(c) | Revocar credenciales | `SecurityStamp` cambia al desactivar o cambiar contraseña | `SelloSeguridadTests`, `AuditoriaSqlServerTests.Desactivar_un_usuario_renueva_su_sello_en_la_base` | Cumple |
-| §11.300(d) | Detectar intentos no autorizados | 5 fallos → bloqueo de 30 min (423), eventos de acceso, aviso en Usuarios | `SeguridadCuentasTests.Cinco_intentos_*` | Cumple |
+| §11.300(d) | Detectar intentos no autorizados | 5 fallos → bloqueo de 30 min (423), eventos de acceso, aviso en Usuarios | `SeguridadCuentasTests.CincoIntentosFallidos_BloqueanLaCuentaYDevuelven423` | Cumple |
 | §11.300(e) | Dispositivos de autenticación | No se usan tarjetas ni tokens físicos en el MVP | Decisión de alcance | No aplica |
 
 ## Evidencia de verificación del corte

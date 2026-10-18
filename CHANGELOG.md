@@ -10,6 +10,18 @@ horaria de Colombia.
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.
 - Revisión de integración backend con estado de ECAR-209 a ECAR-216.
 
+### Integrado (rama `integracion-fase4`, 18/10/2026)
+
+- Entran las ramas de BE-1 (`feature/anulacion-inspecciones-auditoria-Juandavid`) y BE-3
+  (`seguridad-de-cuentas-y-firma-verificable`); su código sustituye al de `fase_4_prueba` en hallazgos,
+  anulación, auditoría, cuentas y firma.
+- Control de concurrencia (`RowVersion`) en inspecciones y hallazgos, hallazgo ligado a su respuesta y
+  FK sin borrado en cascada (4 migraciones del 17/10).
+- La huella HMAC incluye el SHA-256 de cada foto vigente; el API no arranca sin `Firma:ClaveHmac`.
+- Ajustes al contrato: sin `DELETE` (405), cerrar un hallazgo exige pasar por EnProceso, el responsable
+  debe ser Técnico o Administrador, integridad solo para Administrador y Auditor, `PUT /api/usuarios`
+  sin contraseña, correo fijo tras firmar y la fecha de la Fase 3 leída de SQL Server como UTC.
+
 ### Añadido (rama `fase_4_prueba`, 16/10/2026)
 
 - **Hallazgos (ECAR-211/212):** endpoints 4 a 9 con filtros, detalle con origen, alta manual,
