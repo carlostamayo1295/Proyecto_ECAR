@@ -114,3 +114,6 @@ secret.json
 
 # Fotografías de evidencias subidas en local (Evidencias:RutaBase). Nunca se versionan.
 EvidenciasStorageLocal/
+
+# Contexto local de Claude Code. No se versiona.
+CLAUDE.md
