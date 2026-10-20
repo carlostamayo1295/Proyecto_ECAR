@@ -47,7 +47,7 @@
             }
             else if (inspecciones != null && inspecciones.Any())
             {
-                <MudTable Items="inspecciones" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="inspecciones" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Md">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Equipo</MudTh>
@@ -59,7 +59,7 @@
                         <MudTh>Evidencias</MudTh>
                         <MudTh>Novedades totales</MudTh>
                         <MudTh>Novedades pendientes</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="ID">@context.IdInspeccion</MudTd>
@@ -92,7 +92,7 @@
                                 <span>0</span>
                             }
                         </MudTd>
-                        <MudTd DataLabel="Acciones" Class="acciones-inspeccion">
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             @if (context.Estado == InspeccionEstados.EnCurso && puedeEjecutar)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
@@ -320,15 +320,5 @@
 .action-button:hover {
     box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
     transform: translateY(-1px) !important;
-}
-
-/* En el teléfono la tabla se apila y cada celda es una fila flex: sin el salto de línea los
-   cuatro botones ocupan unos 400 px seguidos y ensanchan toda la página (y los modales). */
-@@media (max-width: 599.98px) {
-    .acciones-inspeccion {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 4px;
-    }
 }
 </style>

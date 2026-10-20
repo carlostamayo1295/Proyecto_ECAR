@@ -99,7 +99,7 @@
             }
             else if (registros.Count > 0)
             {
-                <MudTable Items="registros" Hover="true" Striped="true" Elevation="0" Dense="true">
+                <MudTable Items="registros" Hover="true" Striped="true" Elevation="0" Dense="true" Breakpoint="Breakpoint.Md">
                     <HeaderContent>
                         <MudTh>Fecha y hora</MudTh>
                         <MudTh>Tabla</MudTh>
@@ -107,7 +107,7 @@
                         <MudTh>Acción</MudTh>
                         <MudTh>Usuario</MudTh>
                         <MudTh>Motivo</MudTh>
-                        <MudTh></MudTh>
+                        <MudTh Class="col-acciones"></MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Fecha y hora" Style="white-space: nowrap;">@FormatoAuditoria.FechaHora(context.FechaHora)</MudTd>
@@ -121,7 +121,7 @@
                         <MudTd DataLabel="Motivo">
                             <span class="motivo-corto" title="@context.Motivo">@(string.IsNullOrWhiteSpace(context.Motivo) ? "—" : context.Motivo)</span>
                         </MudTd>
-                        <MudTd DataLabel="">
+                        <MudTd DataLabel="" Class="col-acciones">
                             <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => VerDetalleAsync(context)">
                                 Ver

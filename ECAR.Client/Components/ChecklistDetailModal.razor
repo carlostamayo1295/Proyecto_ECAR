@@ -1,4 +1,4 @@
-<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
+<MudDialog Options="Opciones">
     <TitleContent>
         <MudText Typo="Typo.h6">@Checklist?.Nombre</MudText>
     </TitleContent>
@@ -56,6 +56,12 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    // MudBlazor 9 solo aplica las Options de <MudDialog> a los diálogos en línea: abierto con
+    // DialogService salía con el ancho pequeño (600 px). Se aplican al abrirse.
+    private static readonly DialogOptions Opciones = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    protected override Task OnInitializedAsync() => MudDialog.SetOptionsAsync(Opciones);
 
     [Parameter]
     public ChecklistDto? Checklist { get; set; }

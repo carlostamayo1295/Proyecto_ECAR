@@ -49,7 +49,7 @@
             }
             else if (preguntas != null && preguntas.Any())
             {
-                <MudTable Items="preguntas" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="preguntas" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Checklist</MudTh>
@@ -57,15 +57,15 @@
                         <MudTh>Pregunta</MudTh>
                         <MudTh>Tipo de respuesta</MudTh>
                         <MudTh>Obligatoria</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdPregunta.ToString()</MudTd>
-                        <MudTd>@context.IdChecklist.ToString()</MudTd>
-                        <MudTd>@context.Orden.ToString()</MudTd>
-                        <MudTd>@context.Pregunta</MudTd>
-                        <MudTd>@TiposRespuesta.Etiqueta(context.TipoRespuesta)</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdPregunta.ToString()</MudTd>
+                        <MudTd DataLabel="Checklist">@context.IdChecklist.ToString()</MudTd>
+                        <MudTd DataLabel="Orden">@context.Orden.ToString()</MudTd>
+                        <MudTd DataLabel="Pregunta">@context.Pregunta</MudTd>
+                        <MudTd DataLabel="Tipo de respuesta">@TiposRespuesta.Etiqueta(context.TipoRespuesta)</MudTd>
+                        <MudTd DataLabel="Obligatoria">
                             @if (context.Obligatoria)
                             {
                                 <MudChip T="string" Color="Color.Error" Size="Size.Small">Obligatoria</MudChip>
@@ -75,7 +75,7 @@
                                 <MudChip T="string" Color="Color.Default" Size="Size.Small">Opcional</MudChip>
                             }
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                        StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar

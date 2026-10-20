@@ -30,20 +30,20 @@
             }
             else if (ubicaciones != null && ubicaciones.Any())
             {
-                <MudTable Items="ubicaciones" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="ubicaciones" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Planta</MudTh>
                         <MudTh>Área</MudTh>
                         <MudTh>Descripción</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdUbicacion.ToString()</MudTd>
-                        <MudTd>@context.Planta</MudTd>
-                        <MudTd>@context.Area</MudTd>
-                        <MudTd>@context.Descripcion</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdUbicacion.ToString()</MudTd>
+                        <MudTd DataLabel="Planta">@context.Planta</MudTd>
+                        <MudTd DataLabel="Área">@context.Area</MudTd>
+                        <MudTd DataLabel="Descripción">@context.Descripcion</MudTd>
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar

@@ -34,7 +34,7 @@
             }
             else if (checklists != null && checklists.Any())
             {
-                <MudTable Items="checklists" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="checklists" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Nombre</MudTh>
@@ -42,19 +42,19 @@
                         <MudTh>Preguntas</MudTh>
                         <MudTh>Fecha Creación</MudTh>
                         <MudTh>Estado</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdChecklist.ToString()</MudTd>
-                        <MudTd>@context.Nombre</MudTd>
-                        <MudTd>@context.Version</MudTd>
-                        <MudTd>@context.Preguntas.Count</MudTd>
-                        <MudTd>@context.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdChecklist.ToString()</MudTd>
+                        <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                        <MudTd DataLabel="Versión">@context.Version</MudTd>
+                        <MudTd DataLabel="Preguntas">@context.Preguntas.Count</MudTd>
+                        <MudTd DataLabel="Fecha Creación">@context.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                        <MudTd DataLabel="Estado">
                             <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)"
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
                                 Ver

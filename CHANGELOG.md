@@ -28,6 +28,16 @@ horaria de Colombia.
 - Sello de la inspección `HMACSHA256-v2` (sin el resultado); las firmadas con `HMACSHA256-v1` se siguen verificando.
 - Tablero: novedades pendientes y resueltas; reportes y cumplimiento cuentan como firmadas las que tienen novedades pendientes.
 - Inspecciones, su detalle y la ficha del equipo: columnas separadas de evidencias, novedades totales y novedades pendientes.
+- **Pantallas responsive** (20/10/2026): entre 600 y 1550 px las tablas no cabían junto al menú y los botones
+  quedaban fuera de la vista a la derecha.
+  - Las tablas anchas (inspecciones, novedades, equipos, usuarios, auditoría y la ficha del equipo) se apilan hasta
+    1280 px y las demás hasta 960 px (`Breakpoint`).
+  - Por encima, la columna de los botones (`Class="col-acciones"`, reglas en `wwwroot/styles/theme.css`) queda fija
+    a la derecha y las demás se desplazan por debajo; apilada, los botones bajan de línea.
+  - Las celdas que no lo tenían llevan `DataLabel`.
+  - Los diálogos anchos (ficha del equipo, detalle y edición de inspecciones, checklists, versiones y detalle de
+    auditoría) salían todos con 600 px: MudBlazor 9 solo aplica las `Options` de `<MudDialog>` a los diálogos en
+    línea. Ahora las aplican al abrirse (`SetOptionsAsync`). En el teléfono, todos los diálogos usan casi todo el ancho.
 
 ### Añadido
 

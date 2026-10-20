@@ -1,7 +1,7 @@
 @* Detalle de una fila de auditoría: quién, cuándo, desde dónde, por qué, qué cambió y, si la
    fila es de un registro (no un evento de "Sistema"), todo su historial. *@
 
-<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true }">
+<MudDialog Options="Opciones">
     <DialogContent>
         @if (Registro != null)
         {
@@ -78,6 +78,12 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    // MudBlazor 9 solo aplica las Options de <MudDialog> a los diálogos en línea: abierto con
+    // DialogService salía con el ancho pequeño (600 px). Se aplican al abrirse.
+    private static readonly DialogOptions Opciones = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+
+    protected override Task OnInitializedAsync() => MudDialog.SetOptionsAsync(Opciones);
 
     [Parameter]
     public AuditoriaDto? Registro { get; set; }

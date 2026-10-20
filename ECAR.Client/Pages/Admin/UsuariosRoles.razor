@@ -37,22 +37,22 @@
             }
             else if (asignaciones != null && asignaciones.Any())
             {
-                <MudTable Items="asignaciones" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="asignaciones" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Usuario</MudTh>
                         <MudTh>Correo</MudTh>
                         <MudTh>Rol</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.Id.ToString()</MudTd>
-                        <MudTd>@context.UsuarioNombre</MudTd>
-                        <MudTd>@context.UsuarioCorreo</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.Id.ToString()</MudTd>
+                        <MudTd DataLabel="Usuario">@context.UsuarioNombre</MudTd>
+                        <MudTd DataLabel="Correo">@context.UsuarioCorreo</MudTd>
+                        <MudTd DataLabel="Rol">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Text="@context.RolNombre" />
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                 Editar

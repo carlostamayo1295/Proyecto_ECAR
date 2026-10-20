@@ -38,7 +38,7 @@
                         fallidos en esta lista. Se desbloquean solas pasado el tiempo de bloqueo o con «Desbloquear».
                     </MudAlert>
                 }
-                <MudTable Items="usuarios" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="usuarios" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Md">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Nombre</MudTh>
@@ -46,14 +46,14 @@
                         <MudTh>Usuario AD</MudTh>
                         <MudTh>Roles</MudTh>
                         <MudTh>Estado</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdUsuario.ToString()</MudTd>
-                        <MudTd>@context.Nombre</MudTd>
-                        <MudTd>@context.Correo</MudTd>
-                        <MudTd>@(context.UsuarioAD ?? "-")</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdUsuario.ToString()</MudTd>
+                        <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                        <MudTd DataLabel="Correo">@context.Correo</MudTd>
+                        <MudTd DataLabel="Usuario AD">@(context.UsuarioAD ?? "-")</MudTd>
+                        <MudTd DataLabel="Roles">
                             @if (context.Roles != null && context.Roles.Any())
                             {
                                 @string.Join(", ", context.Roles)
@@ -63,7 +63,7 @@
                                 <MudText Typo="Typo.caption">Sin roles</MudText>
                             }
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Estado">
                             <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)" 
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
                             @if (EstaBloqueado(context))
@@ -77,8 +77,8 @@
                                     Text="Contraseña temporal" title="Debe cambiarla al entrar" />
                             }
                         </MudTd>
-                        <MudTd>
-                            <div class="d-flex flex-wrap gap-1">
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
+                            <div class="d-flex flex-wrap justify-end gap-1">
                                 <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" 
                                     StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
                                     Editar

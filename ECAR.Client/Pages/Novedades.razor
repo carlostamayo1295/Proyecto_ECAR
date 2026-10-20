@@ -82,7 +82,7 @@
                 }
                 else if (novedades != null && novedades.Any())
                 {
-                    <MudTable Items="novedades" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
+                    <MudTable Items="novedades" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Md">
                         <HeaderContent>
                             <MudTh>ID</MudTh>
                             <MudTh>Equipo</MudTh>
@@ -92,7 +92,7 @@
                             <MudTh>Reportada</MudTh>
                             <MudTh>Estado</MudTh>
                             <MudTh>Correo</MudTh>
-                            <MudTh>Acciones</MudTh>
+                            <MudTh Class="col-acciones">Acciones</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="ID">@context.IdNovedad</MudTd>
@@ -123,8 +123,8 @@
                                          Color="@(context.FechaNotificacion.HasValue ? Color.Success : Color.Default)" Size="Size.Small"
                                          title="@(context.FechaNotificacion is { } enviado ? $"Enviado el {FormatoEstados.HoraColombia(enviado)}" : "Sin enviar")" />
                             </MudTd>
-                            <MudTd DataLabel="Acciones">
-                                <div class="d-flex flex-wrap gap-1">
+                            <MudTd DataLabel="Acciones" Class="col-acciones">
+                                <div class="d-flex flex-wrap justify-end gap-1">
                                     <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
                                                StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => AbrirDetalleAsync(context.IdNovedad, false)">
                                         Ver

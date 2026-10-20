@@ -5,7 +5,7 @@
 @* Ficha técnica y consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Es de solo
    lectura y la pueden abrir Administrador, Técnico y Auditor. El historial sale de
    GET /api/inspecciones?idEquipo=: el API aplica sus reglas, así que un Técnico ve solo las suyas. *@
-<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true }">
+<MudDialog Options="Opciones">
     <TitleContent>
         <MudText Typo="Typo.h6">@Equipo.CodigoInterno · @Equipo.NombreEquipo</MudText>
     </TitleContent>
@@ -56,7 +56,7 @@
         }
         else
         {
-            <MudTable Items="inspecciones" Dense="true" Hover="true" Striped="true" Elevation="0">
+            <MudTable Items="inspecciones" Dense="true" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Md">
                 <HeaderContent>
                     <MudTh>ID</MudTh>
                     <MudTh>Fecha</MudTh>
@@ -67,7 +67,7 @@
                     <MudTh>Evidencias</MudTh>
                     <MudTh>Novedades totales</MudTh>
                     <MudTh>Novedades pendientes</MudTh>
-                    <MudTh></MudTh>
+                    <MudTh Class="col-acciones"></MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="ID">@context.IdInspeccion</MudTd>
@@ -83,7 +83,7 @@
                     <MudTd DataLabel="Evidencias">@context.TotalEvidencias</MudTd>
                     <MudTd DataLabel="Novedades totales">@context.TotalNovedades</MudTd>
                     <MudTd DataLabel="Novedades pendientes">@context.NovedadesPendientes</MudTd>
-                    <MudTd DataLabel="">
+                    <MudTd DataLabel="" Class="col-acciones">
                         @if (InspeccionEstados.EstaFirmada(context.Estado))
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
@@ -129,6 +129,10 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
+    // MudBlazor 9 solo aplica las Options de <MudDialog> a los diálogos en línea: abierto con
+    // DialogService salía con el ancho pequeño (600 px). Se aplican al abrirse.
+    private static readonly DialogOptions Opciones = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
+
     [Parameter, EditorRequired]
     public EquipoDto Equipo { get; set; } = null!;
 
@@ -146,6 +150,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await MudDialog.SetOptionsAsync(Opciones);
         var roles = await AuthorizationService.GetUserRolesAsync();
         puedeVerAuditoria = roles.Contains("Administrador") || roles.Contains("Auditor");
         await CargarHistorialAsync();

@@ -82,7 +82,7 @@
                 }
                 else
                 {
-                    <MudTable Items="evidencias" Hover="true" Striped="true" Elevation="0">
+                    <MudTable Items="evidencias" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh>ID</MudTh>
                             <MudTh>Vista previa</MudTh>
@@ -91,7 +91,7 @@
                             <MudTh>Inspección</MudTh>
                             <MudTh>Subido por</MudTh>
                             <MudTh>Fecha de carga</MudTh>
-                            <MudTh>Acciones</MudTh>
+                            <MudTh Class="col-acciones">Acciones</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="ID">@context.IdEvidencia</MudTd>
@@ -117,7 +117,7 @@
                             <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
                             <MudTd DataLabel="Subido por">@context.UsuarioCarga</MudTd>
                             <MudTd DataLabel="Fecha de carga">@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
-                            <MudTd DataLabel="Acciones">
+                            <MudTd DataLabel="Acciones" Class="col-acciones">
                                 @if (context.Retirada)
                                 {
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"

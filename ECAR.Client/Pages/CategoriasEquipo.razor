@@ -33,18 +33,18 @@
             }
             else if (categorias != null && categorias.Any())
             {
-                <MudTable Items="categorias" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="categorias" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Nombre</MudTh>
                         <MudTh>Descripción</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.IdCategoria.ToString()</MudTd>
-                        <MudTd>@context.Nombre</MudTd>
-                        <MudTd>@(context.Descripcion ?? "-")</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="ID">@context.IdCategoria.ToString()</MudTd>
+                        <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                        <MudTd DataLabel="Descripción">@(context.Descripcion ?? "-")</MudTd>
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             @if (esAdmin)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"

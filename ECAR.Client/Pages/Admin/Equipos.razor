@@ -73,7 +73,7 @@
             }
             else if (equipos != null && equipos.Any())
             {
-                <MudTable Items="equipos" Hover="true" Striped="true" Elevation="0">
+                <MudTable Items="equipos" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Md">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>Código Interno</MudTh>
@@ -83,7 +83,7 @@
                         <MudTh>Ubicación</MudTh>
                         <MudTh>Criticidad</MudTh>
                         <MudTh>Estado</MudTh>
-                        <MudTh>Acciones</MudTh>
+                        <MudTh Class="col-acciones">Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="ID">@context.IdEquipo.ToString()</MudTd>
@@ -107,7 +107,7 @@
                             <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)"
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
                         </MudTd>
-                        <MudTd DataLabel="Acciones" Class="acciones-equipo">
+                        <MudTd DataLabel="Acciones" Class="col-acciones">
                             <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
                                 StartIcon="@Icons.Material.Filled.Description" OnClick="() => OpenFichaDialog(context)" Class="action-button">
                                 Ficha
@@ -380,14 +380,5 @@
 .action-button:hover {
     box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
     transform: translateY(-1px) !important;
-}
-
-/* En el teléfono la tabla se apila: que los botones bajen de línea en vez de ensanchar la página. */
-@@media (max-width: 599.98px) {
-    .acciones-equipo {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 4px;
-    }
 }
 </style>

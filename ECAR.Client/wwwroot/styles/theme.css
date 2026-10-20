@@ -99,3 +99,74 @@ body {
 .sidebar {
     background-color: var(--primary-dark) !important;
 }
+
+/* Tablas con botones (MudTable): la columna de los botones lleva Class="col-acciones" en su MudTh
+   y en su MudTd. Mientras se ve como tabla, esa columna queda fija a la derecha: si las demás no
+   caben, se desplazan por debajo y los botones siguen a la vista. Cuando la tabla se apila (por
+   debajo del Breakpoint de cada MudTable: Xs ≤600, Sm ≤960, Md ≤1280 px), la celda vuelve a su
+   sitio y los botones bajan de línea en vez de ensanchar la página. */
+.mud-table-container .col-acciones {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: var(--mud-palette-surface);
+    box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.3);
+}
+
+.mud-table-striped .mud-table-container tbody tr:nth-of-type(odd) > .col-acciones {
+    background-image: linear-gradient(var(--mud-palette-table-striped), var(--mud-palette-table-striped));
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .mud-table-hover .mud-table-container tbody tr:hover > .col-acciones {
+        background-image: linear-gradient(var(--mud-palette-table-hover), var(--mud-palette-table-hover));
+    }
+}
+
+/* Cada botón en una sola línea: la columna toma el ancho del botón más largo y no parte «Ver resultado». */
+td.col-acciones .mud-button-root {
+    margin: 2px;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .mud-xs-table .mud-table-container .col-acciones {
+        position: static;
+        box-shadow: none;
+        background: none !important;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+    }
+}
+
+@media (max-width: 960px) {
+    .mud-sm-table .mud-table-container .col-acciones {
+        position: static;
+        box-shadow: none;
+        background: none !important;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+    }
+}
+
+@media (max-width: 1280px) {
+    .mud-md-table .mud-table-container .col-acciones {
+        position: static;
+        box-shadow: none;
+        background: none !important;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+    }
+}
+
+/* En el teléfono todos los diálogos usan casi todo el ancho: con FullWidth, MudBlazor les deja
+   32 px de margen a cada lado, y en 375 px eso es la sexta parte de la pantalla. */
+@media (max-width: 600px) {
+    .mud-dialog-container .mud-dialog {
+        width: calc(100% - 16px);
+        max-width: calc(100% - 16px) !important;
+    }
+}
