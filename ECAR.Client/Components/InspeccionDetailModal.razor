@@ -21,13 +21,12 @@
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.caption">Resultado</MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                        Color="@ResultadoColor(Inspeccion.Resultado)" Text="@InspeccionResultados.Texto(Inspeccion.Resultado)" />
+                        Color="@FormatoEstados.ColorResultado(Inspeccion.Resultado)" Text="@InspeccionResultados.Texto(Inspeccion.Resultado)" />
                 </MudItem>
                 <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Estado</MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                        Color="@(Inspeccion.Estado switch { InspeccionEstados.Cerrada => Color.Success, InspeccionEstados.Anulada => Color.Default, _ => Color.Warning })"
-                        Text="@(Inspeccion.Estado == InspeccionEstados.EnCurso ? "En curso" : Inspeccion.Estado)" />
+                        Color="@FormatoEstados.ColorInspeccion(Inspeccion.Estado)" Text="@InspeccionEstados.Texto(Inspeccion.Estado)" />
                 </MudItem>
                 @if (Inspeccion.Estado == InspeccionEstados.Anulada)
                 {
@@ -42,8 +41,14 @@
                     <MudText Typo="Typo.body1">@Inspeccion.TotalEvidencias</MudText>
                 </MudItem>
                 <MudItem xs="6" sm="4">
-                    <MudText Typo="Typo.caption">Hallazgos</MudText>
-                    <MudText Typo="Typo.body1">@Inspeccion.TotalHallazgos</MudText>
+                    <MudText Typo="Typo.caption">Novedades</MudText>
+                    <MudText Typo="Typo.body1">
+                        @Inspeccion.TotalNovedades
+                        @if (Inspeccion.NovedadesPendientes > 0)
+                        {
+                            <span class="mud-error-text">(@Inspeccion.NovedadesPendientes pendiente(s))</span>
+                        }
+                    </MudText>
                 </MudItem>
             </MudGrid>
 
@@ -80,14 +85,6 @@
     {
         MudDialog.Close(DialogResult.Ok(true));
     }
-
-    private static Color ResultadoColor(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
-    {
-        // Conforme / ConNovedad los calcula el servidor al firmar; los otros dos son de la Fase 1-2.
-        "conforme" or "satisfactoria" => Color.Success,
-        "connovedad" or "con novedad" => Color.Warning,
-        _ => Color.Default
-    };
 }
 
 <style>

@@ -1,4 +1,5 @@
 using ECAR.API.Services;
+using ECAR.API.Services.Notificaciones;
 using ECAR.Infrastructure.Data;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -121,6 +122,18 @@ builder.Services.AddOptions<ECAR.API.Configuration.FirmaOptions>()
     .ValidateOnStart();
 builder.Services.AddSingleton<PoliticaPasswords>();
 builder.Services.AddScoped<VerificadorIntegridad>();
+
+// Correo de cada novedad a la mesa de ayuda (SRS v1.1, regla 4). Firmar solo deja las novedades en
+// la cola; un servicio en segundo plano las envía, así que un correo caído no detiene ni revierte
+// la firma. Sin Correo:Usuario y Correo:Password (user-secrets) los mensajes se guardan como .eml
+// en Correo:CarpetaSalida y la novedad queda "sin enviar" para reenviarla después.
+builder.Services.AddOptions<ECAR.API.Configuration.CorreoOptions>()
+    .Bind(builder.Configuration.GetSection(ECAR.API.Configuration.CorreoOptions.SectionName));
+builder.Services.AddSingleton<ColaNotificaciones>();
+builder.Services.AddSingleton<INotificadorNovedades>(servicios => servicios.GetRequiredService<ColaNotificaciones>());
+builder.Services.AddSingleton<IEnviadorCorreo, EnviadorCorreoSmtp>();
+builder.Services.AddScoped<NotificacionNovedades>();
+builder.Services.AddHostedService<EnvioNotificacionesService>();
 
 // Configurar almacenamiento de evidencias
 builder.Services.Configure<ECAR.API.Configuration.EvidenciasOptions>(builder.Configuration.GetSection("Evidencias"));

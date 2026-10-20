@@ -69,41 +69,43 @@ namespace ECAR.API.Services
         public IQueryable<EquipoNovedadFilaDto> EquiposNovedades(ReporteFiltroDto filtro)
         {
             var (inicio, fin) = HoraColombia.RangoUtc(filtro.Desde, filtro.Hasta);
-            var query = _context.Hallazgos.AsNoTracking()
-                .Where(h => h.FechaRegistro >= inicio!.Value && h.FechaRegistro < fin!.Value);
+            var query = _context.Novedades.AsNoTracking()
+                .Where(n => n.FechaRegistro >= inicio!.Value && n.FechaRegistro < fin!.Value);
 
             if (!string.IsNullOrWhiteSpace(filtro.Estado))
-                query = query.Where(h => h.Estado == filtro.Estado);
+                query = query.Where(n => n.Estado == filtro.Estado);
             if (!string.IsNullOrWhiteSpace(filtro.Criticidad))
-                query = query.Where(h => h.Criticidad == filtro.Criticidad);
+                query = query.Where(n => n.Criticidad == filtro.Criticidad);
             if (filtro.IdEquipo.HasValue)
-                query = query.Where(h => h.Inspeccion.IdEquipo == filtro.IdEquipo.Value);
+                query = query.Where(n => n.Inspeccion.IdEquipo == filtro.IdEquipo.Value);
             if (!string.IsNullOrWhiteSpace(filtro.Planta))
-                query = query.Where(h => h.Inspeccion.Equipo.Ubicacion != null && h.Inspeccion.Equipo.Ubicacion.Planta == filtro.Planta);
+                query = query.Where(n => n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Planta == filtro.Planta);
             if (!string.IsNullOrWhiteSpace(filtro.Area))
-                query = query.Where(h => h.Inspeccion.Equipo.Ubicacion != null && h.Inspeccion.Equipo.Ubicacion.Area == filtro.Area);
+                query = query.Where(n => n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Area == filtro.Area);
 
+            // "Responsable" (SRS §7) es quien firmó la resolución; vacío mientras está pendiente.
             return query
-                .OrderBy(h => h.FechaRegistro).ThenBy(h => h.IdHallazgo)
-                .Select(h => new EquipoNovedadFilaDto
+                .OrderBy(n => n.FechaRegistro).ThenBy(n => n.IdNovedad)
+                .Select(n => new EquipoNovedadFilaDto
                 {
-                    IdHallazgo = h.IdHallazgo,
-                    Equipo = h.Inspeccion.Equipo.CodigoInterno + " - " + h.Inspeccion.Equipo.NombreEquipo,
-                    Area = h.Inspeccion.Equipo.Ubicacion != null
-                        ? h.Inspeccion.Equipo.Ubicacion.Planta + " - " + h.Inspeccion.Equipo.Ubicacion.Area
+                    IdNovedad = n.IdNovedad,
+                    Equipo = n.Inspeccion.Equipo.CodigoInterno + " - " + n.Inspeccion.Equipo.NombreEquipo,
+                    Area = n.Inspeccion.Equipo.Ubicacion != null
+                        ? n.Inspeccion.Equipo.Ubicacion.Planta + " - " + n.Inspeccion.Equipo.Ubicacion.Area
                         : null,
-                    Hallazgo = h.Descripcion,
-                    Criticidad = h.Criticidad,
-                    Fecha = h.FechaRegistro,
-                    Responsable = h.UsuarioResponsable != null ? h.UsuarioResponsable.Nombre : null,
-                    Estado = h.Estado
+                    Novedad = n.Descripcion,
+                    Criticidad = n.Criticidad,
+                    Fecha = n.FechaRegistro,
+                    Responsable = n.UsuarioResolucion != null ? n.UsuarioResolucion.Nombre : null,
+                    Estado = n.Estado
                 });
         }
 
         /// <summary>
         /// Cumplimiento por mes y por planta/área (pendiente de confirmar la definición con ECAR):
         /// programados = equipos activos con FrecuenciaInspeccion que ya existían en el periodo;
-        /// inspeccionados = cuántos de ellos tienen al menos una inspección firmada en el periodo.
+        /// inspeccionados = cuántos de ellos tienen al menos una inspección firmada en el periodo
+        /// (cerrada o con novedades pendientes).
         /// Los de frecuencia Trimestral se programan una vez por trimestre, en el primer mes del
         /// trimestre que cae en el rango, y cuenta cualquier inspección de ese trimestre.
         /// Un equipo sin frecuencia no entra.
@@ -134,7 +136,7 @@ namespace ECAR.API.Services
             var idsEquipos = equipos.Select(e => e.IdEquipo).ToList();
 
             var inspecciones = await _context.Inspecciones.AsNoTracking()
-                .Where(i => i.Estado == InspeccionEstados.Cerrada &&
+                .Where(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes) &&
                             i.FechaInspeccion >= inicio!.Value && i.FechaInspeccion < fin!.Value &&
                             idsEquipos.Contains(i.IdEquipo))
                 .Select(i => new { i.IdEquipo, i.FechaInspeccion })
@@ -214,7 +216,9 @@ namespace ECAR.API.Services
                     Area = g.Key.Area,
                     TotalInspecciones = g.Count(),
                     Satisfactorias = g.Count(i => i.Resultado == InspeccionResultados.Conforme),
-                    ConNovedad = g.Count(i => i.Resultado == InspeccionResultados.ConNovedad)
+                    // Una con novedades pendientes también encontró novedad, aunque no se haya resuelto.
+                    ConNovedad = g.Count(i => i.Resultado == InspeccionResultados.ConNovedad ||
+                                              i.Resultado == InspeccionResultados.Pendiente)
                 })
                 .ToListAsync();
 
@@ -232,12 +236,15 @@ namespace ECAR.API.Services
 
         private const string SinUbicacion = "Sin ubicación";
 
-        /// <summary>Inspecciones firmadas del rango con los filtros comunes de los historiales.</summary>
+        /// <summary>
+        /// Inspecciones firmadas del rango (cerradas o con novedades pendientes) con los filtros
+        /// comunes de los historiales.
+        /// </summary>
         private IQueryable<Inspeccion> Cerradas(ReporteFiltroDto filtro)
         {
             var (inicio, fin) = HoraColombia.RangoUtc(filtro.Desde, filtro.Hasta);
             var query = _context.Inspecciones.AsNoTracking()
-                .Where(i => i.Estado == InspeccionEstados.Cerrada &&
+                .Where(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes) &&
                             i.FechaInspeccion >= inicio!.Value && i.FechaInspeccion < fin!.Value);
 
             if (filtro.IdEquipo.HasValue)

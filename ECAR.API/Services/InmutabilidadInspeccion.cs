@@ -13,7 +13,7 @@ public enum EstadoEscritura
     /// <summary>La inspección admite escrituras.</summary>
     EnCurso,
 
-    /// <summary>La inspección está cerrada: responder 409 (regla 6 del SRS).</summary>
+    /// <summary>La inspección está firmada (cerrada o con novedades pendientes): responder 409 (regla 6 del SRS).</summary>
     Cerrada,
 
     /// <summary>La inspección está anulada: responder 409; conserva sus datos tal como estaban (§3.6).</summary>
@@ -35,11 +35,12 @@ public static class InmutabilidadInspeccion
 
     /// <summary>
     /// El mensaje del 409 si la inspección en <paramref name="estado"/> ya no admite cambios
-    /// (Cerrada o Anulada), o null si sigue en curso.
+    /// (firmada o anulada), o null si sigue en curso. Una con novedades pendientes ya está firmada:
+    /// lo que falta se hace en sus novedades, no en la inspección.
     /// </summary>
     public static string? MensajeSiNoAdmiteCambios(string estado) => estado switch
     {
-        InspeccionEstados.Cerrada => MensajeCerrada,
+        InspeccionEstados.Cerrada or InspeccionEstados.NovedadesPendientes => MensajeCerrada,
         InspeccionEstados.Anulada => MensajeAnulada,
         _ => null
     };
@@ -57,7 +58,7 @@ public static class InmutabilidadInspeccion
         return estado switch
         {
             null => EstadoEscritura.NoExiste,
-            InspeccionEstados.Cerrada => EstadoEscritura.Cerrada,
+            InspeccionEstados.Cerrada or InspeccionEstados.NovedadesPendientes => EstadoEscritura.Cerrada,
             InspeccionEstados.Anulada => EstadoEscritura.Anulada,
             _ => EstadoEscritura.EnCurso
         };

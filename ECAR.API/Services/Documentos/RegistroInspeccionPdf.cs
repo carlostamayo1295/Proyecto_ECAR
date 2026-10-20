@@ -6,13 +6,14 @@ using MigraDoc.DocumentObjectModel.Tables;
 namespace ECAR.API.Services.Documentos;
 
 /// <summary>
-/// Copia legible y completa de una inspección cerrada (endpoint 14, Parte 11 §11.10(b) y §11.50):
+/// Copia legible y completa de una inspección firmada (endpoint 14, Parte 11 §11.10(b) y §11.50):
 /// cabecera, respuestas con las novedades resaltadas, miniaturas de las evidencias vigentes, la
-/// firma con su manifestación (nombre, fecha y hora con zona, significado), el algoritmo y la huella.
+/// firma con su manifestación (nombre, fecha y hora con zona, significado), el algoritmo y la huella,
+/// y el estado de cada novedad con la manifestación de la firma que la resolvió.
 /// </summary>
 public static class RegistroInspeccionPdf
 {
-    /// <param name="inspeccion">Con Equipo.Ubicacion, Usuario, Checklist.Preguntas, Respuestas y Evidencias.</param>
+    /// <param name="inspeccion">Con Equipo.Ubicacion, Usuario, Checklist.Preguntas, Respuestas, Evidencias y Novedades.</param>
     /// <param name="imagenes">Bytes de cada evidencia vigente por IdEvidencia; las que no se pudieron leer, ausentes.</param>
     public static byte[] Generar(Inspeccion inspeccion, IReadOnlyDictionary<long, byte[]> imagenes,
         string generadoPor, DateTime generadoUtc)
@@ -34,6 +35,7 @@ public static class RegistroInspeccionPdf
 
         Evidencias(seccion, inspeccion, imagenes);
         Firma(seccion, inspeccion);
+        Novedades(seccion, inspeccion);
 
         return ExportadorTabla.Renderizar(documento);
     }
@@ -50,8 +52,8 @@ public static class RegistroInspeccionPdf
             ("Inspector", inspeccion.Usuario.Nombre),
             ("Inicio", $"{HoraColombia.Texto(inspeccion.FechaInspeccion)} ({HoraColombia.Zona})"),
             ("Cierre", inspeccion.FechaCierre is { } cierre ? $"{HoraColombia.Texto(cierre)} ({HoraColombia.Zona})" : "—"),
-            ("Estado", inspeccion.Estado),
-            ("Resultado", inspeccion.Resultado == InspeccionResultados.ConNovedad ? "Con novedad" : inspeccion.Resultado ?? "—")
+            ("Estado", InspeccionEstados.Texto(inspeccion.Estado)),
+            ("Resultado", inspeccion.Resultado == null ? "—" : InspeccionResultados.Texto(inspeccion.Resultado))
         };
 
         var tabla = seccion.AddTable();
@@ -156,6 +158,38 @@ public static class RegistroInspeccionPdf
             var pie = celda.AddParagraph($"{evidencia.NombreOriginal} · {HoraColombia.Texto(evidencia.FechaCarga)}");
             pie.Format.Font.Size = 7;
             pie.Format.SpaceAfter = Unit.FromPoint(6);
+        }
+    }
+
+    /// <summary>Cada novedad con su estado; la resuelta, con lo que se hizo y la manifestación de su firma.</summary>
+    private static void Novedades(Section seccion, Inspeccion inspeccion)
+    {
+        if (inspeccion.Novedades.Count == 0)
+        {
+            return;
+        }
+
+        Titulo(seccion, $"Novedades ({inspeccion.Novedades.Count})");
+        foreach (var novedad in inspeccion.Novedades.OrderBy(n => n.IdNovedad))
+        {
+            var parrafo = seccion.AddParagraph();
+            parrafo.Format.SpaceAfter = Unit.FromPoint(4);
+            parrafo.AddFormattedText($"Novedad #{novedad.IdNovedad} — {novedad.Estado}. ", TextFormat.Bold);
+            parrafo.AddText(novedad.Descripcion);
+            if (novedad.Estado == NovedadEstados.Resuelta && novedad.FechaResolucion is { } resuelta)
+            {
+                var resolucion = seccion.AddParagraph();
+                resolucion.Format.LeftIndent = Unit.FromCentimeter(0.5);
+                resolucion.Format.Font.Size = 8.5;
+                resolucion.AddText($"Lo que se hizo: {novedad.Solucion}. Firmado electrónicamente por {novedad.FirmaNombre} " +
+                                   $"el {HoraColombia.Texto(resuelta)} ({HoraColombia.Zona}). Significado: {novedad.FirmaSignificado}.");
+            }
+            else if (novedad.Estado == NovedadEstados.Anulada)
+            {
+                var anulacion = seccion.AddParagraph($"Anulada. Motivo: {novedad.MotivoAnulacion}");
+                anulacion.Format.LeftIndent = Unit.FromCentimeter(0.5);
+                anulacion.Format.Font.Size = 8.5;
+            }
         }
     }
 

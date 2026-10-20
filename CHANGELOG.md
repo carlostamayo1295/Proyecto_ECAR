@@ -5,6 +5,24 @@ horaria de Colombia.
 
 ## [Sin publicar] — Fase 4
 
+### Cambiado (rama `Prueba_nuevo_novedades`, 19/10/2026)
+
+- **Los hallazgos pasan a ser novedades.** La tabla `Novedades` reemplaza a `Hallazgos` (la migración
+  `NovedadesReemplazanHallazgos` borra `Hallazgos` sin pasar sus datos: la base es de prueba). El API pasa de
+  `api/hallazgos` a `api/novedades` y la pantalla, de `/hallazgos` a `/novedades` (la ruta anterior sigue abriendo la nueva).
+- Al firmar una inspección se crea una novedad **Pendiente** por cada «No». Con novedades, la inspección queda
+  firmada e inmutable, pero en estado **Novedades pendientes** y con resultado **Pendiente**; al resolverse (o
+  anularse) la última, pasa sola a **Cerrada** con resultado **Con novedad**.
+- Una novedad se **resuelve con firma**, como una inspección: lo que se hizo (10 a 2000 caracteres), la firma
+  dibujada y la contraseña. La resuelve cualquier Técnico o Administrador, aunque no haya hecho la inspección.
+  Solo el Administrador la anula, con motivo. No hay alta manual, edición, responsable ni reapertura.
+- **Correo a la mesa de ayuda** por cada novedad (`Correo:Destinatarios`), en segundo plano: si el correo falla,
+  la firma no se revierte; queda en la auditoría (`NotificacionEnviada` / `NotificacionFallida`) y el Administrador
+  puede reenviarlo. Sin `Correo:Usuario` y `Correo:Password` (user-secrets) el mensaje se guarda como `.eml` en
+  `Correo:CarpetaSalida` y no sale.
+- Sello de la inspección `HMACSHA256-v2` (sin el resultado); las firmadas con `HMACSHA256-v1` se siguen verificando.
+- Tablero: novedades pendientes y resueltas; reportes y cumplimiento cuentan como firmadas las que tienen novedades pendientes.
+
 ### Añadido
 
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.

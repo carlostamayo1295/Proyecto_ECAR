@@ -34,6 +34,7 @@
                     <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined" Clearable="true"
                         ValueChanged="OnEstadoChanged">
                         <MudSelectItem T="string" Value="@InspeccionEstados.EnCurso">En curso</MudSelectItem>
+                        <MudSelectItem T="string" Value="@InspeccionEstados.NovedadesPendientes">Novedades pendientes</MudSelectItem>
                         <MudSelectItem T="string" Value="@InspeccionEstados.Cerrada">Cerrada</MudSelectItem>
                         <MudSelectItem T="string" Value="@InspeccionEstados.Anulada">Anulada</MudSelectItem>
                     </MudSelect>
@@ -55,7 +56,7 @@
                         <MudTh>Estado</MudTh>
                         <MudTh>Resultado</MudTh>
                         <MudTh>Firma</MudTh>
-                        <MudTh>Evid. / Hall.</MudTh>
+                        <MudTh>Evid. / Nov.</MudTh>
                         <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
@@ -65,19 +66,25 @@
                         <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                         <MudTd DataLabel="Estado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                Color="@EstadoColor(context.Estado)" Text="@EstadoTexto(context.Estado)"
+                                Color="@FormatoEstados.ColorInspeccion(context.Estado)" Text="@InspeccionEstados.Texto(context.Estado)"
                                 title="@(context.Estado == InspeccionEstados.Anulada ? $"Anulada: {context.MotivoAnulacion}" : null)" />
                         </MudTd>
                         <MudTd DataLabel="Resultado">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                Color="@ResultadoColor(context.Resultado)"
+                                Color="@FormatoEstados.ColorResultado(context.Resultado)"
                                 Text="@InspeccionResultados.Texto(context.Resultado)" />
                         </MudTd>
                         <MudTd DataLabel="Firma">
                             <MudIcon Icon="@(context.TieneFirma ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
                                 Color="@(context.TieneFirma ? Color.Success : Color.Default)" Size="Size.Small" />
                         </MudTd>
-                        <MudTd DataLabel="Evid. / Hall.">@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
+                        <MudTd DataLabel="Evid. / Nov.">
+                            @context.TotalEvidencias / @context.TotalNovedades
+                            @if (context.NovedadesPendientes > 0)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@context.NovedadesPendientes pendiente(s)</MudText>
+                            }
+                        </MudTd>
                         <MudTd DataLabel="Acciones" Class="acciones-inspeccion">
                             @if (context.Estado == InspeccionEstados.EnCurso && puedeEjecutar)
                             {
@@ -86,11 +93,18 @@
                                     Continuar
                                 </MudButton>
                             }
-                            else if (context.Estado == InspeccionEstados.Cerrada)
+                            else if (InspeccionEstados.EstaFirmada(context.Estado))
                             {
                                 <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.Assignment" OnClick="() => VerResultado(context)" Class="action-button">
                                     Ver resultado
+                                </MudButton>
+                            }
+                            @if (context.TotalNovedades > 0)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                    StartIcon="@Icons.Material.Filled.ReportProblem" Href="@($"/novedades?inspeccion={context.IdInspeccion}")" Class="action-button">
+                                    Novedades
                                 </MudButton>
                             }
                             <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
@@ -286,26 +300,6 @@
         }
     }
 
-    private static Color EstadoColor(string estado) => estado switch
-    {
-        InspeccionEstados.Cerrada => Color.Success,
-        InspeccionEstados.Anulada => Color.Default,
-        _ => Color.Warning
-    };
-
-    private static string EstadoTexto(string estado) => estado switch
-    {
-        InspeccionEstados.EnCurso => "En curso",
-        _ => estado
-    };
-
-    private static Color ResultadoColor(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
-    {
-        // Conforme / ConNovedad los calcula el servidor al firmar; los otros dos son de la Fase 1-2.
-        "conforme" or "satisfactoria" => Color.Success,
-        "connovedad" or "con novedad" => Color.Warning,
-        _ => Color.Default
-    };
 }
 
 <style>

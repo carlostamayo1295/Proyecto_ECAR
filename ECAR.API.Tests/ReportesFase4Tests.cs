@@ -65,7 +65,7 @@ public class ReportesFase4Tests
         {
             IdEquipo = equipo.IdEquipo, IdChecklist = checklist.IdChecklist, IdUsuario = tecnico.IdUsuario,
             FechaInspeccion = DateTime.UtcNow.AddDays(-diasAtras), Estado = estado, Resultado = resultado,
-            FechaCierre = estado == InspeccionEstados.Cerrada ? DateTime.UtcNow.AddDays(-diasAtras) : null
+            FechaCierre = InspeccionEstados.EstaFirmada(estado) ? DateTime.UtcNow.AddDays(-diasAtras) : null
         };
 
         var conNovedad = Nueva(balanza, 3, InspeccionEstados.Cerrada, InspeccionResultados.ConNovedad);
@@ -74,11 +74,13 @@ public class ReportesFase4Tests
             conNovedad,
             Nueva(balanza, 1, InspeccionEstados.EnCurso, null));
         await db.SaveChangesAsync();
-        db.Hallazgos.Add(new Hallazgo
+        // La novedad ya se resolvió: por eso la inspección está Cerrada y ConNovedad.
+        db.Novedades.Add(new Novedad
         {
-            IdInspeccion = conNovedad.IdInspeccion, Descripcion = "Plato descentrado", Criticidad = "Alta",
-            Estado = HallazgoEstados.Abierto, Origen = HallazgoOrigenes.Novedad, IdUsuarioRegistro = tecnico.IdUsuario,
-            IdUsuarioResponsable = tecnico.IdUsuario
+            IdInspeccion = conNovedad.IdInspeccion, IdPregunta = 1, IdRespuesta = 1, Descripcion = "Plato descentrado",
+            Criticidad = "Alta", Estado = NovedadEstados.Resuelta, FechaRegistro = conNovedad.FechaInspeccion,
+            IdUsuarioRegistro = tecnico.IdUsuario, IdUsuarioResolucion = tecnico.IdUsuario, Solucion = "Se centró el plato",
+            FechaResolucion = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
         return new Datos(db, balanza, bomba, sinFrecuencia, tecnico);
@@ -146,7 +148,7 @@ public class ReportesFase4Tests
         var fila = Assert.Single(filas.Data);
         Assert.Equal("BAL-1 - Balanza", fila.Equipo);
         Assert.Equal("Ana Técnica", fila.Responsable);
-        Assert.Equal(HallazgoEstados.Abierto, fila.Estado);
+        Assert.Equal(NovedadEstados.Resuelta, fila.Estado);
     }
 
     [Fact]
@@ -160,6 +162,31 @@ public class ReportesFase4Tests
         Assert.Equal(1, totales.Satisfactorias);
         Assert.Equal(1, totales.ConNovedad);
         Assert.Single(totales.PorArea);
+    }
+
+    [Fact]
+    public async Task Una_firmada_con_novedades_pendientes_cuenta_como_realizada_y_con_novedad()
+    {
+        var d = await SeedAsync();
+        d.Db.Inspecciones.Add(new Inspeccion
+        {
+            IdEquipo = d.Bomba.IdEquipo, IdChecklist = d.Db.Checklists.First().IdChecklist, IdUsuario = d.Tecnico.IdUsuario,
+            FechaInspeccion = DateTime.UtcNow, FechaCierre = DateTime.UtcNow,
+            Estado = InspeccionEstados.NovedadesPendientes, Resultado = InspeccionResultados.Pendiente
+        });
+        await d.Db.SaveChangesAsync();
+        var c = Controlador(d.Db);
+
+        var totales = Datos_<InspeccionesPorFechasDto>(await c.GetInspeccionesFechas(Mes()));
+        var cumplimiento = Datos_<PagedResultDto<CumplimientoFilaDto>>(await c.GetCumplimiento(
+            new ReporteFiltroDto { Desde = Hoy.AddDays(-Hoy.Day + 1), Hasta = Hoy })).Data;
+        var historial = Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await c.GetHistorialEquipo(
+            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipo = d.Bomba.IdEquipo }));
+
+        Assert.Equal(3, totales.TotalInspecciones);
+        Assert.Equal(2, totales.ConNovedad);
+        Assert.Equal(1, Assert.Single(cumplimiento, f => f.Area == "Producción").EquiposInspeccionados);
+        Assert.Equal(InspeccionResultados.Pendiente, Assert.Single(historial.Data).Resultado);
     }
 
     [Fact]

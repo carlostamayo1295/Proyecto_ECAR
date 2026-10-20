@@ -214,10 +214,10 @@
         }
     }
 
-    // Regla 6 del SRS: la evidencia de una inspección cerrada no se borra. El servidor ya
+    // Regla 6 del SRS: la evidencia de una inspección firmada no se borra. El servidor ya
     // responde 409; la pantalla no ofrece lo que el servidor va a rechazar.
     private static bool EsDeInspeccionCerrada(EvidenciaDto evidencia) =>
-        evidencia.EstadoInspeccion == InspeccionEstados.Cerrada;
+        InspeccionEstados.EstaFirmada(evidencia.EstadoInspeccion);
 
     private static string FormatearTamano(long bytes)
     {

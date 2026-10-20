@@ -1,0 +1,436 @@
+@* Detalle de una novedad y su resolución firmada. Resolver es firmar, como al cerrar una
+   inspección: lo que se hizo, la firma dibujada y la contraseña (ConfirmarIdentidadDialog). Lo
+   puede firmar cualquier Técnico o Administrador, aunque no haya hecho la inspección. El
+   Administrador puede anular con motivo una novedad registrada por error y reenviar su correo.
+
+   Uso:
+       await NovedadDetailModal.AbrirAsync(DialogService, idNovedad, resolver: true);
+*@
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Novedad #@IdNovedad</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (cargando && detalle == null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+        }
+        else if (detalle is { } d)
+        {
+            <MudGrid Class="mb-3">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Equipo</MudText>
+                    <MudText Typo="Typo.body1">@d.CodigoInterno - @d.NombreEquipo</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@(d.Area ?? "Sin ubicación")</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption">Inspección</MudText>
+                    <MudText Typo="Typo.body1">
+                        @if (InspeccionEstados.EstaFirmada(d.EstadoInspeccion) && PuedeVerInspeccion)
+                        {
+                            <MudLink Typo="Typo.inherit" OnClick="@(() => IrAInspeccion(d.IdInspeccion))">#@d.IdInspeccion</MudLink>
+                        }
+                        else
+                        {
+                            <span>#@d.IdInspeccion</span>
+                        }
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ml-1"
+                                 Color="@FormatoEstados.ColorInspeccion(d.EstadoInspeccion)" Text="@InspeccionEstados.Texto(d.EstadoInspeccion)" />
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@d.NombreChecklist</MudText>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Criticidad</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                             Color="@FormatoEstados.ColorCriticidad(d.Criticidad)" Text="@(d.Criticidad ?? "-")" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Estado</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                             Color="@FormatoEstados.ColorNovedad(d.Estado)" Text="@d.Estado" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption">Reportada</MudText>
+                    <MudText Typo="Typo.body2">@FormatoEstados.HoraColombia(d.FechaRegistro)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">por @(d.NombreInspector ?? "-")</MudText>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Lo que se reportó</MudText>
+            <MudPaper Elevation="0" Class="value-box pa-3">
+                <MudText Typo="Typo.body2" Style="word-break: break-word;"><b>Pregunta:</b> @(d.Pregunta ?? "-")</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">
+                    <b>Observación del inspector:</b> @(string.IsNullOrWhiteSpace(d.ObservacionRespuesta) ? "-" : d.ObservacionRespuesta)
+                </MudText>
+            </MudPaper>
+
+            <div class="d-flex flex-wrap align-center gap-2 mt-3">
+                <MudIcon Icon="@(d.FechaNotificacion.HasValue ? Icons.Material.Filled.MarkEmailRead : Icons.Material.Filled.ScheduleSend)"
+                         Color="@(d.FechaNotificacion.HasValue ? Color.Success : Color.Default)" Size="Size.Small" />
+                <MudText Typo="Typo.body2">
+                    @(d.FechaNotificacion is { } enviado
+                        ? $"Correo a la mesa de ayuda enviado el {FormatoEstados.HoraColombia(enviado)}"
+                        : "El correo a la mesa de ayuda aún no se ha enviado")
+                </MudText>
+                @if (esAdmin)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="@procesando"
+                               StartIcon="@Icons.Material.Filled.Send" OnClick="ReenviarCorreoAsync" Class="print-hidden">
+                        @(d.FechaNotificacion.HasValue ? "Reenviar" : "Enviar")
+                    </MudButton>
+                }
+            </div>
+
+            @if (d.Estado == NovedadEstados.Resuelta)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Resolución</MudText>
+                <MudPaper Elevation="0" Class="value-box pa-3">
+                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;"><b>Lo que se hizo:</b> @d.Solucion</MudText>
+                    @if (!string.IsNullOrEmpty(d.FirmaPngBase64))
+                    {
+                        <img src="data:image/png;base64,@d.FirmaPngBase64" alt="Firma de la resolución" class="firma-novedad mt-2" />
+                    }
+                    @if (d.FechaResolucion is { } resuelta)
+                    {
+                        @* Manifestación de la firma (Parte 11 §11.50): nombre, fecha y hora con zona, significado. *@
+                        <MudText Typo="Typo.caption" Class="d-block mt-1">
+                            Firmado electrónicamente por @d.FirmaNombre el @FormatoEstados.HoraColombia(resuelta)
+                            (hora de Colombia, UTC−5). Significado: @d.FirmaSignificado
+                        </MudText>
+                    }
+                    @if (puedeVerSello && !string.IsNullOrEmpty(d.FirmaHash))
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block mud-text-secondary" Style="word-break: break-all;">
+                            Sello @d.FirmaAlgoritmo: <code>@d.FirmaHash</code>
+                        </MudText>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="mt-2 print-hidden"
+                                   StartIcon="@Icons.Material.Filled.VerifiedUser" Disabled="@procesando" OnClick="VerificarIntegridadAsync">
+                            Verificar integridad
+                        </MudButton>
+                        @if (integridad != null)
+                        {
+                            <MudAlert Severity="@(integridad.Integra ? Severity.Success : Severity.Error)" Dense="true" Class="mt-2">
+                                @(integridad.Integra
+                                    ? "Integridad verificada: la resolución no ha cambiado desde que se firmó."
+                                    : "Integridad alterada: la resolución no coincide con el sello registrado al firmarla.")
+                            </MudAlert>
+                        }
+                    }
+                </MudPaper>
+            }
+
+            @if (d.Estado == NovedadEstados.Anulada)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">
+                    Anulada por @(d.NombreUsuarioAnulacion ?? "-")
+                    @(d.FechaAnulacion is { } anulada ? $"el {FormatoEstados.HoraColombia(anulada)}" : string.Empty).
+                    Motivo: @d.MotivoAnulacion
+                </MudAlert>
+            }
+
+            @if (resolviendo)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mt-4">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Resolver la novedad</MudText>
+                    <MudTextField T="string" Label="¿Qué se hizo?" @bind-Value="solucion"
+                                  Variant="Variant.Outlined" Lines="4" Immediate="true" AutoFocus="true"
+                                  MaxLength="@ResolverNovedadDto.LongitudMaximaSolucion" Counter="@ResolverNovedadDto.LongitudMaximaSolucion"
+                                  Error="@(intentoResolver && !SolucionValida)"
+                                  ErrorText="Describa qué se hizo para resolver la novedad (al menos 10 caracteres)."
+                                  HelperText="Queda en el registro firmado y no se podrá cambiar." />
+
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="my-3 text-justify">
+                        Al firmar, declaro que lo registrado es veraz. La novedad quedará resuelta y no podrá modificarse.
+                    </MudAlert>
+
+                    <div class="d-flex justify-center mb-2">
+                        <FirmaCanvas OnFirmaConfirmada="RecibirFirma" />
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(firmaCapturada))
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">
+                            Firma capturada. Pulse «Firmar resolución» para confirmar su identidad.
+                        </MudAlert>
+                    }
+
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Lock"
+                                   Disabled="@(procesando || string.IsNullOrWhiteSpace(firmaCapturada))"
+                                   OnClick="FirmarResolucionAsync">
+                            @(procesando ? "Firmando…" : "Firmar resolución")
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Default" Disabled="@procesando" OnClick="CancelarResolucion">
+                            Cancelar
+                        </MudButton>
+                    </div>
+                </MudPaper>
+            }
+
+            @if (puedeVerSello)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Historial de cambios</MudText>
+                <HistorialCambiosRegistro Tabla="Novedades" RegistroId="IdNovedad" />
+            }
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@(error ?? "No se pudo cargar la novedad")</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <div class="d-flex flex-wrap gap-2 pa-2">
+            @if (PuedeResolver && !resolviendo)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="@procesando"
+                           StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="IniciarResolucion">Resolver</MudButton>
+            }
+            @if (PuedeAnular && !resolviendo)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@procesando" OnClick="AnularAsync">Anular</MudButton>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Cerrar">Cerrar</MudButton>
+        </div>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public long IdNovedad { get; set; }
+
+    /// <summary>Abre directamente el formulario de resolución (botón «Resolver» del listado).</summary>
+    [Parameter]
+    public bool Resolver { get; set; }
+
+    private NovedadDetalleDto? detalle;
+    private string? error;
+    private bool cargando = true;
+    private bool procesando;
+    private bool esAdmin;
+    private bool puedeGestionar;
+    private bool puedeVerSello;
+    private string? idUsuario;
+    private IntegridadInspeccionDto? integridad;
+
+    // Resolución
+    private bool resolviendo;
+    private bool intentoResolver;
+    private string? solucion;
+    private string? firmaCapturada;
+
+    private bool SolucionValida => (solucion?.Trim().Length ?? 0) >= ResolverNovedadDto.LongitudMinimaSolucion;
+    private bool PuedeResolver => puedeGestionar && detalle?.Estado == NovedadEstados.Pendiente;
+    private bool PuedeAnular => esAdmin && detalle?.Estado == NovedadEstados.Pendiente;
+
+    // Como en el API: Administrador y Auditor ven cualquier inspección; un Técnico, solo las suyas.
+    private bool PuedeVerInspeccion => puedeVerSello || idUsuario == detalle?.IdUsuarioRegistro.ToString();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        esAdmin = roles.Contains("Administrador");
+        puedeGestionar = esAdmin || roles.Contains("Técnico");
+        puedeVerSello = esAdmin || roles.Contains("Auditor");
+        idUsuario = await AuthorizationService.GetUserIdAsync();
+
+        await CargarAsync();
+        resolviendo = Resolver && PuedeResolver;
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        try
+        {
+            var result = await HttpClientService.GetNovedadAsync(IdNovedad);
+            if (result.Success && result.Data != null)
+            {
+                detalle = result.Data;
+                error = null;
+            }
+            else
+            {
+                error = result.Message;
+            }
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void IniciarResolucion()
+    {
+        solucion = null;
+        firmaCapturada = null;
+        intentoResolver = false;
+        resolviendo = true;
+    }
+
+    private void CancelarResolucion()
+    {
+        resolviendo = false;
+        intentoResolver = false;
+        solucion = null;
+        firmaCapturada = null;
+    }
+
+    private void RecibirFirma(string firmaBase64) => firmaCapturada = firmaBase64;
+
+    private async Task FirmarResolucionAsync()
+    {
+        intentoResolver = true;
+        if (!SolucionValida || string.IsNullOrWhiteSpace(firmaCapturada) || procesando)
+        {
+            return;
+        }
+
+        procesando = true;
+        ApiResponse<NovedadDto>? respuesta;
+        try
+        {
+            respuesta = await ConfirmarIdentidadDialog.ResolverNovedadAsync(DialogService, IdNovedad,
+                QuitarPrefijoDataUri(firmaCapturada), solucion!.Trim());
+        }
+        finally
+        {
+            procesando = false;
+        }
+
+        if (respuesta == null)
+        {
+            // Canceló la confirmación: la firma y el texto siguen ahí.
+            return;
+        }
+
+        if (!respuesta.Success)
+        {
+            Snackbar.Add(respuesta.Message, Severity.Error);
+            foreach (var falta in respuesta.Errors ?? [])
+            {
+                Snackbar.Add(falta, Severity.Warning);
+            }
+
+            await CargarAsync();
+            return;
+        }
+
+        Snackbar.Add(respuesta.Message, Severity.Success);
+        CancelarResolucion();
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync()
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Anular novedad",
+            "Solo para una novedad registrada por error. Quedará anulada y no se podrá modificar.", "Anular", Color.Error);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        procesando = true;
+        try
+        {
+            var result = await HttpClientService.AnularNovedadAsync(IdNovedad, motivo);
+            Snackbar.Add(result.Message, result.Success ? Severity.Success : Severity.Error);
+            if (result.Success)
+            {
+                await CargarAsync();
+            }
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    private async Task ReenviarCorreoAsync()
+    {
+        procesando = true;
+        try
+        {
+            var result = await HttpClientService.ReenviarCorreoNovedadAsync(IdNovedad);
+            Snackbar.Add(result.Message, result.Success ? Severity.Info : Severity.Error);
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    private async Task VerificarIntegridadAsync()
+    {
+        procesando = true;
+        integridad = null;
+        try
+        {
+            var result = await HttpClientService.VerificarIntegridadNovedadAsync(IdNovedad);
+            if (result.Success && result.Data != null)
+            {
+                integridad = result.Data;
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    private void IrAInspeccion(long idInspeccion)
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+        NavigationManager.NavigateTo($"/inspecciones/{idInspeccion}/resultado");
+    }
+
+    private void Cerrar() => MudDialog.Close(DialogResult.Ok(true));
+
+    private static string QuitarPrefijoDataUri(string firmaPng)
+    {
+        var separador = firmaPng.IndexOf("base64,", StringComparison.OrdinalIgnoreCase);
+        return separador >= 0 ? firmaPng[(separador + "base64,".Length)..] : firmaPng;
+    }
+
+    /// <summary>Abre el detalle de una novedad y espera a que se cierre.</summary>
+    public static async Task AbrirAsync(IDialogService dialogos, long idNovedad, bool resolver = false)
+    {
+        var parametros = new DialogParameters<NovedadDetailModal>
+        {
+            { d => d.IdNovedad, idNovedad },
+            { d => d.Resolver, resolver }
+        };
+
+        var dialogo = await dialogos.ShowAsync<NovedadDetailModal>("Novedad", parametros);
+        await dialogo.Result;
+    }
+}
+
+<style>
+.value-box {
+    border: 1px solid #E0E6ED !important;
+    border-radius: 8px !important;
+    background-color: #F4F5F7 !important;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.firma-novedad {
+    display: block;
+    max-width: 100%;
+    width: 260px;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 4px;
+    background: white;
+}
+</style>

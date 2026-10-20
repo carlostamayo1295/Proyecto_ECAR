@@ -97,7 +97,7 @@ public class InspeccionesAnulacionTests
         return new ECARDbContext(builder.Options, contexto);
     }
 
-    /// <summary>Una inspección del técnico con una respuesta, una evidencia y un hallazgo.</summary>
+    /// <summary>Una inspección del técnico con una respuesta y una evidencia (las novedades nacen al firmar).</summary>
     private static async Task<Escenario> SeedAsync(string estado = InspeccionEstados.EnCurso)
     {
         var nombre = Guid.NewGuid().ToString();
@@ -137,14 +137,7 @@ public class InspeccionesAnulacionTests
         };
         context.AddRange(
             new RespuestaInspeccion { IdInspeccion = inspeccion.IdInspeccion, IdPregunta = pregunta.IdPregunta, Respuesta = "Si" },
-            evidencia,
-            new Hallazgo
-            {
-                IdInspeccion = inspeccion.IdInspeccion,
-                Descripcion = "Fuga",
-                Origen = HallazgoOrigenes.Manual,
-                IdUsuarioRegistro = tecnico.IdUsuario
-            });
+            evidencia);
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
@@ -240,13 +233,12 @@ public class InspeccionesAnulacionTests
     }
 
     [Fact]
-    public async Task Anular_ConservaRespuestasEvidenciasFotosYHallazgos()
+    public async Task Anular_ConservaRespuestasEvidenciasYFotos()
     {
         var e = await AnuladaAsync();
 
         Assert.Equal(1, await e.Context.RespuestasInspeccion.CountAsync(r => r.IdInspeccion == e.Inspeccion.IdInspeccion));
         Assert.Equal(1, await e.Context.Evidencias.CountAsync(ev => ev.IdInspeccion == e.Inspeccion.IdInspeccion));
-        Assert.Equal(1, await e.Context.Hallazgos.CountAsync(h => h.IdInspeccion == e.Inspeccion.IdInspeccion));
         Assert.Empty(e.Storage.Eliminados);
     }
 
@@ -268,6 +260,7 @@ public class InspeccionesAnulacionTests
     }
 
     [Theory]
+    [InlineData(InspeccionEstados.NovedadesPendientes)]
     [InlineData(InspeccionEstados.Cerrada)]
     [InlineData(InspeccionEstados.Anulada)]
     public async Task Anular_UnaInspeccionQueNoEstaEnCurso_Devuelve409(string estado)
@@ -416,18 +409,6 @@ public class InspeccionesAnulacionTests
         Assert.Single(dto.Evidencias);
     }
 
-    [Fact]
-    public async Task Anulada_NoAdmiteHallazgosManuales()
-    {
-        var e = await AnuladaAsync();
-
-        var action = await new HallazgosController(e.Context, new FakeCurrentUser(e.Tecnico.IdUsuario, "Técnico"), e.Motivo)
-            .CreateHallazgo(new CreateHallazgoDto { IdInspeccion = e.Inspeccion.IdInspeccion, Descripcion = "Nuevo" });
-
-        Assert.IsType<ConflictObjectResult>(action.Result);
-        Assert.Equal(1, await e.Context.Hallazgos.CountAsync());
-    }
-
     // ------------------------------------------------------------------ Fase 3: conservación
 
     /// <summary>Todo lo que cuelga de la inspección, en texto, para comparar antes y después.</summary>
@@ -438,12 +419,10 @@ public class InspeccionesAnulacionTests
             .OrderBy(r => r.IdRespuesta).Select(r => $"{r.IdRespuesta}|{r.IdPregunta}|{r.Respuesta}|{r.Observacion}").ToListAsync();
         var evidencias = await e.Context.Evidencias.AsNoTracking().Where(ev => ev.IdInspeccion == id)
             .OrderBy(ev => ev.IdEvidencia).Select(ev => $"{ev.IdEvidencia}|{ev.Archivo}|{ev.NombreOriginal}|{ev.TamanoBytes}|{ev.Retirada}").ToListAsync();
-        var hallazgos = await e.Context.Hallazgos.AsNoTracking().Where(h => h.IdInspeccion == id)
-            .OrderBy(h => h.IdHallazgo).Select(h => $"{h.IdHallazgo}|{h.Descripcion}|{h.Estado}|{h.Origen}").ToListAsync();
         var inspeccion = await e.Context.Inspecciones.AsNoTracking().SingleAsync(i => i.IdInspeccion == id);
         return string.Join("\n", [
             $"{inspeccion.IdEquipo}|{inspeccion.IdChecklist}|{inspeccion.IdUsuario}|{inspeccion.FechaInspeccion:O}|{inspeccion.Observaciones}",
-            .. respuestas, .. evidencias, .. hallazgos]);
+            .. respuestas, .. evidencias]);
     }
 
     [Fact]
@@ -457,22 +436,6 @@ public class InspeccionesAnulacionTests
 
         Assert.Equal(antes, await InstantaneaAsync(e));
         Assert.Empty(e.Storage.Eliminados);
-    }
-
-    [Fact]
-    public async Task Anulada_SusHallazgosSiguenConsultablesYGestionables()
-    {
-        var e = await AnuladaAsync();
-        var hallazgos = new HallazgosController(e.Context, new FakeCurrentUser(e.Tecnico.IdUsuario, "Técnico"), e.Motivo);
-        var idHallazgo = (await e.Context.Hallazgos.AsNoTracking().SingleAsync()).IdHallazgo;
-
-        var listado = await hallazgos.GetHallazgos(new HallazgoFiltroDto { IdInspeccion = e.Inspeccion.IdInspeccion });
-        var cambio = await hallazgos.CambiarEstado(idHallazgo, new CambiarEstadoHallazgoDto { Estado = HallazgoEstados.EnProceso });
-
-        var pagina = Assert.IsType<ApiResponse<PagedResultDto<HallazgoDto>>>(Assert.IsType<OkObjectResult>(listado.Result).Value).Data!;
-        Assert.Equal(1, pagina.TotalCount);
-        Assert.IsType<OkObjectResult>(cambio.Result);
-        Assert.Equal(HallazgoEstados.EnProceso, (await e.Context.Hallazgos.AsNoTracking().SingleAsync()).Estado);
     }
 
     [Fact]
@@ -524,7 +487,7 @@ public class InspeccionesAnulacionTests
         Assert.Equal("Ana Técnica", anulada.NombreUsuarioAnulacion);
         Assert.NotNull(anulada.FechaAnulacion);
         Assert.Equal(1, anulada.TotalEvidencias);
-        Assert.Equal(1, anulada.TotalHallazgos);
+        Assert.Equal(0, anulada.TotalNovedades);
         Assert.Null(pagina.Data.Single(i => i.IdInspeccion != e.Inspeccion.IdInspeccion).MotivoAnulacion);
     }
 

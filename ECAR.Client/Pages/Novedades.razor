@@ -1,0 +1,320 @@
+@page "/novedades"
+@page "/novedades/{IdNovedad:long}"
+@page "/hallazgos"
+@inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
+@inject NavigationManager NavigationManager
+
+@* Novedades: una por cada respuesta "No" de una inspección firmada. Las crea el servidor al firmar
+   y se resuelven con firma electrónica (lo que se hizo, la firma dibujada y la contraseña); las
+   resuelve un Técnico o un Administrador, aunque no haya hecho la inspección. /novedades/{id} es el
+   enlace del correo a la mesa de ayuda: abre el detalle de esa novedad. /hallazgos se conserva
+   para los enlaces anteriores. *@
+<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })">
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5">Novedades</MudText>
+                    <MudText Typo="Typo.body2">
+                        Respuestas «No» de las inspecciones firmadas. Cada una se resuelve con firma electrónica;
+                        la inspección se cierra cuando se resuelven todas.
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+
+            <MudCardContent>
+                @if (inspeccionFiltro.HasValue)
+                {
+                    <div class="mb-3">
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" OnClose="QuitarFiltroInspeccionAsync"
+                                 Text="@($"Inspección #{inspeccionFiltro}")" />
+                    </div>
+                }
+                <MudGrid Class="mb-2">
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Label="Buscar por equipo, novedad o criticidad" @bind-Value="searchText" Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true"
+                                      OnKeyUp="OnSearchKeyUp" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSelect T="string" Label="Estado" Value="estadoFiltro" Variant="Variant.Outlined"
+                                   Clearable="true" ValueChanged="OnEstadoChanged">
+                            @foreach (var estado in NovedadEstados.Todos)
+                            {
+                                <MudSelectItem T="string" Value="@estado">@estado</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSelect T="string" Label="Criticidad" Value="criticidadFiltro" Variant="Variant.Outlined"
+                                   Clearable="true" ValueChanged="OnCriticidadChanged">
+                            @foreach (var criticidad in Criticidades.Todas)
+                            {
+                                <MudSelectItem T="string" Value="@criticidad">@criticidad</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="long?" Label="Equipo" Value="equipoFiltro" Variant="Variant.Outlined"
+                                   Clearable="true" ValueChanged="OnEquipoChanged">
+                            @foreach (var equipo in equipos)
+                            {
+                                <MudSelectItem T="long?" Value="@((long?)equipo.IdEquipo)">@equipo.CodigoInterno - @equipo.NombreEquipo</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudDatePicker Label="Desde" Date="fechaDesde" DateChanged="OnFechaDesdeChanged"
+                                       Variant="Variant.Outlined" Clearable="true" DateFormat="dd/MM/yyyy" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudDatePicker Label="Hasta" Date="fechaHasta" DateChanged="OnFechaHastaChanged"
+                                       Variant="Variant.Outlined" Clearable="true" DateFormat="dd/MM/yyyy" />
+                    </MudItem>
+                </MudGrid>
+
+                @if (isLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="my-4" />
+                }
+                else if (novedades != null && novedades.Any())
+                {
+                    <MudTable Items="novedades" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>ID</MudTh>
+                            <MudTh>Equipo</MudTh>
+                            <MudTh>Novedad</MudTh>
+                            <MudTh>Criticidad</MudTh>
+                            <MudTh>Inspección</MudTh>
+                            <MudTh>Reportada</MudTh>
+                            <MudTh>Estado</MudTh>
+                            <MudTh>Correo</MudTh>
+                            <MudTh>Acciones</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="ID">@context.IdNovedad</MudTd>
+                            <MudTd DataLabel="Equipo">
+                                @context.CodigoInterno - @context.NombreEquipo
+                                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@(context.Area ?? "Sin ubicación")</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Novedad">@Truncar(context.Descripcion)</MudTd>
+                            <MudTd DataLabel="Criticidad">
+                                <MudChip T="string" Color="@FormatoEstados.ColorCriticidad(context.Criticidad)"
+                                         Size="Size.Small" Variant="Variant.Filled" Text="@(context.Criticidad ?? "-")" />
+                            </MudTd>
+                            <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
+                            <MudTd DataLabel="Reportada">
+                                @FormatoEstados.HoraColombia(context.FechaRegistro, "dd/MM/yyyy")
+                                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@context.NombreInspector</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Estado">
+                                <MudChip T="string" Color="@FormatoEstados.ColorNovedad(context.Estado)"
+                                         Size="Size.Small" Variant="Variant.Outlined" Text="@context.Estado" />
+                                @if (context.Estado == NovedadEstados.Resuelta && context.NombreUsuarioResolucion != null)
+                                {
+                                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">por @context.NombreUsuarioResolucion</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Correo">
+                                <MudIcon Icon="@(context.FechaNotificacion.HasValue ? Icons.Material.Filled.MarkEmailRead : Icons.Material.Filled.ScheduleSend)"
+                                         Color="@(context.FechaNotificacion.HasValue ? Color.Success : Color.Default)" Size="Size.Small"
+                                         title="@(context.FechaNotificacion is { } enviado ? $"Enviado el {FormatoEstados.HoraColombia(enviado)}" : "Sin enviar")" />
+                            </MudTd>
+                            <MudTd DataLabel="Acciones">
+                                <div class="d-flex flex-wrap gap-1">
+                                    <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                               StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => AbrirDetalleAsync(context.IdNovedad, false)">
+                                        Ver
+                                    </MudButton>
+                                    @if (puedeResolver && context.Estado == NovedadEstados.Pendiente)
+                                    {
+                                        <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
+                                                   StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="() => AbrirDetalleAsync(context.IdNovedad, true)">
+                                            Resolver
+                                        </MudButton>
+                                    }
+                                </div>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudPagination Class="mt-4" Count="@totalPages" Selected="@currentPage"
+                                   SelectedChanged="HandlePageChange" />
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Class="my-4">
+                        @(estadoFiltro == NovedadEstados.Pendiente ? "No hay novedades pendientes" : "No hay novedades para mostrar")
+                    </MudAlert>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudContainer>
+</RolRouteGuard>
+
+@code {
+    /// <summary>La novedad que se abre al llegar (enlace del correo).</summary>
+    [Parameter]
+    public long? IdNovedad { get; set; }
+
+    /// <summary>?inspeccion=N: solo las novedades de esa inspección (desde su resultado o el listado).</summary>
+    [SupplyParameterFromQuery(Name = "inspeccion")]
+    public long? IdInspeccion { get; set; }
+
+    private List<NovedadDto>? novedades;
+    private string searchText = string.Empty;
+    private string? estadoFiltro = NovedadEstados.Pendiente;
+    private string? criticidadFiltro;
+    private long? equipoFiltro;
+    private long? inspeccionFiltro;
+    private List<EquipoDto> equipos = new();
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int totalPages = 1;
+    private bool isLoading;
+    private bool puedeResolver;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        if (!roles.Any(r => r is "Administrador" or "Técnico" or "Auditor"))
+        {
+            // RolRouteGuard redirige; sin el rol no se pide nada al API.
+            return;
+        }
+
+        puedeResolver = roles.Contains("Administrador") || roles.Contains("Técnico");
+
+        // De una inspección se ven todas sus novedades, no solo las pendientes.
+        if (IdInspeccion.HasValue)
+        {
+            inspeccionFiltro = IdInspeccion;
+            estadoFiltro = null;
+        }
+
+        // Equipos activos para el filtro; si la consulta falla, la lista queda vacía y el resto funciona
+        var respuestaEquipos = await HttpClientService.GetEquiposAsync(1, 100, activo: true);
+        equipos = respuestaEquipos?.Data?.Data ?? new List<EquipoDto>();
+
+        await LoadNovedadesAsync();
+
+        if (IdNovedad is > 0)
+        {
+            await AbrirDetalleAsync(IdNovedad.Value, false);
+        }
+    }
+
+    private async Task LoadNovedadesAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var filtro = new NovedadFiltroDto
+            {
+                Search = string.IsNullOrWhiteSpace(searchText) ? null : searchText.Trim(),
+                Estado = estadoFiltro,
+                Criticidad = criticidadFiltro,
+                IdEquipo = equipoFiltro,
+                IdInspeccion = inspeccionFiltro,
+                Desde = fechaDesde?.Date,
+                Hasta = fechaHasta?.Date
+            };
+            var result = await HttpClientService.BuscarNovedadesAsync(filtro, currentPage, PageSize);
+
+            if (result.Success && result.Data != null)
+            {
+                novedades = result.Data.Data ?? new List<NovedadDto>();
+                totalPages = Math.Max(result.Data.TotalPages, 1);
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+                novedades = new List<NovedadDto>();
+                totalPages = 1;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadNovedadesAsync();
+        }
+    }
+
+    private async Task OnEstadoChanged(string? value)
+    {
+        estadoFiltro = value;
+        await AplicarFiltrosAsync();
+    }
+
+    private async Task OnCriticidadChanged(string? value)
+    {
+        criticidadFiltro = value;
+        await AplicarFiltrosAsync();
+    }
+
+    private async Task OnEquipoChanged(long? value)
+    {
+        equipoFiltro = value;
+        await AplicarFiltrosAsync();
+    }
+
+    private async Task OnFechaDesdeChanged(DateTime? value)
+    {
+        fechaDesde = value;
+        await AplicarFiltrosAsync();
+    }
+
+    private async Task OnFechaHastaChanged(DateTime? value)
+    {
+        fechaHasta = value;
+        await AplicarFiltrosAsync();
+    }
+
+    private async Task QuitarFiltroInspeccionAsync(MudChip<string> _)
+    {
+        inspeccionFiltro = null;
+        NavigationManager.NavigateTo("/novedades", replace: true);
+        await AplicarFiltrosAsync();
+    }
+
+    // Un solo lugar para aplicar cualquier filtro: valida las fechas y vuelve a la página 1
+    private async Task AplicarFiltrosAsync()
+    {
+        if (fechaDesde.HasValue && fechaHasta.HasValue && fechaDesde > fechaHasta)
+        {
+            Snackbar.Add("La fecha \"Desde\" no puede ser posterior a \"Hasta\".", Severity.Warning);
+            return;
+        }
+
+        currentPage = 1;
+        await LoadNovedadesAsync();
+    }
+
+    private async Task HandlePageChange(int newPage)
+    {
+        currentPage = newPage;
+        await LoadNovedadesAsync();
+    }
+
+    private async Task AbrirDetalleAsync(long idNovedad, bool resolver)
+    {
+        await NovedadDetailModal.AbrirAsync(DialogService, idNovedad, resolver);
+        await LoadNovedadesAsync();
+    }
+
+    private static string Truncar(string? texto) =>
+        string.IsNullOrEmpty(texto) ? "-" : texto.Length > 70 ? texto[..70] + "…" : texto;
+}

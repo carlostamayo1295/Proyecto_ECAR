@@ -27,6 +27,10 @@ public class Inspeccion
     [Column("FechaInspeccion")]
     public DateTime FechaInspeccion { get; set; }
 
+    /// <summary>
+    /// Uno de InspeccionResultados: lo calcula el servidor al firmar. "Pendiente" mientras queden
+    /// novedades sin resolver; por eso no entra en el sello HMACSHA256-v2.
+    /// </summary>
     [MaxLength(50)]
     [Column("Resultado")]
     public string? Resultado { get; set; }
@@ -59,7 +63,10 @@ public class Inspeccion
     [Column("FirmaSignificado")]
     public string? FirmaSignificado { get; set; }
 
-    /// <summary>Cómo se calculó FirmaHash: null o "SHA256" en las cerradas antes de la Fase 4, "HMACSHA256-v1" después.</summary>
+    /// <summary>
+    /// Cómo se calculó FirmaHash: null o "SHA256" en las cerradas antes de la Fase 4,
+    /// "HMACSHA256-v1" en la Fase 4 y "HMACSHA256-v2" (sin el resultado) desde las novedades.
+    /// </summary>
     [MaxLength(30)]
     [Column("FirmaAlgoritmo")]
     public string? FirmaAlgoritmo { get; set; }
@@ -101,5 +108,5 @@ public class Inspeccion
 
     public virtual ICollection<RespuestaInspeccion> Respuestas { get; set; } = new List<RespuestaInspeccion>();
     public virtual ICollection<Evidencia> Evidencias { get; set; } = new List<Evidencia>();
-    public virtual ICollection<Hallazgo> Hallazgos { get; set; } = new List<Hallazgo>();
+    public virtual ICollection<Novedad> Novedades { get; set; } = new List<Novedad>();
 }

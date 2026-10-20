@@ -193,13 +193,13 @@ public class FirmaIntegridadTests
         var dto = Assert.IsType<ApiResponse<InspeccionResultadoDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
         Assert.Equal("Técnico Firmante", dto.FirmaNombre);
         Assert.Equal(VerificadorIntegridad.SignificadoEjecucion, dto.FirmaSignificado);
-        Assert.Equal(VerificadorIntegridad.AlgoritmoHmac, dto.FirmaAlgoritmo);
+        Assert.Equal(VerificadorIntegridad.AlgoritmoHmacV2, dto.FirmaAlgoritmo);
 
         var guardada = await LeerAsync(escenario);
         Assert.Equal(InspeccionEstados.Cerrada, guardada.Estado);
         Assert.NotNull(guardada.FechaCierre);
         Assert.Equal("Técnico Firmante", guardada.FirmaNombre);
-        Assert.Equal(VerificadorIntegridad.AlgoritmoHmac, guardada.FirmaAlgoritmo);
+        Assert.Equal(VerificadorIntegridad.AlgoritmoHmacV2, guardada.FirmaAlgoritmo);
         Assert.Equal(64, guardada.FirmaHash!.Length);
     }
 
@@ -213,7 +213,7 @@ public class FirmaIntegridadTests
         var integridad = await VerificarAsync(escenario);
 
         Assert.True(integridad.Integra);
-        Assert.Equal(VerificadorIntegridad.AlgoritmoHmac, integridad.Algoritmo);
+        Assert.Equal(VerificadorIntegridad.AlgoritmoHmacV2, integridad.Algoritmo);
         Assert.Contains(await escenario.Context.Auditoria.AsNoTracking().ToListAsync(),
             a => a.Accion == AuditoriaAcciones.VerificacionIntegridad);
     }

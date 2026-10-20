@@ -29,7 +29,7 @@ public partial class ECARDbContext : DbContext
     public DbSet<Inspeccion> Inspecciones { get; set; }
     public DbSet<RespuestaInspeccion> RespuestasInspeccion { get; set; }
     public DbSet<Evidencia> Evidencias { get; set; }
-    public DbSet<Hallazgo> Hallazgos { get; set; }
+    public DbSet<Novedad> Novedades { get; set; }
     public DbSet<Auditoria> Auditoria { get; set; }
     public DbSet<HistorialPassword> HistorialPasswords { get; set; }
 
@@ -182,25 +182,22 @@ public partial class ECARDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // Configuración de Hallazgo
-        modelBuilder.Entity<Hallazgo>(entity =>
+        // Configuración de Novedad
+        modelBuilder.Entity<Novedad>(entity =>
         {
-            entity.HasIndex(e => e.IdInspeccion);
             entity.HasIndex(e => e.Criticidad);
             entity.HasIndex(e => e.Estado);
             entity.HasIndex(e => e.FechaRegistro);
-            entity.Property(e => e.Estado).HasDefaultValue(HallazgoEstados.Abierto);
-            entity.Property(e => e.Origen).HasDefaultValue(HallazgoOrigenes.Manual);
+            entity.Property(e => e.Estado).HasDefaultValue(NovedadEstados.Pendiente);
 
-            // Una novedad por pregunta y por inspección: si la firma se repite, no se duplica.
-            // Los manuales no tienen pregunta y quedan fuera del índice.
-            entity.HasIndex(e => new { e.IdInspeccion, e.IdPregunta })
-                .IsUnique()
-                .HasFilter("[IdPregunta] IS NOT NULL");
+            // Una novedad por pregunta en cada inspección y una por respuesta: si la firma se
+            // repite, no se duplica.
+            entity.HasIndex(e => new { e.IdInspeccion, e.IdPregunta }).IsUnique();
+            entity.HasIndex(e => e.IdRespuesta).IsUnique();
 
-            // Ninguna relación borra en cascada: un hallazgo se conserva siempre, se anula.
+            // Ninguna relación borra en cascada: una novedad se conserva siempre, se anula.
             entity.HasOne(e => e.Inspeccion)
-                .WithMany(i => i.Hallazgos)
+                .WithMany(i => i.Novedades)
                 .HasForeignKey(e => e.IdInspeccion)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Respuesta)
@@ -215,13 +212,13 @@ public partial class ECARDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.IdUsuarioRegistro)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e => e.UsuarioResponsable)
+            entity.HasOne(e => e.UsuarioResolucion)
                 .WithMany()
-                .HasForeignKey(e => e.IdUsuarioResponsable)
+                .HasForeignKey(e => e.IdUsuarioResolucion)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e => e.UsuarioCierre)
+            entity.HasOne(e => e.UsuarioAnulacion)
                 .WithMany()
-                .HasForeignKey(e => e.IdUsuarioCierre)
+                .HasForeignKey(e => e.IdUsuarioAnulacion)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

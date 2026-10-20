@@ -1,7 +1,7 @@
 # Matriz de trazabilidad — ECAR MVP
 
-**Corte:** 18 de octubre de 2026  
-**Rama:** `integracion-fase4` (`fase_4_prueba` + ramas de BE-1 y BE-3 + correcciones de las pruebas a fondo)  
+**Corte:** 19 de octubre de 2026  
+**Rama:** `Prueba_nuevo_novedades` (`develop` + novedades: reemplazan a los hallazgos, se resuelven con firma y avisan por correo)  
 **Alcance revisado:** reglas de negocio del SRS MVP y controles técnicos de la Fase 4.
 
 Esta matriz relaciona cada requisito con su implementación y su evidencia automatizada. Un estado
@@ -13,35 +13,37 @@ que no está integrada en `develop`.
 | ID | Requisito | Implementación principal | Evidencia | Estado |
 |---|---|---|---|---|
 | RN-01 | Código interno y activo fijo obligatorios | `Equipo`, `CreateEquipoDto`, `EquiposController` | `BackendPhaseOneTests` | Cumple |
-| SRS §2 | Clasificación por criticidad | `Criticidades` (Alta, Media, Baja) en `EquiposController` y `HallazgosController` | `CorreccionesPruebasTests.La_criticidad_solo_admite_Alta_Media_o_Baja` | Cumple |
+| SRS §2 | Clasificación por criticidad | `Criticidades` (Alta, Media, Baja) en `EquiposController`; la novedad hereda la del equipo | `CorreccionesPruebasTests.La_criticidad_solo_admite_Alta_Media_o_Baja` | Cumple |
 | RN-02 | La inspección pertenece al usuario autenticado | `CurrentUser`, `InspeccionesController`, `InspeccionService`; la fecha la pone el servidor (ALCOA+ contemporáneo) | `BackendPhaseThreeTests`, `CorreccionesPruebasTests.La_fecha_de_una_inspeccion_creada_por_el_administrador_es_la_del_servidor` | Cumple |
 | RN-03 | Obligatorias respondidas antes del cierre | `InspeccionService`, `InspeccionesController.FirmarInspeccion`; no se inicia ni se firma con un checklist sin preguntas | `BackendPhaseThreeFirmaTests`, `CorreccionesPruebasTests.No_se_inspecciona_con_un_checklist_sin_preguntas` | Cumple |
 | RN-04 | Una novedad exige observación | `InspeccionService`, validación de firma | `BackendPhaseThreeFirmaTests.Firmar_RechazaNovedadSinObservacion` | Cumple |
-| RN-05 | Toda acción queda en auditoría | `ECARDbContext.Auditoria`, `ContextoAuditoriaHttp`, `CadenaAuditoria`, `IMotivoCambio` en cada acción con motivo | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `AuditoriaConsultaTests`, `AuditoriaHistorialTests`, `CorreccionesPruebasTests.Editar_un_hallazgo_exige_motivo` | Cumple |
-| RN-06 | Los históricos no se modifican | Inmutabilidad de cerradas y anuladas, trigger `TR_Auditoria_SoloInsercion`, sin `DELETE` de inspecciones, evidencias ni hallazgos | `BackendPhaseThreeFirmaTests`, `BorradoInspeccionTests`, `InspeccionesAnulacionTests`, `AuditoriaSqlServerTests.El_trigger_impide_modificar_o_borrar_la_auditoria_incluso_por_SQL`, `CorreccionesPruebasTests.La_descripcion_de_un_hallazgo_de_novedad_no_se_cambia`, `CorreccionesPruebasTests.Las_preguntas_validan_el_tipo_y_no_cambian_un_checklist_ya_usado` | Cumple |
+| RN-04 | Notificación a la mesa de ayuda | Un correo por novedad al firmar: `ColaNotificaciones`, `EnvioNotificacionesService`, `CorreoNovedad`; SMTP con `Correo:*` (sin credenciales, `.eml` en `Correo:CarpetaSalida`); reenvío por el Administrador | `NovedadesTests.Firmar_con_dos_No_crea_dos_novedades_pendientes_y_la_inspeccion_queda_pendiente`, `NotificacionNovedadesTests` | Cumple en código; falta la cuenta de correo de ECAR y confirmar los datos del mensaje |
+| SRS §2 | Gestión de novedades | Una por cada «No» al firmar (`Novedades`); la inspección queda `NovedadesPendientes` / `Pendiente` y pasa a `Cerrada` / `ConNovedad` al resolverse la última; resolución con firma (texto, firma dibujada y contraseña) por cualquier Técnico o Administrador | `NovedadesTests`, `NovedadesSqlServerTests.Dos_personas_resuelven_a_la_vez_las_dos_ultimas_y_la_inspeccion_queda_cerrada` | Cumple |
+| RN-05 | Toda acción queda en auditoría | `ECARDbContext.Auditoria`, `ContextoAuditoriaHttp`, `CadenaAuditoria`, `IMotivoCambio` en cada acción con motivo | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `AuditoriaConsultaTests`, `AuditoriaHistorialTests`, `NovedadesTests.El_administrador_anula_con_motivo_y_si_era_la_ultima_cierra_la_inspeccion` | Cumple |
+| RN-06 | Los históricos no se modifican | Inmutabilidad de cerradas y anuladas, trigger `TR_Auditoria_SoloInsercion`, sin `DELETE` de inspecciones, evidencias ni novedades; una novedad no se edita | `BackendPhaseThreeFirmaTests`, `BorradoInspeccionTests`, `InspeccionesAnulacionTests`, `AuditoriaSqlServerTests.El_trigger_impide_modificar_o_borrar_la_auditoria_incluso_por_SQL`, `NovedadesTests.Ninguna_ruta_borra_ni_edita_inspecciones_novedades_ni_evidencias`, `CorreccionesPruebasTests.Las_preguntas_validan_el_tipo_y_no_cambian_un_checklist_ya_usado` | Cumple |
 | RN-07 | Un usuario puede tener varios roles | `UsuarioRol`, `UsuariosController`, claims JWT múltiples | `BackendPhaseOneTests`, `AuthServiceTests` | Cumple |
 | RN-08 | Solo Administrador modifica equipos | Autorización por rol en `EquiposController` | `BackendPhaseOneTests` | Cumple |
 | RN-09 | Fotografías desde dispositivo móvil | `EvidenciasController`, `EvidenciaStorageDisco`, cliente de evidencias | `EvidenciasControllerTests` | Cumple en código; falta prueba final en teléfono real |
 | RN-10 | Lectura mediante código QR | Endpoints QR de `EquiposController`, `ConsultaQr.razor` (sin sesión solo nombre, código y ubicación); escáner en la app (`EscanerQrDialog`, html5-qrcode 2.3.8) | `BackendPhaseTwoTests`, `CorreccionesPruebasTests.Sin_sesion_el_QR_muestra_solo_nombre_codigo_y_ubicacion`, revisión en pantalla 18/10 con lector simulado | Cumple en código; falta la prueba con la cámara de un teléfono |
-| SRS §6 | Dashboard: equipos, inspecciones y hallazgos | `DashboardController` (`GET /api/dashboard`), `Pages/Home.razor` | `CorreccionesPruebasTests.El_tablero_cuenta_equipos_inspecciones_y_hallazgos` | Cumple; la definición de "pendientes" es la del cumplimiento, por confirmar con ECAR |
+| SRS §6 | Dashboard: equipos, inspecciones y novedades | `DashboardController` (`GET /api/dashboard`), `Pages/Home.razor` | `CorreccionesPruebasTests.El_tablero_cuenta_equipos_inspecciones_y_novedades` | Cumple; la definición de "pendientes" es la del cumplimiento, por confirmar con ECAR |
 
 ## Fase 4 y CFR 21 Parte 11
 
 | Referencia | Control técnico | Implementación o dueño | Prueba / evidencia | Estado |
 |---|---|---|---|---|
-| §11.10(a) | Validación del sistema | Esta matriz, pruebas unitarias y proyecto `ECAR.IntegrationTests` | 354 pruebas API + 28 de integración, batería del API 86/86 (permisos de 99 rutas) y 67 comprobaciones de punta a punta el 18/10 | Cumple; IQ/OQ/PQ en la Fase 6 |
+| §11.10(a) | Validación del sistema | Esta matriz, pruebas unitarias y proyecto `ECAR.IntegrationTests` | 276 pruebas API + 31 de integración, batería del API 89/89 (permisos de 99 rutas) y 37 comprobaciones de punta a punta de novedades el 19/10 | Cumple; IQ/OQ/PQ en la Fase 6 |
 | §11.10(b) | Copias legibles y electrónicas | `RegistroInspeccionPdf`, `ReportesController` (PDF/Excel), `AuditoriaController.Exportar` | `ReportesFase4Tests`, `AuditoriaEndpointsTests.Exportar_*` | Cumple |
-| §11.10(c) | Conservación sin borrado físico | Anular inspecciones y hallazgos, retirar evidencias; `DELETE` retirados (405) | `BorradoInspeccionTests`, `HallazgosModeloTests.Ninguna_ruta_borra_inspecciones_hallazgos_ni_evidencias`, `InspeccionesSqlServerTests`, `EvidenciasControllerTests.Retirar_*` | Cumple |
+| §11.10(c) | Conservación sin borrado físico | Anular inspecciones y novedades, retirar evidencias; `DELETE` retirados (405) | `BorradoInspeccionTests`, `NovedadesTests.Ninguna_ruta_borra_ni_edita_inspecciones_novedades_ni_evidencias`, `NovedadesSqlServerTests.Una_inspeccion_con_novedades_no_se_puede_borrar`, `InspeccionesSqlServerTests`, `EvidenciasControllerTests.Retirar_*` | Cumple |
 | §11.10(d) | Acceso limitado y revocación inmediata | JWT por roles; claim `ecar_sello`; `SelloSeguridad.ValidarTokenAsync`; cabeceras `nosniff`, `X-Frame-Options`, CSP y HSTS fuera de desarrollo | `SelloSeguridadTests`, `SeguridadCuentasTests.ConPasswordPendiente_SoloSePermiteCambiarla`, `SeguridadCuentasTests.Desactivar_InvalidaLasSesionesAnteriores` | Cumple |
 | §11.10(e) | Auditoría automática, segura e inmutable | `ECARDbContext.Auditoria`, hashes encadenados, trigger; consulta, historial y verificación por API | `AuditoriaTransaccionalTests`, `AuditoriaSqlServerTests`, `MigracionFase4Tests`, `AuditoriaVerificacionTests.UnaFilaAlterada_SeDetectaYSeIndicaCual`, `AuditoriaVerificacionSqlServerTests` | Cumple |
-| §11.10(f) | Secuencia operativa controlada | EnCurso → Cerrada/Anulada; Abierto → EnProceso → Cerrado → (Admin) Abierto | `BackendPhaseThreeFirmaTests`, `HallazgosEstadosTests.Matriz_SoloPermiteLasCincoTransicionesAcordadas` | Cumple |
-| §11.10(g) | Comprobación de autoridad | Roles y propiedad; reabrir, anular, restablecer y desbloquear solo el Administrador | `HallazgosEstadosTests.Reabrir_ElAdministradorConMotivo_LimpiaElCierreYConservaLaAccion`, `InspeccionesAnulacionTests.Anular_UnTecnicoQueNoEsElInspector_Devuelve403`, `IntegracionFase4Tests.Verificar_la_integridad_es_solo_de_Administrador_y_Auditor`, `SeguridadCuentasTests` | Cumple |
+| §11.10(f) | Secuencia operativa controlada | Inspección: EnCurso → Cerrada / NovedadesPendientes → Cerrada, o EnCurso → Anulada. Novedad: Pendiente → Resuelta (firma) o → Anulada (Administrador); no se reabre | `BackendPhaseThreeFirmaTests`, `NovedadesTests.Al_resolver_la_ultima_la_inspeccion_queda_cerrada_con_novedad_y_sus_sellos_siguen_integros`, `NovedadesTests.Una_resuelta_no_se_vuelve_a_resolver_ni_se_anula` | Cumple |
+| §11.10(g) | Comprobación de autoridad | Roles y propiedad; resolver una novedad, Técnico o Administrador; anularla, restablecer y desbloquear, solo el Administrador | `NovedadesTests.Cada_accion_exige_su_rol`, `InspeccionesAnulacionTests.Anular_UnTecnicoQueNoEsElInspector_Devuelve403`, `IntegracionFase4Tests.Verificar_la_integridad_es_solo_de_Administrador_y_Auditor`, `SeguridadCuentasTests` | Cumple |
 | §11.10(h) | Origen de los datos | `ContextoAuditoriaHttp`: usuario, IP y agente; validación binaria de imágenes | `SelloSeguridadTests`, `AuditoriaSqlServerTests.Cada_cambio_queda_en_la_auditoria_con_su_cadena` | Cumple |
 | §11.10(i) | Personal capacitado | Procedimiento y capacitación de ECAR | No corresponde únicamente al software | Fuera de código |
 | §11.10(j) | Responsabilidad por firma | Declaración legal antes de firmar y manifestación visible | `PasoFirma.TextoLegal`, revisión en pantalla 16/10 | Cumple en el sistema; falta el SOP de ECAR |
 | §11.10(k) | Control de documentación | Git, PR, este archivo y `CHANGELOG.md` | Revisión de repositorio | Cumple desde este corte |
-| §11.50 | Nombre, fecha y significado de la firma | `FirmaNombre`, `FirmaSignificado` guardados al firmar; pantalla, impresión y PDF con zona horaria | `FirmaIntegridadTests.Firmar_GuardaNombreFechaSignificadoYAlgoritmo` | Cumple |
-| §11.70 | Firma vinculada al registro | HMAC-SHA256 con `Firma:ClaveHmac` fuera de la base, sobre el contenido, la manifestación y la huella de cada foto vigente; `GET …/integridad` | `FirmaIntegridadTests.Integridad_*`, `IntegracionFase4Tests.La_huella_no_incluye_las_evidencias_retiradas`, `FirmaSqlServerTests` | Cumple |
+| §11.50 | Nombre, fecha y significado de la firma | `FirmaNombre`, `FirmaSignificado` guardados al firmar la inspección y al resolver cada novedad («Responsable de la resolución de la novedad»); pantalla, impresión y PDF con zona horaria | `FirmaIntegridadTests.Firmar_GuardaNombreFechaSignificadoYAlgoritmo`, `NovedadesTests.Otro_tecnico_la_resuelve_con_su_firma_y_la_inspeccion_espera_a_la_otra` | Cumple |
+| §11.70 | Firma vinculada al registro | HMAC-SHA256 con `Firma:ClaveHmac` fuera de la base, sobre el contenido, la manifestación y la huella de cada foto vigente. Desde las novedades, `HMACSHA256-v2` sin el resultado (cambia al resolverse); las firmadas con v1 se siguen verificando. La resolución de una novedad tiene su propio sello, atado al de la inspección; `GET …/integridad` en los dos | `FirmaIntegridadTests.Integridad_*`, `IntegracionFase4Tests.La_huella_no_incluye_las_evidencias_retiradas`, `FirmaSqlServerTests`, `NovedadesTests.Cambiar_lo_que_se_hizo_despues_de_firmar_rompe_el_sello`, `NovedadesTests.Una_inspeccion_sellada_con_v1_se_sigue_verificando_y_en_v2_el_resultado_no_cuenta` | Cumple |
 | §11.100(a) | Firma única por persona | Cuentas únicas; correo y usuario AD fijos tras firmar | `IntegracionFase4Tests.Editar_un_usuario_no_fija_contrasenas_ni_cambia_el_correo_de_quien_firmo` | Cumple |
 | §11.100(b) | Identidad verificada antes de habilitar firma | Alta de usuario atribuible y auditada | `AuditoriaTransaccionalTests` | Control técnico parcial; requiere procedimiento ECAR |
 | §11.200(a) | Reautenticación al firmar | Contraseña en cada firma (400 errónea, 423 bloqueada); restablecer ≠ fijar | `FirmaIntegridadTests.Firmar_*`, `SeguridadCuentasTests.Restablecer_*`, `IntegracionFase4Tests.Restablecer_no_da_contrasena_local_a_una_cuenta_solo_de_Active_Directory` | Cumple |
@@ -55,8 +57,8 @@ que no está integrada en `develop`.
 
 ```text
 dotnet test ECAR.AuditoriaEquipos.slnx
-ECAR.API.Tests:         143 superadas, 0 fallidas
-ECAR.IntegrationTests:   11 superadas, 0 fallidas
+ECAR.API.Tests:         276 superadas, 0 fallidas
+ECAR.IntegrationTests:   31 superadas, 0 fallidas
 
 dotnet ef migrations has-pending-model-changes ...
 No changes have been made to the model since the last migration.

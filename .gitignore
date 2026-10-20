@@ -114,6 +114,8 @@ secret.json
 
 # Fotografías de evidencias subidas en local (Evidencias:RutaBase). Nunca se versionan.
 EvidenciasStorageLocal/
+# Correos de novedades guardados en local mientras no hay SMTP (Correo:CarpetaSalida). Nunca se versionan.
+CorreosSalida/
 
 # Contexto local de Claude Code. No se versiona.
 CLAUDE.md

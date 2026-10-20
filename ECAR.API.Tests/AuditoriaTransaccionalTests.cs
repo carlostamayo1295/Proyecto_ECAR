@@ -183,13 +183,14 @@ public class AuditoriaTransaccionalTests
         Assert.Equal("(cambiada)", Json(fila.ValorNuevo)["PasswordHash"].GetString());
     }
 
-    private static async Task<(ECARDbContext Db, ContextoFalso Contexto, Inspeccion Inspeccion, Hallazgo Hallazgo)> InspeccionConHallazgoAsync()
+    private static async Task<(ECARDbContext Db, ContextoFalso Contexto, Inspeccion Inspeccion, Novedad Novedad)> InspeccionConNovedadAsync()
     {
         var contexto = new ContextoFalso();
         var db = CrearContexto(contexto);
         var usuario = NuevoUsuario();
         var equipo = NuevoEquipo();
-        var checklist = new Checklist { Nombre = "Diario", Version = "1.0" };
+        var pregunta = new PreguntaChecklist { Pregunta = "¿Sin fugas?", TipoRespuesta = TiposRespuesta.SiNo, Orden = 1 };
+        var checklist = new Checklist { Nombre = "Diario", Version = "1.0", Preguntas = [pregunta] };
         db.AddRange(usuario, equipo, checklist);
         await db.SaveChangesAsync();
         var inspeccion = new Inspeccion
@@ -201,57 +202,74 @@ public class AuditoriaTransaccionalTests
         };
         db.Inspecciones.Add(inspeccion);
         await db.SaveChangesAsync();
-        var hallazgo = new Hallazgo
+        var respuesta = new RespuestaInspeccion
+        {
+            IdInspeccion = inspeccion.IdInspeccion, IdPregunta = pregunta.IdPregunta, Respuesta = "No", Observacion = "Fuga en la junta"
+        };
+        db.RespuestasInspeccion.Add(respuesta);
+        await db.SaveChangesAsync();
+        var novedad = new Novedad
         {
             IdInspeccion = inspeccion.IdInspeccion,
-            Descripcion = "Fuga en la junta",
+            IdPregunta = pregunta.IdPregunta,
+            IdRespuesta = respuesta.IdRespuesta,
+            Descripcion = "¿Sin fugas?: Fuga en la junta",
             Criticidad = "Alta",
+            FechaRegistro = DateTime.UtcNow,
             IdUsuarioRegistro = usuario.IdUsuario
         };
-        db.Hallazgos.Add(hallazgo);
+        db.Novedades.Add(novedad);
         await db.SaveChangesAsync();
-        return (db, contexto, inspeccion, hallazgo);
+        return (db, contexto, inspeccion, novedad);
     }
 
     [Fact]
-    public async Task Anular_un_hallazgo_registra_Anular_con_el_motivo()
+    public async Task Anular_una_novedad_registra_Anular_con_el_motivo()
     {
-        var (db, contexto, _, hallazgo) = await InspeccionConHallazgoAsync();
+        var (db, contexto, _, novedad) = await InspeccionConNovedadAsync();
         await using var _db = db;
 
         contexto.Motivo = "  Registrado por error en otro equipo  ";
-        hallazgo.Estado = HallazgoEstados.Anulado;
-        hallazgo.MotivoAnulacion = "Registrado por error en otro equipo";
+        novedad.Estado = NovedadEstados.Anulada;
+        novedad.MotivoAnulacion = "Registrado por error en otro equipo";
         await db.SaveChangesAsync();
 
         var fila = (await FilasAsync(db)).Last();
-        Assert.Equal("Hallazgos", fila.Tabla);
-        Assert.Equal(hallazgo.IdHallazgo, fila.RegistroId);
+        Assert.Equal("Novedades", fila.Tabla);
+        Assert.Equal(novedad.IdNovedad, fila.RegistroId);
         Assert.Equal(AuditoriaAcciones.Anular, fila.Accion);
         Assert.Equal("Registrado por error en otro equipo", fila.Motivo);
-        Assert.Equal(HallazgoEstados.Abierto, Json(fila.ValorAnterior)["Estado"].GetString());
+        Assert.Equal(NovedadEstados.Pendiente, Json(fila.ValorAnterior)["Estado"].GetString());
     }
 
     [Fact]
-    public async Task Cerrar_y_reabrir_un_hallazgo_tienen_su_propia_accion()
+    public async Task Firmar_con_novedades_resolverlas_y_cerrar_la_inspeccion_tienen_su_propia_accion()
     {
-        var (db, _, _, hallazgo) = await InspeccionConHallazgoAsync();
+        var (db, _, inspeccion, novedad) = await InspeccionConNovedadAsync();
         await using var _db = db;
 
-        hallazgo.Estado = HallazgoEstados.Cerrado;
-        hallazgo.AccionCorrectiva = "Se cambió la junta";
+        inspeccion.Estado = InspeccionEstados.NovedadesPendientes;
         await db.SaveChangesAsync();
-        hallazgo.Estado = HallazgoEstados.Abierto;
+        novedad.Estado = NovedadEstados.Resuelta;
+        novedad.Solucion = "Se cambió la junta";
+        novedad.FirmaDigital = "iVBORw0KGgo" + new string('B', 200);
+        inspeccion.Estado = InspeccionEstados.Cerrada;
         await db.SaveChangesAsync();
 
-        var acciones = (await FilasAsync(db)).TakeLast(2).Select(f => f.Accion);
-        Assert.Equal([AuditoriaAcciones.Cerrar, AuditoriaAcciones.Reabrir], acciones);
+        var filas = await FilasAsync(db);
+        Assert.Equal(AuditoriaAcciones.Firmar, filas[^3].Accion);
+        // Ordenadas por tabla: Inspecciones (Cerrar) y Novedades (Resolver).
+        Assert.Equal([AuditoriaAcciones.Cerrar, AuditoriaAcciones.Resolver],
+            filas.TakeLast(2).OrderBy(f => f.Tabla).Select(f => f.Accion));
+        // La firma de la resolución tampoco se copia en la auditoría: solo su huella.
+        var resolver = filas.Single(f => f.Accion == AuditoriaAcciones.Resolver);
+        Assert.StartsWith("sha256:", Json(resolver.ValorNuevo)["FirmaDigital"].GetString());
     }
 
     [Fact]
     public async Task Firmar_y_anular_una_inspeccion_y_la_firma_se_guarda_como_huella()
     {
-        var (db, _, inspeccion, _) = await InspeccionConHallazgoAsync();
+        var (db, _, inspeccion, _) = await InspeccionConNovedadAsync();
         await using var _db = db;
         var png = "iVBORw0KGgo" + new string('A', 400);
 
@@ -282,7 +300,7 @@ public class AuditoriaTransaccionalTests
     [Fact]
     public async Task Retirar_una_evidencia_registra_Retirar()
     {
-        var (db, _, inspeccion, _) = await InspeccionConHallazgoAsync();
+        var (db, _, inspeccion, _) = await InspeccionConNovedadAsync();
         await using var _db = db;
         var evidencia = new Evidencia
         {

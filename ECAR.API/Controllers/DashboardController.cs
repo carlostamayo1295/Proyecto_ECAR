@@ -11,8 +11,9 @@ using Microsoft.EntityFrameworkCore;
 namespace ECAR.API.Controllers;
 
 /// <summary>
-/// Indicadores de la portada (SRS §6 "Dashboard"). Son conteos sin datos personales, así que los
-/// ven los tres roles.
+/// Indicadores de la portada (SRS §6 "Dashboard"): equipos, inspecciones y novedades. Son conteos
+/// sin datos personales, así que los
+/// ven los tres roles. Una inspección con novedades pendientes ya está firmada: cuenta como realizada.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -70,7 +71,8 @@ public class DashboardController : ControllerBase
         var programados = equipos.Where(e => e.FrecuenciaInspeccion != null).ToList();
         var idsProgramados = programados.Select(e => e.IdEquipo).ToList();
         var firmadasDelTrimestre = await _context.Inspecciones.AsNoTracking()
-            .Where(i => i.Estado == InspeccionEstados.Cerrada && i.FechaInspeccion >= inicioTrimestreUtc!.Value
+            .Where(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes)
+                        && i.FechaInspeccion >= inicioTrimestreUtc!.Value
                         && idsProgramados.Contains(i.IdEquipo))
             .Select(i => new { i.IdEquipo, i.FechaInspeccion })
             .ToListAsync();
@@ -85,27 +87,28 @@ public class DashboardController : ControllerBase
             .Select(g => new { Estado = g.Key, Cantidad = g.Count() })
             .ToDictionaryAsync(g => g.Estado, g => g.Cantidad);
         var firmadasMes = await _context.Inspecciones.AsNoTracking()
-            .CountAsync(i => i.Estado == InspeccionEstados.Cerrada && i.FechaInspeccion >= inicioMesUtc!.Value);
+            .CountAsync(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes)
+                             && i.FechaInspeccion >= inicioMesUtc!.Value);
 
-        var estadosHallazgo = await _context.Hallazgos.AsNoTracking()
-            .GroupBy(h => h.Estado)
+        var estadosNovedad = await _context.Novedades.AsNoTracking()
+            .GroupBy(n => n.Estado)
             .Select(g => new { Estado = g.Key, Cantidad = g.Count() })
-            .ToDictionaryAsync(g => g.Estado ?? HallazgoEstados.Abierto, g => g.Cantidad);
+            .ToDictionaryAsync(g => g.Estado, g => g.Cantidad);
+        var conPendientes = estadosInspeccion.GetValueOrDefault(InspeccionEstados.NovedadesPendientes);
 
         var dto = new DashboardDto
         {
             TotalEquipos = equipos.Count,
             EquiposPorCriticidad = criticidades,
             EquiposPorArea = areas,
-            InspeccionesRealizadas = estadosInspeccion.GetValueOrDefault(InspeccionEstados.Cerrada),
+            InspeccionesRealizadas = estadosInspeccion.GetValueOrDefault(InspeccionEstados.Cerrada) + conPendientes,
             InspeccionesRealizadasMes = firmadasMes,
             InspeccionesEnCurso = estadosInspeccion.GetValueOrDefault(InspeccionEstados.EnCurso),
             InspeccionesPendientes = pendientes,
             EquiposProgramados = programados.Count,
-            HallazgosAbiertos = estadosHallazgo.GetValueOrDefault(HallazgoEstados.Abierto)
-                                + estadosHallazgo.GetValueOrDefault(HallazgoEstados.EnProceso),
-            HallazgosEnProceso = estadosHallazgo.GetValueOrDefault(HallazgoEstados.EnProceso),
-            HallazgosCerrados = estadosHallazgo.GetValueOrDefault(HallazgoEstados.Cerrado),
+            InspeccionesConNovedadesPendientes = conPendientes,
+            NovedadesPendientes = estadosNovedad.GetValueOrDefault(NovedadEstados.Pendiente),
+            NovedadesResueltas = estadosNovedad.GetValueOrDefault(NovedadEstados.Resuelta),
             Periodo = inicioMes.ToString("MMMM 'de' yyyy", CultureInfo.GetCultureInfo("es-CO")),
             GeneradoEn = ahora
         };

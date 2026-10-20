@@ -8,7 +8,7 @@ namespace ECAR.API.Tests;
 
 /// <summary>
 /// Fase 1 de la anulación de inspecciones: Anulada es un estado válido y ninguna relación borra
-/// en cascada una inspección ni sus datos (respuestas, evidencias, preguntas, hallazgos, auditoría).
+/// en cascada una inspección ni sus datos (respuestas, evidencias, preguntas, novedades, auditoría).
 /// </summary>
 public class InspeccionesModeloTests
 {
@@ -18,9 +18,10 @@ public class InspeccionesModeloTests
 
     [Theory]
     [InlineData(InspeccionEstados.EnCurso)]
+    [InlineData(InspeccionEstados.NovedadesPendientes)]
     [InlineData(InspeccionEstados.Cerrada)]
     [InlineData(InspeccionEstados.Anulada)]
-    public void EsValido_IncluyeLosTresEstados(string estado)
+    public void EsValido_IncluyeLosCuatroEstados(string estado)
     {
         Assert.True(InspeccionEstados.EsValido(estado));
     }
@@ -36,7 +37,7 @@ public class InspeccionesModeloTests
     [InlineData(typeof(RespuestaInspeccion))]
     [InlineData(typeof(Evidencia))]
     [InlineData(typeof(PreguntaChecklist))]
-    [InlineData(typeof(Hallazgo))]
+    [InlineData(typeof(Novedad))]
     [InlineData(typeof(Auditoria))]
     public void Modelo_NingunaRelacionBorraEnCascada(Type entidad)
     {

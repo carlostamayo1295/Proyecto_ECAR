@@ -41,7 +41,7 @@ public class InspeccionEjecucionDto
     public int ObligatoriasRespondidas { get; set; }
     public int TotalNovedades { get; set; }
 
-    public bool EstaCerrada => Estado == InspeccionEstados.Cerrada;
+    public bool EstaCerrada => InspeccionEstados.EstaFirmada(Estado);
 
     /// <summary>Fase 4: anulada con motivo; como una cerrada, ya no admite cambios.</summary>
     public bool EstaAnulada => Estado == InspeccionEstados.Anulada;

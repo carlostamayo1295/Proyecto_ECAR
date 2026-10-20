@@ -10,7 +10,7 @@
 
 @*
   Portada. Sin sesión: bienvenida y acceso al login. Con sesión: el tablero de indicadores del
-  SRS §6 (equipos, inspecciones y hallazgos), calculado por GET api/dashboard.
+  SRS §6 (equipos, inspecciones y novedades), calculado por GET api/dashboard.
 *@
 <MudContainer MaxWidth="MaxWidth.Large" Class="home-container">
     @if (cargando)
@@ -119,9 +119,11 @@
                 <MudPaper Class="indicador" Elevation="1">
                     <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Color="Color.Error" />
                     <div>
-                        <MudText Typo="Typo.h4">@tablero.HallazgosAbiertos</MudText>
-                        <MudText Typo="Typo.body2">Hallazgos abiertos</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@tablero.HallazgosEnProceso de ellos en proceso</MudText>
+                        <MudText Typo="Typo.h4">@tablero.NovedadesPendientes</MudText>
+                        <MudText Typo="Typo.body2">Novedades pendientes</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            en @tablero.InspeccionesConNovedadesPendientes inspección(es) firmada(s) sin cerrar
+                        </MudText>
                     </div>
                 </MudPaper>
             </MudItem>
@@ -129,8 +131,8 @@
                 <MudPaper Class="indicador" Elevation="1">
                     <MudIcon Icon="@Icons.Material.Filled.Verified" Color="Color.Success" />
                     <div>
-                        <MudText Typo="Typo.h4">@tablero.HallazgosCerrados</MudText>
-                        <MudText Typo="Typo.body2">Hallazgos cerrados</MudText>
+                        <MudText Typo="Typo.h4">@tablero.NovedadesResueltas</MudText>
+                        <MudText Typo="Typo.body2">Novedades resueltas</MudText>
                     </div>
                 </MudPaper>
             </MudItem>

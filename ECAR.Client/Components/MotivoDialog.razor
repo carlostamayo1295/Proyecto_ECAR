@@ -1,10 +1,10 @@
-@* Pide el motivo de una acción que lo exige (PLAN_FASE4_TAREAS §3.3): anular una inspección o un
-   hallazgo, retirar una evidencia, reabrir un hallazgo, restablecer una contraseña, desbloquear
-   una cuenta. El motivo viaja en MotivoDto y queda en la fila de auditoría de la acción.
+@* Pide el motivo de una acción que lo exige (PLAN_FASE4_TAREAS §3.3): anular una inspección o una
+   novedad, retirar una evidencia, restablecer una contraseña, desbloquear una cuenta. El motivo
+   viaja en MotivoDto y queda en la fila de auditoría de la acción.
 
    Uso, desde cualquier pantalla:
-       var motivo = await MotivoDialog.PedirAsync(DialogService, "Anular hallazgo",
-           "El hallazgo quedará anulado y no se podrá modificar.", "Anular", Color.Error);
+       var motivo = await MotivoDialog.PedirAsync(DialogService, "Anular novedad",
+           "La novedad quedará anulada y no se podrá modificar.", "Anular", Color.Error);
        if (motivo is null) return;   // canceló
 *@
 

@@ -1,21 +1,24 @@
 ﻿@* Confirmación de identidad antes de firmar (Parte 11 §11.200(a)(1)). Se abre al pulsar
-   "Firmar y cerrar" en PasoFirma.razor y en el modal de Inspecciones. Si la contraseña es
-   incorrecta (400 sin Errors) o la cuenta está bloqueada (423), el diálogo se queda abierto para
-   no perder la firma ya dibujada. Si lo que falla es el contenido (400 con Errors: obligatorias
-   sin responder, novedades sin observación), se cierra y devuelve la lista para mostrarla.
+   "Firmar y cerrar" en PasoFirma.razor y en el modal de Inspecciones, y al firmar la resolución de
+   una novedad. Si la contraseña es incorrecta (400 sin Errors) o la cuenta está bloqueada (423), el
+   diálogo se queda abierto para no perder la firma ya dibujada. Si lo que falla es el contenido
+   (400 con Errors: obligatorias sin responder, novedades sin observación, solución vacía), se
+   cierra y devuelve la lista para mostrarla.
 
    Uso:
        var respuesta = await ConfirmarIdentidadDialog.AbrirAsync(DialogService, idInspeccion, firmaPngSinPrefijo, observaciones);
+       var respuesta = await ConfirmarIdentidadDialog.ResolverNovedadAsync(DialogService, idNovedad, firmaPngSinPrefijo, solucion);
        if (respuesta is null) return;              // canceló
-       if (!respuesta.Success) { ... respuesta.Errors ... }   // faltan datos para cerrar
+       if (!respuesta.Success) { ... respuesta.Errors ... }   // faltan datos para firmar
 *@
 @inject AuthorizationService AuthorizationService
 
 <MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = false }">
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-4">
-            Para firmar y cerrar la inspección, confirme su contraseña. Esto equivale a su firma
-            electrónica sobre este registro.
+            @(IdNovedad > 0
+                ? "Para firmar la resolución de la novedad, confirme su contraseña. Esto equivale a su firma electrónica sobre lo que registró."
+                : "Para firmar y cerrar la inspección, confirme su contraseña. Esto equivale a su firma electrónica sobre este registro.")
         </MudText>
 
         <MudTextField T="string" Label="Usuario" Value="@usuario" ReadOnly="true" Variant="Variant.Outlined"
@@ -65,9 +68,17 @@
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
-    [Parameter, EditorRequired] public long IdInspeccion { get; set; }
+    /// <summary>La inspección que se firma; 0 si lo que se firma es una novedad.</summary>
+    [Parameter] public long IdInspeccion { get; set; }
+
+    /// <summary>La novedad cuya resolución se firma; 0 si se firma una inspección.</summary>
+    [Parameter] public long IdNovedad { get; set; }
+
     [Parameter, EditorRequired] public string FirmaPngBase64 { get; set; } = string.Empty;
     [Parameter] public string? Observaciones { get; set; }
+
+    /// <summary>Lo que se hizo para resolver la novedad.</summary>
+    [Parameter] public string? Solucion { get; set; }
 
     [Inject] private HttpClientService HttpClientService { get; set; } = null!;
 
@@ -99,36 +110,54 @@
         bloqueado = false;
         mensajeError = string.Empty;
 
-        var result = await HttpClientService.FirmarInspeccionAsync(IdInspeccion, new FirmarInspeccionDto
+        object respuesta;
+        bool firmado;
+        string mensaje;
+        List<string>? errores;
+        if (IdNovedad > 0)
         {
-            FirmaPngBase64 = FirmaPngBase64,
-            Observaciones = Observaciones,
-            Password = password
-        });
+            var result = await HttpClientService.ResolverNovedadAsync(IdNovedad, new ResolverNovedadDto
+            {
+                Solucion = Solucion ?? string.Empty,
+                FirmaPngBase64 = FirmaPngBase64,
+                Password = password
+            });
+            (respuesta, firmado, mensaje, errores) = (result, result.Success && result.Data != null, result.Message, result.Errors);
+        }
+        else
+        {
+            var result = await HttpClientService.FirmarInspeccionAsync(IdInspeccion, new FirmarInspeccionDto
+            {
+                FirmaPngBase64 = FirmaPngBase64,
+                Observaciones = Observaciones,
+                Password = password
+            });
+            (respuesta, firmado, mensaje, errores) = (result, result.Success && result.Data != null, result.Message, result.Errors);
+        }
 
         enviando = false;
 
-        // Firmada, o el contenido no permite cerrarla todavía: en los dos casos decide quien abrió
+        // Firmada, o el contenido no permite firmar todavía: en los dos casos decide quien abrió
         // el diálogo (mostrar el resultado o la lista de lo que falta).
-        if ((result.Success && result.Data != null) || result.Errors is { Count: > 0 })
+        if (firmado || errores is { Count: > 0 })
         {
-            MudDialog.Close(DialogResult.Ok(result));
+            MudDialog.Close(DialogResult.Ok(respuesta));
             return;
         }
 
         // 400 sin Errors (contraseña incorrecta) o 423 (cuenta bloqueada): el diálogo sigue
         // abierto y la firma dibujada en el canvas queda intacta para reintentar.
-        if (result.Message.Contains("bloquead", StringComparison.OrdinalIgnoreCase))
+        if (mensaje.Contains("bloquead", StringComparison.OrdinalIgnoreCase))
         {
             bloqueado = true;
-            mensajeError = result.Message;
+            mensajeError = mensaje;
         }
         else
         {
             tieneError = true;
-            mensajeError = string.IsNullOrWhiteSpace(result.Message)
+            mensajeError = string.IsNullOrWhiteSpace(mensaje)
                 ? "No se pudo verificar la contraseña. Intente de nuevo."
-                : result.Message;
+                : mensaje;
             password = string.Empty;
         }
     }
@@ -161,5 +190,23 @@
         var dialogo = await dialogos.ShowAsync<ConfirmarIdentidadDialog>("Confirmar identidad", parametros);
         var resultado = await dialogo.Result;
         return resultado is { Canceled: false, Data: ApiResponse<InspeccionResultadoDto> respuesta } ? respuesta : null;
+    }
+
+    /// <summary>
+    /// Igual que <see cref="AbrirAsync"/>, pero firma la resolución de una novedad con lo que se hizo.
+    /// </summary>
+    public static async Task<ApiResponse<NovedadDto>?> ResolverNovedadAsync(IDialogService dialogos,
+        long idNovedad, string firmaPngBase64, string solucion)
+    {
+        var parametros = new DialogParameters<ConfirmarIdentidadDialog>
+        {
+            { d => d.IdNovedad, idNovedad },
+            { d => d.FirmaPngBase64, firmaPngBase64 },
+            { d => d.Solucion, solucion }
+        };
+
+        var dialogo = await dialogos.ShowAsync<ConfirmarIdentidadDialog>("Confirmar identidad", parametros);
+        var resultado = await dialogo.Result;
+        return resultado is { Canceled: false, Data: ApiResponse<NovedadDto> respuesta } ? respuesta : null;
     }
 }

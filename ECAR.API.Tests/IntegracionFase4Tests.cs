@@ -133,30 +133,6 @@ public class IntegracionFase4Tests
         Assert.NotEqual(sinFotos, await verificador.CalcularSelloAsync(inspeccion));
     }
 
-    [Fact]
-    public async Task El_responsable_de_un_hallazgo_debe_ser_Tecnico_o_Administrador()
-    {
-        await using var db = Base();
-        var (tecnico, inspeccion) = await InspeccionFirmadaAsync(db);
-        var auditor = new Usuario { Nombre = "Diana", Correo = "diana@ecar.test", PasswordHash = "x", Activo = true };
-        auditor.UsuarioRoles.Add(new UsuarioRol { Rol = new Rol { Nombre = "Auditor" } });
-        db.Usuarios.Add(auditor);
-        await db.SaveChangesAsync();
-        var controlador = new HallazgosController(db, new Usuario1(tecnico.IdUsuario, "Técnico"), new MotivoCambio());
-
-        var aAuditor = await controlador.CreateHallazgo(new CreateHallazgoDto
-        {
-            IdInspeccion = inspeccion.IdInspeccion, Descripcion = "Etiqueta de calibración vencida", IdUsuarioResponsable = auditor.IdUsuario
-        });
-        var aTecnico = await controlador.CreateHallazgo(new CreateHallazgoDto
-        {
-            IdInspeccion = inspeccion.IdInspeccion, Descripcion = "Etiqueta de calibración vencida", IdUsuarioResponsable = tecnico.IdUsuario
-        });
-
-        Assert.IsType<BadRequestObjectResult>(aAuditor.Result);
-        Assert.IsType<CreatedAtActionResult>(aTecnico.Result);
-    }
-
     private sealed class FakeFoto : IEvidenciaStorage
     {
         public Task<string> GuardarAsync(Stream stream, string extension, long idInspeccion) => Task.FromResult("f.png");

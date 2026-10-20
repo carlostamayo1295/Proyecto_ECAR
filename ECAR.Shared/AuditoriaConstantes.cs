@@ -16,8 +16,8 @@ public static class AuditoriaAcciones
     public const string Cerrar = "Cerrar";
     public const string Firmar = "Firmar";
 
-    /// <summary>Un hallazgo cerrado que el Administrador vuelve a abrir, con motivo (§3.5).</summary>
-    public const string Reabrir = "Reabrir";
+    /// <summary>Una novedad que un Técnico o un Administrador resuelve con su firma.</summary>
+    public const string Resolver = "Resolver";
 
     /// <summary>Una evidencia quitada de una inspección en curso: se conserva, no se borra (§3.6).</summary>
     public const string Retirar = "Retirar";
@@ -32,11 +32,17 @@ public static class AuditoriaAcciones
     public const string Exportacion = "Exportacion";
     public const string VerificacionIntegridad = "VerificacionIntegridad";
 
+    /// <summary>Salió el correo de una novedad a la mesa de ayuda (RegistroId = la novedad).</summary>
+    public const string NotificacionEnviada = "NotificacionEnviada";
+
+    /// <summary>No se pudo enviar el correo de una novedad; el Administrador puede reenviarlo.</summary>
+    public const string NotificacionFallida = "NotificacionFallida";
+
     public static readonly IReadOnlyList<string> Todas =
     [
-        Crear, Modificar, Eliminar, Desactivar, Activar, Anular, Cerrar, Firmar, Reabrir, Retirar,
+        Crear, Modificar, Eliminar, Desactivar, Activar, Anular, Cerrar, Firmar, Resolver, Retirar,
         LoginExitoso, LoginFallido, CuentaBloqueada, CierreSesion, CambioPassword,
-        RestablecerPassword, Exportacion, VerificacionIntegridad
+        RestablecerPassword, Exportacion, VerificacionIntegridad, NotificacionEnviada, NotificacionFallida
     ];
 }
 
@@ -51,7 +57,7 @@ public static class AuditoriaTablas
     public static readonly IReadOnlyList<string> Todas =
     [
         "Equipos", "CategoriasEquipo", "Ubicaciones", "Checklists", "PreguntasChecklist",
-        "Inspecciones", "RespuestasInspeccion", "Evidencias", "Hallazgos",
+        "Inspecciones", "RespuestasInspeccion", "Evidencias", "Novedades",
         "Usuarios", "Roles", "UsuarioRol", "HistorialPasswords", Sistema
     ];
 }

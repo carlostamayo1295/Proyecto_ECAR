@@ -2,6 +2,8 @@ using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
 namespace ECAR.IntegrationTests;
@@ -9,11 +11,15 @@ namespace ECAR.IntegrationTests;
 /// <summary>
 /// La migración Fase4HallazgosAuditoria sobre una base con datos de la Fase 3: convierte los
 /// hallazgos, da un sello a cada usuario y sella la auditoría existente con la misma fórmula que
-/// usa la aplicación, de modo que la cadena se verifica entera y detecta una fila alterada.
+/// usa la aplicación, de modo que la cadena se verifica entera y detecta una fila alterada. Después,
+/// NovedadesReemplazanHallazgos borra Hallazgos y crea Novedades.
 /// </summary>
 public class MigracionFase4Tests
 {
     private const string UltimaMigracionFase3 = "20260921114232_Fase3BaseInspecciones";
+
+    /// <summary>La última con la tabla Hallazgos: la siguiente la reemplaza por Novedades.</summary>
+    private const string UltimaConHallazgos = "20261017200727_InspeccionesControlConcurrencia";
 
     [Fact]
     public async Task Convierte_los_datos_de_la_Fase_3_y_sella_la_auditoria_existente()
@@ -41,16 +47,17 @@ public class MigracionFase4Tests
 
         await using (var db = baseDePruebas.CrearContexto())
         {
-            await db.Database.MigrateAsync();
+            await db.GetService<IMigrator>().MigrateAsync(UltimaConHallazgos);
         }
 
         await using var lectura = baseDePruebas.CrearContexto();
 
-        var hallazgos = await lectura.Hallazgos.AsNoTracking().OrderBy(h => h.IdHallazgo).ToListAsync();
+        // La entidad Hallazgo ya no existe: se lee con SQL.
         var inspector = await lectura.Usuarios.Where(u => u.Correo == "beto@pruebas.ecar").Select(u => u.IdUsuario).SingleAsync();
-        Assert.Equal([HallazgoEstados.Abierto, HallazgoEstados.Cerrado], hallazgos.Select(h => h.Estado));
-        Assert.All(hallazgos, h => Assert.Equal(HallazgoOrigenes.Manual, h.Origen));
-        Assert.All(hallazgos, h => Assert.Equal(inspector, h.IdUsuarioRegistro));
+        Assert.Equal("Abierto,Cerrado", await baseDePruebas.EscalarAsync<string>(
+            "SELECT STRING_AGG(Estado, ',') WITHIN GROUP (ORDER BY IdHallazgo) FROM Hallazgos"));
+        Assert.Equal(2, await baseDePruebas.EscalarAsync<int>(
+            $"SELECT COUNT(*) FROM Hallazgos WHERE Origen = N'Manual' AND IdUsuarioRegistro = {inspector}"));
 
         var sellos = await lectura.Usuarios.Select(u => u.SecurityStamp).ToListAsync();
         Assert.All(sellos, s => Assert.Equal(32, s.Length));
@@ -84,5 +91,37 @@ public class MigracionFase4Tests
         var resultado = CadenaAuditoria.Verificar(alterada, null);
         Assert.False(resultado.Valida);
         Assert.Equal(cadena[1].IdAuditoria, resultado.PrimeraFilaRota);
+    }
+
+    [Fact]
+    public async Task NovedadesReemplazanHallazgos_borra_Hallazgos_y_crea_Novedades_sin_tocar_las_inspecciones()
+    {
+        await using var baseDePruebas = await BaseDePruebas.CrearAsync(UltimaConHallazgos);
+        await baseDePruebas.EjecutarAsync("""
+            SET QUOTED_IDENTIFIER ON;
+            INSERT INTO Usuarios (Nombre, Correo, UsuarioAD, PasswordHash, Activo, SecurityStamp)
+                VALUES (N'Ana', N'ana@pruebas.ecar', N'ana', N'x', 1, REPLICATE(N'a', 32));
+            INSERT INTO Equipos (CodigoInterno, ActivoFijo, NombreEquipo, Activo, FechaCreacion)
+                VALUES (N'E1', N'A1', N'Balanza', 1, SYSUTCDATETIME());
+            INSERT INTO Checklists (Nombre, Version, Activo, FechaCreacion) VALUES (N'Diario', N'1.0', 1, SYSUTCDATETIME());
+            INSERT INTO Inspecciones (IdEquipo, IdUsuario, IdChecklist, FechaInspeccion, Estado, Resultado, FirmaHash)
+                SELECT e.IdEquipo, u.IdUsuario, c.IdChecklist, SYSUTCDATETIME(), N'Cerrada', N'ConNovedad', REPLICATE(N'c', 64)
+                FROM Equipos e CROSS JOIN Checklists c CROSS JOIN Usuarios u;
+            INSERT INTO Hallazgos (IdInspeccion, Descripcion, Criticidad, Estado, FechaRegistro, Origen, IdUsuarioRegistro)
+                SELECT IdInspeccion, N'Fuga', N'Alta', N'Abierto', SYSUTCDATETIME(), N'Manual', IdUsuario FROM Inspecciones;
+            """);
+
+        await using (var db = baseDePruebas.CrearContexto())
+        {
+            await db.Database.MigrateAsync();
+        }
+
+        Assert.Equal(0, await baseDePruebas.EscalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name = N'Hallazgos'"));
+        Assert.Equal(1, await baseDePruebas.EscalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name = N'Novedades'"));
+        await using var lectura = baseDePruebas.CrearContexto();
+        Assert.False(await lectura.Novedades.AnyAsync());
+        var inspeccion = await lectura.Inspecciones.AsNoTracking().SingleAsync();
+        Assert.Equal((InspeccionEstados.Cerrada, InspeccionResultados.ConNovedad, new string('c', 64)),
+            (inspeccion.Estado, inspeccion.Resultado, inspeccion.FirmaHash));
     }
 }

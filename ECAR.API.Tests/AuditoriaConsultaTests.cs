@@ -33,7 +33,7 @@ public class AuditoriaConsultaTests
         };
 
     private sealed record Escenario(ECARDbContext Context, FilaAuditoria CrearInspeccion, FilaAuditoria AnularInspeccion,
-        FilaAuditoria CerrarHallazgo, FilaAuditoria Login, FilaAuditoria ModificarEquipo);
+        FilaAuditoria ResolverNovedad, FilaAuditoria Login, FilaAuditoria ModificarEquipo);
 
     private static async Task<Escenario> SeedAsync()
     {
@@ -50,7 +50,7 @@ public class AuditoriaConsultaTests
         anular.AgenteUsuario = "Mozilla/5.0";
         anular.HashAnterior = new string('A', 64);
         anular.Hash = new string('B', 64);
-        var cerrar = Fila("Hallazgos", 5, AuditoriaAcciones.Cerrar, 2, Local(3, 0), "Luis (luis@ecar.test)");
+        var cerrar = Fila("Novedades", 5, AuditoriaAcciones.Resolver, 2, Local(3, 0), "Luis (luis@ecar.test)");
         var login = Fila(AuditoriaTablas.Sistema, 1, AuditoriaAcciones.LoginExitoso, 1, Local(5, 12));
         var equipo = Fila("Equipos", 7, AuditoriaAcciones.Modificar, null, Local(5, 13), "Sistema");
 
@@ -79,7 +79,7 @@ public class AuditoriaConsultaTests
         var pagina = await ListarAsync(e, new AuditoriaFiltroDto());
 
         Assert.Equal(5, pagina.TotalCount);
-        Assert.Equal(Ids(e.ModificarEquipo, e.Login, e.CerrarHallazgo, e.AnularInspeccion, e.CrearInspeccion), Ids(pagina));
+        Assert.Equal(Ids(e.ModificarEquipo, e.Login, e.ResolverNovedad, e.AnularInspeccion, e.CrearInspeccion), Ids(pagina));
     }
 
     [Fact]
@@ -117,8 +117,8 @@ public class AuditoriaConsultaTests
     {
         var e = await SeedAsync();
 
-        Assert.Equal(Ids(e.CerrarHallazgo), Ids(await ListarAsync(e, new AuditoriaFiltroDto { Tabla = "Hallazgos", RegistroId = 5 })));
-        Assert.Empty((await ListarAsync(e, new AuditoriaFiltroDto { Tabla = "Hallazgos", RegistroId = 10 })).Data);
+        Assert.Equal(Ids(e.ResolverNovedad), Ids(await ListarAsync(e, new AuditoriaFiltroDto { Tabla = "Novedades", RegistroId = 5 })));
+        Assert.Empty((await ListarAsync(e, new AuditoriaFiltroDto { Tabla = "Novedades", RegistroId = 10 })).Data);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class AuditoriaConsultaTests
 
         var pagina = await ListarAsync(e, new AuditoriaFiltroDto { IdUsuario = 2 });
 
-        Assert.Equal(Ids(e.CerrarHallazgo, e.AnularInspeccion), Ids(pagina));
+        Assert.Equal(Ids(e.ResolverNovedad, e.AnularInspeccion), Ids(pagina));
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public class AuditoriaConsultaTests
             Hasta = new DateTime(2026, 10, 3)
         });
 
-        Assert.Equal(Ids(e.CerrarHallazgo, e.AnularInspeccion), Ids(pagina));
+        Assert.Equal(Ids(e.ResolverNovedad, e.AnularInspeccion), Ids(pagina));
     }
 
     [Fact]
@@ -227,7 +227,7 @@ public class AuditoriaConsultaTests
 
         Assert.Equal(5, segunda.TotalCount);
         Assert.Equal(3, segunda.TotalPages);
-        Assert.Equal(Ids(e.CerrarHallazgo, e.AnularInspeccion), Ids(segunda));
+        Assert.Equal(Ids(e.ResolverNovedad, e.AnularInspeccion), Ids(segunda));
         Assert.True(segunda.HasPrevious);
         Assert.True(segunda.HasNext);
     }

@@ -1,0 +1,121 @@
+@* Novedades de una inspección firmada, con su estado y, si sigue pendiente, el botón para
+   resolverla. OnCambio avisa a la página para que relea la inspección: al resolverse la última
+   pasa de «Novedades pendientes» a «Cerrada» con resultado «Con novedad». *@
+@inject HttpClientService Http
+@inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
+
+<MudText Typo="Typo.subtitle2" Class="mt-4 mb-2"><b>Novedades</b></MudText>
+
+@if (_cargando)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else if (_error != null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">@_error</MudAlert>
+}
+else if (_novedades.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+        Esta inspección no reportó novedades.
+    </MudAlert>
+}
+else
+{
+    <div class="mb-4">
+        @foreach (var n in _novedades)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2">
+                <div class="d-flex flex-wrap align-center gap-2 mb-1">
+                    <MudText Typo="Typo.body2"><b>Novedad #@n.IdNovedad</b></MudText>
+                    <MudChip T="string" Size="Size.Small" Color="@FormatoEstados.ColorCriticidad(n.Criticidad)" Text="@(n.Criticidad ?? "-")" />
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@FormatoEstados.ColorNovedad(n.Estado)" Text="@n.Estado" />
+                </div>
+                <MudText Typo="Typo.body2" Style="word-break: break-word;">@n.Descripcion</MudText>
+                @if (n.Estado == NovedadEstados.Resuelta && n.FechaResolucion is { } resuelta)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                        Resuelta por @n.NombreUsuarioResolucion el @FormatoEstados.HoraColombia(resuelta) (hora de Colombia, UTC−5)
+                    </MudText>
+                }
+                <div class="d-flex flex-wrap gap-2 mt-1 print-hidden">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Visibility" OnClick="@(() => AbrirAsync(n, false))">
+                        Ver detalle
+                    </MudButton>
+                    @if (_puedeResolver && n.Estado == NovedadEstados.Pendiente)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="@(() => AbrirAsync(n, true))">
+                            Resolver
+                        </MudButton>
+                    }
+                </div>
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public long IdInspeccion { get; set; }
+
+    [Parameter]
+    public EventCallback OnCambio { get; set; }
+
+    private List<NovedadDto> _novedades = new();
+    private bool _cargando = true;
+    private string? _error;
+    private long _idCargado;
+    private bool _puedeResolver;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        _puedeResolver = roles.Contains("Administrador") || roles.Contains("Técnico");
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IdInspeccion != _idCargado)
+        {
+            _idCargado = IdInspeccion;
+            await CargarAsync();
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        try
+        {
+            // Una inspección tiene a lo sumo una novedad por pregunta: 100 bastan.
+            var result = await Http.BuscarNovedadesAsync(new NovedadFiltroDto { IdInspeccion = IdInspeccion }, 1, 100);
+            if (result.Success && result.Data != null)
+            {
+                _novedades = result.Data.Data.OrderBy(n => n.IdNovedad).ToList();
+            }
+            else
+            {
+                _error = result.Message;
+            }
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task AbrirAsync(NovedadDto novedad, bool resolver)
+    {
+        var estadoAntes = novedad.Estado;
+        await NovedadDetailModal.AbrirAsync(DialogService, novedad.IdNovedad, resolver);
+        await CargarAsync();
+        if (_novedades.FirstOrDefault(n => n.IdNovedad == novedad.IdNovedad)?.Estado != estadoAntes)
+        {
+            await OnCambio.InvokeAsync();
+        }
+    }
+}

@@ -1160,99 +1160,6 @@ public class HttpClientService
         }
     }
 
-    // Métodos del API de Hallazgos
-    public async Task<ApiResponse<PagedResultDto<HallazgoDto>>?> GetHallazgosAsync(int page = 1, int pageSize = 10,
-        string? search = null, long? idInspeccion = null, string? estado = null)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-
-            var query = $"api/hallazgos?page={page}&pageSize={pageSize}";
-            if (!string.IsNullOrEmpty(search))
-            {
-                query += $"&search={Uri.EscapeDataString(search)}";
-            }
-
-            if (idInspeccion.HasValue)
-            {
-                query += $"&idInspeccion={idInspeccion.Value}";
-            }
-
-            if (!string.IsNullOrEmpty(estado))
-            {
-                query += $"&estado={Uri.EscapeDataString(estado)}";
-            }
-
-            var response = await _httpClient.GetAsync(query);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResultDto<HallazgoDto>>>();
-
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error getting hallazgos: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
-    public async Task<ApiResponse<HallazgoDto>?> GetHallazgoAsync(long id)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.GetAsync($"api/hallazgos/{id}");
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<HallazgoDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error getting hallazgo: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
-    public async Task<ApiResponse<HallazgoDto>?> CreateHallazgoAsync(CreateHallazgoDto createDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync("api/hallazgos", createDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<HallazgoDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error creating hallazgo: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
-    public async Task<ApiResponse<HallazgoDto>?> UpdateHallazgoAsync(long id, UpdateHallazgoDto updateDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsJsonAsync($"api/hallazgos/{id}", updateDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<HallazgoDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating hallazgo: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
-
     public async Task<ApiResponse<List<PreguntaChecklistDto>>?> GetPreguntasChecklistAsync(long idChecklist)
     {
         try
@@ -1535,7 +1442,7 @@ public class HttpClientService
     }
 
     // =============================================================================================
-    // Fase 4 — hallazgos, auditoría, reportes y Parte 11 (PLAN_FASE4_TAREAS §3.4)
+    // Fase 4 — novedades, auditoría, reportes y Parte 11 (PLAN_FASE4_TAREAS §3.4)
     //
     // Los endpoints se publican a lo largo de la fase. Mientras uno no existe, el API responde 404
     // sin cuerpo; estos métodos nunca devuelven null: devuelven Success = false con un mensaje que
@@ -1664,23 +1571,34 @@ public class HttpClientService
                 ("desde", filtro.Desde), ("hasta", filtro.Hasta)),
             $"ECAR_auditoria_{DateTime.Now:yyyyMMdd_HHmm}.{formato}");
 
-    // --- Hallazgos (endpoints 4, 5, 8 y 9; el alta y la edición usan Create/UpdateHallazgoAsync) ---
+    // --- Novedades: nacen al firmar una inspección y se resuelven con firma ---
 
-    public Task<ApiResponse<PagedResultDto<HallazgoDto>>> BuscarHallazgosAsync(HallazgoFiltroDto filtro,
+    public Task<ApiResponse<PagedResultDto<NovedadDto>>> BuscarNovedadesAsync(NovedadFiltroDto filtro,
         int page = 1, int pageSize = 10) =>
-        EnviarAsync<PagedResultDto<HallazgoDto>>(HttpMethod.Get, ConFiltros("api/hallazgos",
+        EnviarAsync<PagedResultDto<NovedadDto>>(HttpMethod.Get, ConFiltros("api/novedades",
             ("page", page), ("pageSize", pageSize), ("search", filtro.Search), ("estado", filtro.Estado),
             ("criticidad", filtro.Criticidad), ("idEquipo", filtro.IdEquipo), ("idInspeccion", filtro.IdInspeccion),
             ("desde", filtro.Desde), ("hasta", filtro.Hasta)));
 
-    public Task<ApiResponse<HallazgoDetalleDto>> GetHallazgoDetalleAsync(long id) =>
-        EnviarAsync<HallazgoDetalleDto>(HttpMethod.Get, $"api/hallazgos/{id}");
+    public Task<ApiResponse<NovedadDetalleDto>> GetNovedadAsync(long id) =>
+        EnviarAsync<NovedadDetalleDto>(HttpMethod.Get, $"api/novedades/{id}");
 
-    public Task<ApiResponse<HallazgoDto>> CambiarEstadoHallazgoAsync(long id, CambiarEstadoHallazgoDto cambio) =>
-        EnviarAsync<HallazgoDto>(HttpMethod.Post, $"api/hallazgos/{id}/estado", cambio);
+    /// <summary>
+    /// Firma la resolución. Una contraseña errónea vuelve sin Errors (el diálogo de firma sigue
+    /// abierto); lo que falte en la solución o la firma vuelve en Errors.
+    /// </summary>
+    public Task<ApiResponse<NovedadDto>> ResolverNovedadAsync(long id, ResolverNovedadDto resolucion) =>
+        EnviarAsync<NovedadDto>(HttpMethod.Post, $"api/novedades/{id}/resolver", resolucion);
 
-    public Task<ApiResponse<HallazgoDto>> AnularHallazgoAsync(long id, string motivo) =>
-        EnviarAsync<HallazgoDto>(HttpMethod.Post, $"api/hallazgos/{id}/anular", new MotivoDto { Motivo = motivo });
+    public Task<ApiResponse<NovedadDto>> AnularNovedadAsync(long id, string motivo) =>
+        EnviarAsync<NovedadDto>(HttpMethod.Post, $"api/novedades/{id}/anular", new MotivoDto { Motivo = motivo });
+
+    public Task<ApiResponse<IntegridadInspeccionDto>> VerificarIntegridadNovedadAsync(long id) =>
+        EnviarAsync<IntegridadInspeccionDto>(HttpMethod.Get, $"api/novedades/{id}/integridad");
+
+    /// <summary>Vuelve a poner en cola el correo de la novedad a la mesa de ayuda (Administrador).</summary>
+    public Task<ApiResponse<bool>> ReenviarCorreoNovedadAsync(long id) =>
+        EnviarAsync<bool>(HttpMethod.Post, $"api/novedades/{id}/notificar");
 
     // --- Inspecciones y evidencias (endpoints 10, 11, 13 y 14) ---
 

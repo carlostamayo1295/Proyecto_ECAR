@@ -29,12 +29,22 @@
             <div class="d-flex justify-space-between align-center mb-4">
                 <div>
                     <MudText Typo="Typo.h5" Class="font-weight-bold">Resultado de Inspección</MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Estado: Cerrada e Inmutable</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Estado: @InspeccionEstados.Texto(resultado.Estado) · firmada e inmutable
+                    </MudText>
                 </div>
-                <MudChip T="string" Color="@ObtenerColorResultado(resultado.Resultado)">
+                <MudChip T="string" Color="@FormatoEstados.ColorResultado(resultado.Resultado)">
                     @InspeccionResultados.Texto(resultado.Resultado)
                 </MudChip>
             </div>
+
+            @if (resultado.Estado == InspeccionEstados.NovedadesPendientes)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+                    La inspección está firmada, pero tiene @resultado.NovedadesPendientes novedad(es) sin resolver. El resultado
+                    queda «Pendiente» y pasa a «Con novedad», con la inspección cerrada, cuando se resuelvan todas.
+                </MudAlert>
+            }
 
             <MudDivider Class="mb-4" />
 
@@ -45,7 +55,7 @@
                     <MudText Typo="Typo.body2"><b>Ubicación:</b> @resultado.UbicacionNombre</MudText>
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.body2"><b>Fecha de Cierre:</b> @resultado.FechaCierre?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                    <MudText Typo="Typo.body2"><b>Fecha de firma:</b> @resultado.FechaCierre?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
                     <MudText Typo="Typo.body2"><b>Técnico Responsable:</b> @resultado.NombreUsuario</MudText>
                 </MudItem>
             </MudGrid>
@@ -142,8 +152,8 @@
                 }
             </div>
 
-            <!-- Hallazgos generados (FE-1, tarea 4): los crea el servidor al firmar, uno por novedad -->
-            <HallazgosDeInspeccion IdInspeccion="@resultado.IdInspeccion" />
+            <!-- Novedades: las crea el servidor al firmar, una por cada "No", y se resuelven con firma -->
+            <NovedadesDeInspeccion IdInspeccion="@resultado.IdInspeccion" OnCambio="RecargarEstadoAsync" />
 
             <!-- Visualización de la Firma Capturada -->
             <div class="mb-4 text-center">
@@ -243,14 +253,14 @@
         }
     }
 
-    private Color ObtenerColorResultado(string? estado)
+    // Al resolverse una novedad cambian el estado y el resultado; las miniaturas siguen siendo las mismas.
+    private async Task RecargarEstadoAsync()
     {
-        return estado switch
+        var response = await Http.GetInspeccionResultadoAsync(IdInspeccion);
+        if (response is { Success: true, Data: not null })
         {
-            "Conforme" => Color.Success,
-            "ConNovedad" => Color.Warning,
-            _ => Color.Default
-        };
+            resultado = response.Data;
+        }
     }
 
     private void VolverListado()

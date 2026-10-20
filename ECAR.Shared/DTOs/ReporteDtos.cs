@@ -78,16 +78,20 @@ public class HistorialTecnicoFilaDto
     public string? Observaciones { get; set; }
 }
 
-/// <summary>Reporte "Equipos con Novedades" (SRS §7): una fila por hallazgo.</summary>
+/// <summary>Reporte "Equipos con Novedades" (SRS §7): una fila por novedad.</summary>
 public class EquipoNovedadFilaDto
 {
-    public long IdHallazgo { get; set; }
+    public long IdNovedad { get; set; }
     public string Equipo { get; set; } = string.Empty;
     public string? Area { get; set; }
-    public string Hallazgo { get; set; } = string.Empty;
+    public string Novedad { get; set; } = string.Empty;
     public string? Criticidad { get; set; }
     public DateTime Fecha { get; set; }
+
+    /// <summary>Quien resolvió la novedad; null mientras está pendiente.</summary>
     public string? Responsable { get; set; }
+
+    /// <summary>Uno de <see cref="NovedadEstados"/>.</summary>
     public string Estado { get; set; } = string.Empty;
 }
 

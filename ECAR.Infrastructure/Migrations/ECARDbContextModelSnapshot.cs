@@ -355,120 +355,6 @@ namespace ECAR.Infrastructure.Migrations
                     b.ToTable("Evidencias");
                 });
 
-            modelBuilder.Entity("ECAR.Infrastructure.Entities.Hallazgo", b =>
-                {
-                    b.Property<long>("IdHallazgo")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdHallazgo");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("IdHallazgo"));
-
-                    b.Property<string>("AccionCorrectiva")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("AccionCorrectiva");
-
-                    b.Property<string>("Criticidad")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasColumnName("Criticidad");
-
-                    b.Property<string>("Descripcion")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("Descripcion");
-
-                    b.Property<string>("Estado")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("Abierto")
-                        .HasColumnName("Estado");
-
-                    b.Property<DateTime?>("FechaCierre")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("FechaCierre");
-
-                    b.Property<DateTime?>("FechaCompromiso")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("FechaCompromiso");
-
-                    b.Property<DateTime>("FechaRegistro")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("FechaRegistro");
-
-                    b.Property<long>("IdInspeccion")
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdInspeccion");
-
-                    b.Property<long?>("IdPregunta")
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdPregunta");
-
-                    b.Property<long?>("IdRespuesta")
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdRespuesta");
-
-                    b.Property<long?>("IdUsuarioCierre")
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdUsuarioCierre");
-
-                    b.Property<long>("IdUsuarioRegistro")
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdUsuarioRegistro");
-
-                    b.Property<long?>("IdUsuarioResponsable")
-                        .HasColumnType("bigint")
-                        .HasColumnName("IdUsuarioResponsable");
-
-                    b.Property<string>("MotivoAnulacion")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
-                        .HasColumnName("MotivoAnulacion");
-
-                    b.Property<string>("Origen")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("Manual")
-                        .HasColumnName("Origen");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion")
-                        .HasColumnName("RowVersion");
-
-                    b.HasKey("IdHallazgo");
-
-                    b.HasIndex("Criticidad");
-
-                    b.HasIndex("Estado");
-
-                    b.HasIndex("FechaRegistro");
-
-                    b.HasIndex("IdInspeccion");
-
-                    b.HasIndex("IdPregunta");
-
-                    b.HasIndex("IdRespuesta");
-
-                    b.HasIndex("IdUsuarioCierre");
-
-                    b.HasIndex("IdUsuarioRegistro");
-
-                    b.HasIndex("IdUsuarioResponsable");
-
-                    b.HasIndex("IdInspeccion", "IdPregunta")
-                        .IsUnique()
-                        .HasFilter("[IdPregunta] IS NOT NULL");
-
-                    b.ToTable("Hallazgos");
-                });
-
             modelBuilder.Entity("ECAR.Infrastructure.Entities.HistorialPassword", b =>
                 {
                     b.Property<long>("Id")
@@ -608,6 +494,139 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasIndex("IdUsuario", "Estado");
 
                     b.ToTable("Inspecciones");
+                });
+
+            modelBuilder.Entity("ECAR.Infrastructure.Entities.Novedad", b =>
+                {
+                    b.Property<long>("IdNovedad")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdNovedad");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("IdNovedad"));
+
+                    b.Property<string>("Criticidad")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("Criticidad");
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("Descripcion");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pendiente")
+                        .HasColumnName("Estado");
+
+                    b.Property<DateTime?>("FechaAnulacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaAnulacion");
+
+                    b.Property<DateTime?>("FechaNotificacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaNotificacion");
+
+                    b.Property<DateTime>("FechaRegistro")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaRegistro");
+
+                    b.Property<DateTime?>("FechaResolucion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaResolucion");
+
+                    b.Property<string>("FirmaAlgoritmo")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("FirmaAlgoritmo");
+
+                    b.Property<string>("FirmaDigital")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("FirmaDigital");
+
+                    b.Property<string>("FirmaHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("FirmaHash");
+
+                    b.Property<string>("FirmaNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("FirmaNombre");
+
+                    b.Property<string>("FirmaSignificado")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("FirmaSignificado");
+
+                    b.Property<long>("IdInspeccion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdInspeccion");
+
+                    b.Property<long>("IdPregunta")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdPregunta");
+
+                    b.Property<long>("IdRespuesta")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdRespuesta");
+
+                    b.Property<long?>("IdUsuarioAnulacion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioAnulacion");
+
+                    b.Property<long>("IdUsuarioRegistro")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioRegistro");
+
+                    b.Property<long?>("IdUsuarioResolucion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioResolucion");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("MotivoAnulacion");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("RowVersion");
+
+                    b.Property<string>("Solucion")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("Solucion");
+
+                    b.HasKey("IdNovedad");
+
+                    b.HasIndex("Criticidad");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("FechaRegistro");
+
+                    b.HasIndex("IdPregunta");
+
+                    b.HasIndex("IdRespuesta")
+                        .IsUnique();
+
+                    b.HasIndex("IdUsuarioAnulacion");
+
+                    b.HasIndex("IdUsuarioRegistro");
+
+                    b.HasIndex("IdUsuarioResolucion");
+
+                    b.HasIndex("IdInspeccion", "IdPregunta")
+                        .IsUnique();
+
+                    b.ToTable("Novedades");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.PreguntaChecklist", b =>
@@ -895,53 +914,6 @@ namespace ECAR.Infrastructure.Migrations
                     b.Navigation("UsuarioRetiro");
                 });
 
-            modelBuilder.Entity("ECAR.Infrastructure.Entities.Hallazgo", b =>
-                {
-                    b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
-                        .WithMany("Hallazgos")
-                        .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
-                        .WithMany()
-                        .HasForeignKey("IdPregunta")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ECAR.Infrastructure.Entities.RespuestaInspeccion", "Respuesta")
-                        .WithMany()
-                        .HasForeignKey("IdRespuesta")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCierre")
-                        .WithMany()
-                        .HasForeignKey("IdUsuarioCierre")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioRegistro")
-                        .WithMany()
-                        .HasForeignKey("IdUsuarioRegistro")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioResponsable")
-                        .WithMany()
-                        .HasForeignKey("IdUsuarioResponsable")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Inspeccion");
-
-                    b.Navigation("Pregunta");
-
-                    b.Navigation("Respuesta");
-
-                    b.Navigation("UsuarioCierre");
-
-                    b.Navigation("UsuarioRegistro");
-
-                    b.Navigation("UsuarioResponsable");
-                });
-
             modelBuilder.Entity("ECAR.Infrastructure.Entities.HistorialPassword", b =>
                 {
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "Usuario")
@@ -985,6 +957,55 @@ namespace ECAR.Infrastructure.Migrations
                     b.Navigation("Usuario");
 
                     b.Navigation("UsuarioAnulacion");
+                });
+
+            modelBuilder.Entity("ECAR.Infrastructure.Entities.Novedad", b =>
+                {
+                    b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
+                        .WithMany("Novedades")
+                        .HasForeignKey("IdInspeccion")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
+                        .WithMany()
+                        .HasForeignKey("IdPregunta")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.RespuestaInspeccion", "Respuesta")
+                        .WithMany()
+                        .HasForeignKey("IdRespuesta")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioAnulacion")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioAnulacion")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioRegistro")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioRegistro")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioResolucion")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioResolucion")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Inspeccion");
+
+                    b.Navigation("Pregunta");
+
+                    b.Navigation("Respuesta");
+
+                    b.Navigation("UsuarioAnulacion");
+
+                    b.Navigation("UsuarioRegistro");
+
+                    b.Navigation("UsuarioResolucion");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.PreguntaChecklist", b =>
@@ -1057,7 +1078,7 @@ namespace ECAR.Infrastructure.Migrations
                 {
                     b.Navigation("Evidencias");
 
-                    b.Navigation("Hallazgos");
+                    b.Navigation("Novedades");
 
                     b.Navigation("Respuestas");
                 });

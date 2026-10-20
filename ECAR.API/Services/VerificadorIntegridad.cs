@@ -11,7 +11,22 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
 {
     public const string AlgoritmoLegado = "SHA256-v0";
     public const string AlgoritmoHmac = "HMACSHA256-v1";
+
+    /// <summary>
+    /// Igual que <see cref="AlgoritmoHmac"/> pero sin el resultado: una inspección firmada con
+    /// novedades queda "Pendiente" y pasa a "ConNovedad" cuando se resuelve la última, sin que eso
+    /// altere lo que se firmó. El resultado sale de las respuestas, que sí están selladas.
+    /// </summary>
+    public const string AlgoritmoHmacV2 = "HMACSHA256-v2";
+
+    /// <summary>
+    /// Sello de la resolución de una novedad. Su texto empieza por "registro=novedad", así que
+    /// nunca coincide con el de una inspección aunque use la misma clave.
+    /// </summary>
+    public const string AlgoritmoNovedad = "HMACSHA256-v1";
+
     public const string SignificadoEjecucion = "Responsable de la ejecución de la inspección";
+    public const string SignificadoResolucion = "Responsable de la resolución de la novedad";
 
     private const string ArchivoAusente = "ausente";
 
@@ -28,12 +43,8 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
             : inspeccion.FirmaAlgoritmo;
     }
 
-    public async Task<string> CalcularSelloAsync(Inspeccion inspeccion)
-    {
-        var canonico = await ConstruirContenidoCanonicoAsync(inspeccion);
-        var hmac = HMACSHA256.HashData(ObtenerClave(), Encoding.UTF8.GetBytes(canonico));
-        return Convert.ToHexString(hmac).ToLowerInvariant();
-    }
+    /// <summary>El sello con que se firma hoy una inspección (<see cref="AlgoritmoHmacV2"/>).</summary>
+    public Task<string> CalcularSelloAsync(Inspeccion inspeccion) => CalcularSelloAsync(inspeccion, AlgoritmoHmacV2);
 
     public async Task<bool> VerificarAsync(Inspeccion inspeccion)
     {
@@ -51,32 +62,47 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
                     fechaCierre, inspeccion.FirmaDigital);
                 break;
             case AlgoritmoHmac:
-                esperado = await CalcularSelloAsync(inspeccion);
+                esperado = await CalcularSelloAsync(inspeccion, AlgoritmoHmac);
+                break;
+            case AlgoritmoHmacV2:
+                esperado = await CalcularSelloAsync(inspeccion, AlgoritmoHmacV2);
                 break;
             default:
                 return false;
         }
 
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.ASCII.GetBytes(esperado),
-            Encoding.ASCII.GetBytes(inspeccion.FirmaHash.ToLowerInvariant()));
+        return Iguales(esperado, inspeccion.FirmaHash);
     }
 
-    public async Task<string> ConstruirContenidoCanonicoAsync(Inspeccion inspeccion)
+    /// <summary>
+    /// El texto que se sella. <see cref="AlgoritmoHmac"/> incluye el resultado y se conserva para
+    /// verificar las inspecciones firmadas antes de las novedades; <see cref="AlgoritmoHmacV2"/> no.
+    /// </summary>
+    public async Task<string> ConstruirContenidoCanonicoAsync(Inspeccion inspeccion, string version = AlgoritmoHmacV2)
     {
+        if (version is not (AlgoritmoHmac or AlgoritmoHmacV2))
+        {
+            throw new ArgumentException($"Versión de sello desconocida: {version}", nameof(version));
+        }
+
         var fechaCierre = inspeccion.FechaCierre
             ?? throw new InvalidOperationException("La inspección no tiene fecha de cierre");
 
         var constructor = new StringBuilder();
         constructor
-            .Append("version=").Append(AlgoritmoHmac).Append('|')
+            .Append("version=").Append(version).Append('|')
             .Append("idInspeccion=").Append(inspeccion.IdInspeccion).Append('|')
             .Append("idEquipo=").Append(inspeccion.IdEquipo).Append('|')
             .Append("idChecklist=").Append(inspeccion.IdChecklist).Append('|')
             .Append("idUsuario=").Append(inspeccion.IdUsuario).Append('|')
             .Append("fechaInspeccion=").Append(Fecha(inspeccion.FechaInspeccion)).Append('|')
-            .Append("fechaCierre=").Append(Fecha(fechaCierre)).Append('|')
-            .Append("resultado=").Append(FirmaInspeccion.Escapar(inspeccion.Resultado)).Append('|')
+            .Append("fechaCierre=").Append(Fecha(fechaCierre)).Append('|');
+        if (version == AlgoritmoHmac)
+        {
+            constructor.Append("resultado=").Append(FirmaInspeccion.Escapar(inspeccion.Resultado)).Append('|');
+        }
+
+        constructor
             .Append("observaciones=").Append(FirmaInspeccion.Escapar(inspeccion.Observaciones)).Append('|')
             .Append("firmaNombre=").Append(FirmaInspeccion.Escapar(inspeccion.FirmaNombre)).Append('|')
             .Append("firmaSignificado=").Append(FirmaInspeccion.Escapar(inspeccion.FirmaSignificado)).Append('|')
@@ -109,6 +135,66 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
         constructor.Append("]|firma=").Append(inspeccion.FirmaDigital);
         return constructor.ToString();
     }
+
+    /// <summary>
+    /// Sello de la resolución de una novedad: lo que se reportó, lo que se hizo, quién y cuándo lo
+    /// firmó, la firma manuscrita y el sello de la inspección de la que salió, que la ata a ese
+    /// registro firmado. Necesita <see cref="Novedad.Inspeccion"/> cargada.
+    /// </summary>
+    public string CalcularSelloNovedad(Novedad novedad) => Hmac(ConstruirContenidoCanonicoNovedad(novedad));
+
+    public bool VerificarNovedad(Novedad novedad)
+    {
+        if (string.IsNullOrEmpty(novedad.FirmaHash) || novedad.FechaResolucion is null ||
+            string.IsNullOrEmpty(novedad.FirmaDigital) || novedad.FirmaAlgoritmo != AlgoritmoNovedad)
+        {
+            return false;
+        }
+
+        return Iguales(CalcularSelloNovedad(novedad), novedad.FirmaHash);
+    }
+
+    public static string ConstruirContenidoCanonicoNovedad(Novedad novedad)
+    {
+        var inspeccion = novedad.Inspeccion
+            ?? throw new InvalidOperationException("La novedad no tiene su inspección cargada");
+        var fechaResolucion = novedad.FechaResolucion
+            ?? throw new InvalidOperationException("La novedad no tiene fecha de resolución");
+
+        return new StringBuilder()
+            .Append("registro=novedad|")
+            .Append("version=").Append(AlgoritmoNovedad).Append('|')
+            .Append("idNovedad=").Append(novedad.IdNovedad).Append('|')
+            .Append("idInspeccion=").Append(novedad.IdInspeccion).Append('|')
+            .Append("selloInspeccion=").Append(FirmaInspeccion.Escapar(inspeccion.FirmaHash)).Append('|')
+            .Append("idPregunta=").Append(novedad.IdPregunta).Append('|')
+            .Append("idRespuesta=").Append(novedad.IdRespuesta).Append('|')
+            .Append("descripcion=").Append(FirmaInspeccion.Escapar(novedad.Descripcion)).Append('|')
+            .Append("criticidad=").Append(FirmaInspeccion.Escapar(novedad.Criticidad)).Append('|')
+            .Append("fechaRegistro=").Append(Fecha(novedad.FechaRegistro)).Append('|')
+            .Append("idUsuarioRegistro=").Append(novedad.IdUsuarioRegistro).Append('|')
+            .Append("solucion=").Append(FirmaInspeccion.Escapar(novedad.Solucion)).Append('|')
+            .Append("fechaResolucion=").Append(Fecha(fechaResolucion)).Append('|')
+            .Append("idUsuarioResolucion=").Append(novedad.IdUsuarioResolucion).Append('|')
+            .Append("firmaNombre=").Append(FirmaInspeccion.Escapar(novedad.FirmaNombre)).Append('|')
+            .Append("firmaSignificado=").Append(FirmaInspeccion.Escapar(novedad.FirmaSignificado)).Append('|')
+            .Append("firma=").Append(novedad.FirmaDigital)
+            .ToString();
+    }
+
+    private async Task<string> CalcularSelloAsync(Inspeccion inspeccion, string version) =>
+        Hmac(await ConstruirContenidoCanonicoAsync(inspeccion, version));
+
+    private string Hmac(string canonico)
+    {
+        var hmac = HMACSHA256.HashData(ObtenerClave(), Encoding.UTF8.GetBytes(canonico));
+        return Convert.ToHexString(hmac).ToLowerInvariant();
+    }
+
+    private static bool Iguales(string esperado, string guardado) =>
+        CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(esperado),
+            Encoding.ASCII.GetBytes(guardado.ToLowerInvariant()));
 
     private byte[] ObtenerClave()
     {

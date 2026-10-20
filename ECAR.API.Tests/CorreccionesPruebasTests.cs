@@ -15,9 +15,9 @@ using Xunit;
 namespace ECAR.API.Tests;
 
 /// <summary>
-/// Correcciones de Informes/PRUEBAS_INTEGRACION_2026-10-18.md: descripción de novedades y motivo al
-/// editar hallazgos, criticidad cerrada, fecha de inspección del servidor, checklists sin preguntas,
-/// consulta pública del QR, preguntas por DTO y tablero de indicadores.
+/// Correcciones de Informes/PRUEBAS_INTEGRACION_2026-10-18.md: criticidad cerrada, fecha de
+/// inspección del servidor, checklists sin preguntas, consulta pública del QR, preguntas por DTO y
+/// tablero de indicadores. Las novedades no se editan (no hay PUT): ver NovedadesModeloTests.
 /// </summary>
 public class CorreccionesPruebasTests
 {
@@ -65,27 +65,27 @@ public class CorreccionesPruebasTests
         return new Escenario(db, tecnico, equipo, checklist, vacio);
     }
 
-    private static async Task<Hallazgo> HallazgoAsync(Escenario e, string origen)
+    /// <summary>Una inspección firmada con una novedad sin resolver.</summary>
+    private static async Task<Novedad> NovedadPendienteAsync(Escenario e)
     {
         var inspeccion = new Inspeccion
         {
             IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist, IdUsuario = e.Tecnico.IdUsuario,
-            FechaInspeccion = DateTime.UtcNow, Estado = InspeccionEstados.Cerrada
+            FechaInspeccion = DateTime.UtcNow, Estado = InspeccionEstados.NovedadesPendientes,
+            Resultado = InspeccionResultados.Pendiente
         };
         e.Db.Inspecciones.Add(inspeccion);
         await e.Db.SaveChangesAsync();
-        var hallazgo = new Hallazgo
+        var novedad = new Novedad
         {
-            IdInspeccion = inspeccion.IdInspeccion, Descripcion = "¿Nivelada?: Burbuja corrida", Estado = HallazgoEstados.Abierto,
-            Origen = origen, FechaRegistro = DateTime.UtcNow, IdUsuarioRegistro = e.Tecnico.IdUsuario
+            IdInspeccion = inspeccion.IdInspeccion, IdPregunta = e.Checklist.Preguntas.Single().IdPregunta,
+            Descripcion = "¿Nivelada?: Burbuja corrida", FechaRegistro = DateTime.UtcNow, IdUsuarioRegistro = e.Tecnico.IdUsuario
         };
-        e.Db.Hallazgos.Add(hallazgo);
+        e.Db.Novedades.Add(novedad);
         await e.Db.SaveChangesAsync();
         e.Db.ChangeTracker.Clear();
-        return hallazgo;
+        return novedad;
     }
-
-    private HallazgosController Hallazgos(Escenario e) => new(e.Db, new Usuario1(e.Tecnico.IdUsuario, "Técnico"), new MotivoCambio());
 
     private static EquiposController Equipos(Escenario e, bool conSesion)
     {
@@ -95,38 +95,6 @@ public class CorreccionesPruebasTests
         return controlador;
     }
 
-    // ------------------------------------------------------------------ hallazgos (punto 1)
-
-    [Fact]
-    public async Task La_descripcion_de_un_hallazgo_de_novedad_no_se_cambia()
-    {
-        var e = await SeedAsync();
-        var h = await HallazgoAsync(e, HallazgoOrigenes.Novedad);
-
-        var otra = await Hallazgos(e).UpdateHallazgo(h.IdHallazgo, new UpdateHallazgoDto { Descripcion = "Otra cosa", Motivo = Motivo });
-        var misma = await Hallazgos(e).UpdateHallazgo(h.IdHallazgo,
-            new UpdateHallazgoDto { Descripcion = h.Descripcion, Criticidad = Criticidades.Media, Motivo = Motivo });
-
-        Assert.IsType<BadRequestObjectResult>(otra.Result);
-        Assert.IsType<OkObjectResult>(misma.Result);
-        var guardado = await e.Db.Hallazgos.AsNoTracking().SingleAsync();
-        Assert.Equal(h.Descripcion, guardado.Descripcion);
-        Assert.Equal(Criticidades.Media, guardado.Criticidad);
-    }
-
-    [Fact]
-    public async Task Editar_un_hallazgo_exige_motivo()
-    {
-        var e = await SeedAsync();
-        var h = await HallazgoAsync(e, HallazgoOrigenes.Manual);
-
-        var sinMotivo = await Hallazgos(e).UpdateHallazgo(h.IdHallazgo, new UpdateHallazgoDto { Descripcion = "Etiqueta vencida" });
-        var conMotivo = await Hallazgos(e).UpdateHallazgo(h.IdHallazgo, new UpdateHallazgoDto { Descripcion = "Etiqueta vencida", Motivo = Motivo });
-
-        Assert.IsType<BadRequestObjectResult>(sinMotivo.Result);
-        Assert.IsType<OkObjectResult>(conMotivo.Result);
-    }
-
     // ------------------------------------------------------------------ criticidad (punto 2)
 
     [Fact]
@@ -134,16 +102,13 @@ public class CorreccionesPruebasTests
     {
         var e = await SeedAsync();
         var controlador = Equipos(e, conSesion: true);
-        var h = await HallazgoAsync(e, HallazgoOrigenes.Manual);
 
         var crear = await controlador.CreateEquipo(new CreateEquipoDto { CodigoInterno = "EQ-2", ActivoFijo = "AF-2", NombreEquipo = "Horno", Criticidad = "Altísima" });
         var editar = await controlador.UpdateEquipo(e.Equipo.IdEquipo, new UpdateEquipoDto { Criticidad = "Crítica", Motivo = Motivo });
-        var hallazgo = await Hallazgos(e).UpdateHallazgo(h.IdHallazgo, new UpdateHallazgoDto { Criticidad = "Urgente", Motivo = Motivo });
         var valida = await controlador.CreateEquipo(new CreateEquipoDto { CodigoInterno = "EQ-3", ActivoFijo = "AF-3", NombreEquipo = "Horno", Criticidad = Criticidades.Baja });
 
         Assert.IsType<BadRequestObjectResult>(crear.Result);
         Assert.IsType<BadRequestObjectResult>(editar.Result);
-        Assert.IsType<BadRequestObjectResult>(hallazgo.Result);
         Assert.IsType<CreatedAtActionResult>(valida.Result);
     }
 
@@ -237,10 +202,10 @@ public class CorreccionesPruebasTests
     // ------------------------------------------------------------------ tablero (punto 6)
 
     [Fact]
-    public async Task El_tablero_cuenta_equipos_inspecciones_y_hallazgos()
+    public async Task El_tablero_cuenta_equipos_inspecciones_y_novedades()
     {
         var e = await SeedAsync();
-        await HallazgoAsync(e, HallazgoOrigenes.Novedad);
+        await NovedadPendienteAsync(e);
         e.Db.Inspecciones.Add(new Inspeccion
         {
             IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist, IdUsuario = e.Tecnico.IdUsuario,
@@ -256,13 +221,15 @@ public class CorreccionesPruebasTests
         Assert.Equal(1, t.EquiposPorCriticidad.Single(c => c.Etiqueta == Criticidades.Alta).Cantidad);
         Assert.Equal(1, t.EquiposPorCriticidad.Single(c => c.Etiqueta == "Sin criticidad").Cantidad);
         Assert.Contains(t.EquiposPorArea, a => a.Etiqueta == "Planta 1 - Pesaje" && a.Cantidad == 1);
+        // Firmada con una novedad pendiente: cuenta como realizada.
         Assert.Equal(1, t.InspeccionesRealizadas);
         Assert.Equal(1, t.InspeccionesRealizadasMes);
+        Assert.Equal(1, t.InspeccionesConNovedadesPendientes);
         Assert.Equal(1, t.InspeccionesEnCurso);
         Assert.Equal(1, t.EquiposProgramados);
         Assert.Equal(0, t.InspeccionesPendientes); // el equipo mensual ya tiene su inspección firmada del mes
-        Assert.Equal(1, t.HallazgosAbiertos);
-        Assert.Equal(0, t.HallazgosCerrados);
+        Assert.Equal(1, t.NovedadesPendientes);
+        Assert.Equal(0, t.NovedadesResueltas);
     }
 
     private sealed class AlmacenVacio : IEvidenciaStorage

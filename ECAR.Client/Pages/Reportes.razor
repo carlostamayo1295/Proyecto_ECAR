@@ -68,7 +68,7 @@
                                 <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
                                 <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ResultadoColor(context.Resultado)"
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@FormatoEstados.ColorResultado(context.Resultado)"
                                         Text="@InspeccionResultados.Texto(context.Resultado)" />
                                 </MudTd>
                                 <MudTd DataLabel="Observaciones">@(context.Observaciones ?? "—")</MudTd>
@@ -135,7 +135,7 @@
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
                                 <MudTd DataLabel="Fecha">@context.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ResultadoColor(context.Resultado)"
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@FormatoEstados.ColorResultado(context.Resultado)"
                                         Text="@InspeccionResultados.Texto(context.Resultado)" />
                                 </MudTd>
                                 <MudTd DataLabel="Responsable">@context.Responsable</MudTd>
@@ -189,7 +189,7 @@
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
                                 <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ResultadoColor(context.Resultado)"
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@FormatoEstados.ColorResultado(context.Resultado)"
                                         Text="@InspeccionResultados.Texto(context.Resultado)" />
                                 </MudTd>
                                 <MudTd DataLabel="Observaciones">@(context.Observaciones ?? "—")</MudTd>
@@ -208,9 +208,9 @@
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
                             <MudSelect T="string" Label="Estado" @bind-Value="estadoNovedades.Filtro.Estado" Variant="Variant.Outlined" Clearable="true">
-                                @foreach (var estadoHallazgo in HallazgoEstados.Todos)
+                                @foreach (var estadoNovedad in NovedadEstados.Todos)
                                 {
-                                    <MudSelectItem T="string" Value="@estadoHallazgo">@estadoHallazgo</MudSelectItem>
+                                    <MudSelectItem T="string" Value="@estadoNovedad">@estadoNovedad</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
@@ -239,7 +239,7 @@
                     {
                         <MudTable Items="estadoNovedades.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
                             <HeaderContent>
-                                <MudTh>Hallazgo</MudTh>
+                                <MudTh>Novedad</MudTh>
                                 <MudTh>Equipo</MudTh>
                                 <MudTh>Área</MudTh>
                                 <MudTh>Descripción</MudTh>
@@ -249,18 +249,18 @@
                                 <MudTh>Estado</MudTh>
                             </HeaderContent>
                             <RowTemplate>
-                                <MudTd DataLabel="Hallazgo">#@context.IdHallazgo</MudTd>
+                                <MudTd DataLabel="Novedad">#@context.IdNovedad</MudTd>
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
                                 <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
-                                <MudTd DataLabel="Descripción">@context.Hallazgo</MudTd>
+                                <MudTd DataLabel="Descripción">@context.Novedad</MudTd>
                                 <MudTd DataLabel="Criticidad">
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@CriticidadColor(context.Criticidad)"
                                         Text="@(context.Criticidad ?? "—")" />
                                 </MudTd>
                                 <MudTd DataLabel="Fecha">@context.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
-                                <MudTd DataLabel="Responsable">@(context.Responsable ?? "Sin asignar")</MudTd>
+                                <MudTd DataLabel="Responsable">@(context.Responsable ?? "Sin resolver")</MudTd>
                                 <MudTd DataLabel="Estado">
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@EstadoHallazgoColor(context.Estado)" Text="@context.Estado" />
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@FormatoEstados.ColorNovedad(context.Estado)" Text="@context.Estado" />
                                 </MudTd>
                             </RowTemplate>
                         </MudTable>
@@ -675,27 +675,11 @@
         <MudPagination Count="@estado.TotalPaginas" Selected="@estado.Pagina" SelectedChanged="cambiarPagina" />
     </div>;
 
-    private static Color ResultadoColor(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
-    {
-        "conforme" or "satisfactoria" => Color.Success,
-        "connovedad" or "con novedad" => Color.Warning,
-        _ => Color.Default
-    };
-
     private static Color CriticidadColor(string? criticidad) => (criticidad ?? string.Empty).ToLowerInvariant() switch
     {
         "alta" => Color.Error,
         "media" => Color.Warning,
         "baja" => Color.Info,
-        _ => Color.Default
-    };
-
-    private static Color EstadoHallazgoColor(string? estado) => estado switch
-    {
-        HallazgoEstados.Abierto => Color.Error,
-        HallazgoEstados.EnProceso => Color.Warning,
-        HallazgoEstados.Cerrado => Color.Success,
-        HallazgoEstados.Anulado => Color.Default,
         _ => Color.Default
     };
 

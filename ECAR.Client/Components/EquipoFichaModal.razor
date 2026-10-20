@@ -74,13 +74,13 @@
                     <MudTd DataLabel="Checklist">@context.NombreChecklist</MudTd>
                     <MudTd DataLabel="Estado">
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                            Color="@(context.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
-                            Text="@(context.Estado == InspeccionEstados.Cerrada ? "Cerrada" : "En curso")" />
+                            Color="@FormatoEstados.ColorInspeccion(context.Estado)"
+                            Text="@InspeccionEstados.Texto(context.Estado)" />
                     </MudTd>
                     <MudTd DataLabel="Resultado">@InspeccionResultados.Texto(context.Resultado)</MudTd>
-                    <MudTd DataLabel="Evid. / Hall.">@context.TotalEvidencias / @context.TotalHallazgos</MudTd>
+                    <MudTd DataLabel="Evid. / Nov.">@context.TotalEvidencias / @context.TotalNovedades</MudTd>
                     <MudTd DataLabel="">
-                        @if (context.Estado == InspeccionEstados.Cerrada)
+                        @if (InspeccionEstados.EstaFirmada(context.Estado))
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                 StartIcon="@Icons.Material.Filled.Assignment" OnClick="() => VerResultado(context)">

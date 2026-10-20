@@ -74,7 +74,7 @@ public class AuditoriaHistorialTests
         var modificar = Fila("Inspecciones", 10, AuditoriaAcciones.Modificar, Base.AddHours(1));
         context.Auditoria.AddRange(cerrar, crear, modificar,
             Fila("Inspecciones", 11, AuditoriaAcciones.Crear, Base.AddMinutes(30)),
-            Fila("Hallazgos", 10, AuditoriaAcciones.Crear, Base.AddMinutes(45)));
+            Fila("Novedades", 10, AuditoriaAcciones.Crear, Base.AddMinutes(45)));
         await context.SaveChangesAsync();
 
         var historial = await HistorialAsync(context, "Inspecciones", 10);

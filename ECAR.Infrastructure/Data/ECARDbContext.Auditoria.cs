@@ -288,15 +288,17 @@ public partial class ECARDbContext
             switch (entidad)
             {
                 case Inspeccion when nuevoEstado == InspeccionEstados.Anulada:
-                case Hallazgo when nuevoEstado == HallazgoEstados.Anulado:
+                case Novedad when nuevoEstado == NovedadEstados.Anulada:
                     return AuditoriaAcciones.Anular;
-                case Inspeccion when nuevoEstado == InspeccionEstados.Cerrada:
+                // Firmar es salir de EnCurso, quede cerrada o con novedades pendientes.
+                case Inspeccion when antes.GetValueOrDefault("Estado") as string == InspeccionEstados.EnCurso &&
+                                     InspeccionEstados.EstaFirmada(nuevoEstado):
                     return AuditoriaAcciones.Firmar;
-                case Hallazgo when nuevoEstado == HallazgoEstados.Cerrado:
+                // Ya firmada, se cierra sola al resolverse (o anularse) su última novedad.
+                case Inspeccion when nuevoEstado == InspeccionEstados.Cerrada:
                     return AuditoriaAcciones.Cerrar;
-                case Hallazgo when nuevoEstado == HallazgoEstados.Abierto &&
-                                   antes.GetValueOrDefault("Estado") as string == HallazgoEstados.Cerrado:
-                    return AuditoriaAcciones.Reabrir;
+                case Novedad when nuevoEstado == NovedadEstados.Resuelta:
+                    return AuditoriaAcciones.Resolver;
             }
         }
 

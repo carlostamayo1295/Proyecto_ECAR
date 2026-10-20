@@ -18,7 +18,12 @@ public class InspeccionDto
     public string? Observaciones { get; set; }
     public bool TieneFirma { get; set; }
     public int TotalEvidencias { get; set; }
-    public int TotalHallazgos { get; set; }
+
+    /// <summary>Novedades que generó la inspección al firmarse (una por cada "No").</summary>
+    public int TotalNovedades { get; set; }
+
+    /// <summary>De ellas, las que siguen sin resolver.</summary>
+    public int NovedadesPendientes { get; set; }
 
     // Fase 4 (§3.6): solo en las inspecciones anuladas; null en las demás.
     public string? MotivoAnulacion { get; set; }

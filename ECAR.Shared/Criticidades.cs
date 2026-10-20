@@ -1,9 +1,9 @@
 namespace ECAR.Shared;
 
 /// <summary>
-/// Clasificación por criticidad de un equipo y de un hallazgo (SRS §2). Los filtros, los
-/// hallazgos generados (heredan la del equipo) y los reportes agrupan por estos valores, así que
-/// el API no admite texto libre.
+/// Clasificación por criticidad de un equipo y de una novedad (SRS §2). Los filtros, las
+/// novedades (heredan la del equipo) y los reportes agrupan por estos valores, así que el API no
+/// admite texto libre.
 /// </summary>
 public static class Criticidades
 {

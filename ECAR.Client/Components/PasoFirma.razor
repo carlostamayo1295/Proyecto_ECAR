@@ -57,7 +57,8 @@
 
     public const string TextoLegal =
         "Al firmar, declaro que realicé esta inspección y que la información registrada es veraz. " +
-        "La inspección quedará cerrada y no podrá modificarse.";
+        "La inspección quedará firmada y no podrá modificarse. Si tiene novedades, se avisará por correo " +
+        "a la mesa de ayuda y la inspección se cerrará cuando se resuelvan todas.";
 
     private bool firmando;
     protected bool Firmando => firmando;
@@ -127,7 +128,7 @@
             return;
         }
 
-        Snackbar.Add("Inspección firmada y cerrada", Severity.Success);
+        Snackbar.Add(respuesta.Message, Severity.Success);
         await OnFirmada.InvokeAsync(respuesta.Data);
     }
 

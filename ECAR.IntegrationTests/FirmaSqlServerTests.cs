@@ -71,7 +71,7 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
     [Fact]
     public async Task Una_firma_HMAC_leida_de_la_base_se_verifica_integra()
     {
-        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmac);
+        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmacV2);
 
         var leida = await LeerAsync(id);
 
@@ -89,9 +89,23 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
     }
 
     [Fact]
+    public async Task Una_firma_HMACSHA256_v1_de_antes_de_las_novedades_leida_de_la_base_se_verifica_integra()
+    {
+        var id = await InspeccionCerradaAsync(async (i, _) =>
+        {
+            var canonico = await Firma.ConstruirContenidoCanonicoAsync(i, VerificadorIntegridad.AlgoritmoHmac);
+            return Convert.ToHexString(System.Security.Cryptography.HMACSHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes("clave-hmac-de-las-pruebas-contra-sql-server-32"),
+                System.Text.Encoding.UTF8.GetBytes(canonico))).ToLowerInvariant();
+        }, VerificadorIntegridad.AlgoritmoHmac);
+
+        Assert.True(await Firma.VerificarAsync(await LeerAsync(id)));
+    }
+
+    [Fact]
     public async Task Alterar_una_respuesta_en_la_base_rompe_la_firma()
     {
-        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmac);
+        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmacV2);
         await compartida.Base.EjecutarAsync($"UPDATE RespuestasInspeccion SET Respuesta = N'No' WHERE IdInspeccion = {id}");
 
         Assert.False(await Firma.VerificarAsync(await LeerAsync(id)));

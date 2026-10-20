@@ -10,10 +10,16 @@ public class InspeccionResultadoDto
 {
     public long IdInspeccion { get; set; }
 
-    /// <summary>Siempre <see cref="InspeccionEstados.Cerrada"/> en este DTO.</summary>
+    /// <summary>
+    /// <see cref="InspeccionEstados.Cerrada"/> o <see cref="InspeccionEstados.NovedadesPendientes"/>
+    /// en este DTO: las dos están firmadas.
+    /// </summary>
     public string Estado { get; set; } = string.Empty;
 
-    /// <summary>Valor de <see cref="InspeccionResultados"/>: lo calcula el servidor al cerrar.</summary>
+    /// <summary>
+    /// Valor de <see cref="InspeccionResultados"/>: lo calcula el servidor. "Pendiente" mientras
+    /// queden novedades sin resolver.
+    /// </summary>
     public string Resultado { get; set; } = string.Empty;
 
     public DateTime FechaInspeccion { get; set; }
@@ -32,7 +38,12 @@ public class InspeccionResultadoDto
     // --- Detalle ---
     public List<PreguntaEjecucionDto> Preguntas { get; set; } = new();
     public List<EvidenciaDto> Evidencias { get; set; } = new();
+
+    /// <summary>Respuestas "No": cada una es una novedad.</summary>
     public int TotalNovedades { get; set; }
+
+    /// <summary>Novedades que siguen sin resolver.</summary>
+    public int NovedadesPendientes { get; set; }
 
     // --- Firma ---
     public bool TieneFirma { get; set; }
@@ -51,8 +62,9 @@ public class InspeccionResultadoDto
     /// <summary>Significado de la firma, p. ej. "Responsable de la ejecución de la inspección".</summary>
     public string? FirmaSignificado { get; set; }
 
-    /// <summary>Cómo se calculó FirmaHash: "SHA256-v0" (antes de la Fase 4) o "HMACSHA256-v1".</summary>
+    /// <summary>Cómo se calculó FirmaHash: "SHA256-v0" (antes de la Fase 4), "HMACSHA256-v1" o "HMACSHA256-v2".</summary>
     public string? FirmaAlgoritmo { get; set; }
 
-    public bool ConNovedad => Resultado == InspeccionResultados.ConNovedad;
+    /// <summary>Reportó al menos una novedad, resuelta o no.</summary>
+    public bool ConNovedad => TotalNovedades > 0;
 }

@@ -202,7 +202,7 @@ public class BackendPhaseThreeFirmaTests
     }
 
     [Fact]
-    public async Task Firmar_MarcaConNovedadCuandoUnaRespuestaSiNoEsNo()
+    public async Task Firmar_ConUnNo_QuedaConNovedadesPendientesYResultadoPendiente()
     {
         await using var context = CreateContext();
         var escenario = await SeedAsync(context);
@@ -222,9 +222,12 @@ public class BackendPhaseThreeFirmaTests
 
         var ok = Assert.IsType<OkObjectResult>(action.Result);
         var response = Assert.IsType<ApiResponse<InspeccionResultadoDto>>(ok.Value);
-        Assert.Equal(InspeccionResultados.ConNovedad, response.Data!.Resultado);
+        // Se puede firmar, pero el estado y el resultado esperan a que se resuelva la novedad.
+        Assert.Equal(InspeccionEstados.NovedadesPendientes, response.Data!.Estado);
+        Assert.Equal(InspeccionResultados.Pendiente, response.Data.Resultado);
         Assert.True(response.Data.ConNovedad);
         Assert.Equal(1, response.Data.TotalNovedades);
+        Assert.Equal(1, response.Data.NovedadesPendientes);
     }
 
     [Fact]
@@ -616,8 +619,8 @@ public class BackendPhaseThreeFirmaTests
         var ok = Assert.IsType<OkObjectResult>(action.Result);
         var response = Assert.IsType<ApiResponse<InspeccionResultadoDto>>(ok.Value);
         var resultado = response.Data!;
-        Assert.Equal(InspeccionEstados.Cerrada, resultado.Estado);
-        Assert.Equal(InspeccionResultados.ConNovedad, resultado.Resultado);
+        Assert.Equal(InspeccionEstados.NovedadesPendientes, resultado.Estado);
+        Assert.Equal(InspeccionResultados.Pendiente, resultado.Resultado);
         Assert.Equal("EQ-100", resultado.CodigoInterno);
         Assert.Equal("2.0", resultado.VersionChecklist);
         Assert.Equal(escenario.Tecnico.Nombre, resultado.NombreUsuario);

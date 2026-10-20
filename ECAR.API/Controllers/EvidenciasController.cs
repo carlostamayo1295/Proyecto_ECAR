@@ -359,7 +359,7 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<EvidenciaDto>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        // Regla 6: las evidencias de una inspección cerrada (o anulada) no se tocan.
+        // Regla 6: las evidencias de una inspección firmada (o anulada) no se tocan.
         if (evidencia.Inspeccion.Estado != InspeccionEstados.EnCurso)
         {
             return Conflict(ApiResponse<EvidenciaDto>.ErrorResponse(

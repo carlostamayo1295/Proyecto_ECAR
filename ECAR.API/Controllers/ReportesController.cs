@@ -65,10 +65,10 @@ namespace ECAR.API.Controllers
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
             Tabular(ReporteTipos.EquiposNovedades, "Equipos con novedades", filtro, formato, page, pageSize,
                 () => _reporteService.EquiposNovedades(filtro),
-                [new("Hallazgo", 1.6), new("Equipo", 4.5), new("Área", 3.2), new("Descripción", 7), new("Criticidad", 1.8),
+                [new("Novedad", 1.6), new("Equipo", 4.5), new("Área", 3.2), new("Descripción", 7), new("Criticidad", 1.8),
                  new("Fecha", 2.4), new("Responsable", 3), new("Estado", 2.2)],
-                f => [f.IdHallazgo, f.Equipo, f.Area, f.Hallazgo, f.Criticidad, HoraColombia.DesdeUtc(f.Fecha),
-                      f.Responsable ?? "Sin asignar", Estado(f.Estado)]);
+                f => [f.IdNovedad, f.Equipo, f.Area, f.Novedad, f.Criticidad, HoraColombia.DesdeUtc(f.Fecha),
+                      f.Responsable ?? "Sin resolver", f.Estado]);
 
         [HttpGet("cumplimiento")]
         public async Task<IActionResult> GetCumplimiento([FromQuery] ReporteFiltroDto filtro,
@@ -228,7 +228,5 @@ namespace ECAR.API.Controllers
 
         private static string? Resultado(string? resultado) =>
             resultado == InspeccionResultados.ConNovedad ? "Con novedad" : resultado;
-
-        private static string Estado(string estado) => estado == HallazgoEstados.EnProceso ? "En proceso" : estado;
     }
 }

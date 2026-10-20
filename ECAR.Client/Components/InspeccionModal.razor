@@ -56,7 +56,7 @@
             @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
                 Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3" ReadOnly="EstaCerrada"
-                HelperText="@(EstaCerrada ? "Inspección cerrada: no admite cambios" : "Observaciones generales. El resultado lo calcula el sistema al firmar")" />
+                HelperText="@(EstaCerrada ? "Inspección firmada: no admite cambios" : "Observaciones generales. El resultado lo calcula el sistema al firmar")" />
 
             @* Firma digital. Firmar y cerrar son la misma acción (POST firmar): el servidor exige las
                obligatorias respondidas y cada novedad con observación, y después la inspección queda
@@ -162,7 +162,7 @@
     // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
     private bool errorEquiposAvisado;
 
-    private bool EstaCerrada => Inspeccion?.Estado == InspeccionEstados.Cerrada;
+    private bool EstaCerrada => InspeccionEstados.EstaFirmada(Inspeccion?.Estado);
 
     // Firma digital (solo al editar una inspección en curso)
     private bool datosFirmaListos;
