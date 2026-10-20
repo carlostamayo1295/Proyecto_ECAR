@@ -56,7 +56,9 @@
                         <MudTh>Estado</MudTh>
                         <MudTh>Resultado</MudTh>
                         <MudTh>Firma</MudTh>
-                        <MudTh>Evid. / Nov.</MudTh>
+                        <MudTh>Evidencias</MudTh>
+                        <MudTh>Novedades totales</MudTh>
+                        <MudTh>Novedades pendientes</MudTh>
                         <MudTh>Acciones</MudTh>
                     </HeaderContent>
                     <RowTemplate>
@@ -78,11 +80,16 @@
                             <MudIcon Icon="@(context.TieneFirma ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
                                 Color="@(context.TieneFirma ? Color.Success : Color.Default)" Size="Size.Small" />
                         </MudTd>
-                        <MudTd DataLabel="Evid. / Nov.">
-                            @context.TotalEvidencias / @context.TotalNovedades
+                        <MudTd DataLabel="Evidencias">@context.TotalEvidencias</MudTd>
+                        <MudTd DataLabel="Novedades totales">@context.TotalNovedades</MudTd>
+                        <MudTd DataLabel="Novedades pendientes">
                             @if (context.NovedadesPendientes > 0)
                             {
-                                <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@context.NovedadesPendientes pendiente(s)</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" Text="@context.NovedadesPendientes.ToString()" />
+                            }
+                            else
+                            {
+                                <span>0</span>
                             }
                         </MudTd>
                         <MudTd DataLabel="Acciones" Class="acciones-inspeccion">

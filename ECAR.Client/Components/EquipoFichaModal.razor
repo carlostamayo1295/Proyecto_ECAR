@@ -64,7 +64,9 @@
                     <MudTh>Checklist</MudTh>
                     <MudTh>Estado</MudTh>
                     <MudTh>Resultado</MudTh>
-                    <MudTh>Evid. / Hall.</MudTh>
+                    <MudTh>Evidencias</MudTh>
+                    <MudTh>Novedades totales</MudTh>
+                    <MudTh>Novedades pendientes</MudTh>
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -78,7 +80,9 @@
                             Text="@InspeccionEstados.Texto(context.Estado)" />
                     </MudTd>
                     <MudTd DataLabel="Resultado">@InspeccionResultados.Texto(context.Resultado)</MudTd>
-                    <MudTd DataLabel="Evid. / Nov.">@context.TotalEvidencias / @context.TotalNovedades</MudTd>
+                    <MudTd DataLabel="Evidencias">@context.TotalEvidencias</MudTd>
+                    <MudTd DataLabel="Novedades totales">@context.TotalNovedades</MudTd>
+                    <MudTd DataLabel="Novedades pendientes">@context.NovedadesPendientes</MudTd>
                     <MudTd DataLabel="">
                         @if (InspeccionEstados.EstaFirmada(context.Estado))
                         {

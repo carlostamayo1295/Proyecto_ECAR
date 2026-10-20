@@ -154,7 +154,7 @@ public class NovedadesController : ControllerBase
     /// POST api/novedades/{id}/resolver: firma la resolución, como se firma una inspección (Parte 11
     /// §11.50, §11.70 y §11.200(a)(1)). La firma un Técnico o un Administrador, aunque no haya hecho
     /// la inspección, con su contraseña. Si era la última pendiente de la inspección, esta pasa a
-    /// Cerrada con resultado "ConNovedad" en la misma transacción. Orden: 404, 409, 400 (datos), 400
+    /// Cerrada con resultado "Conforme" en la misma transacción. Orden: 404, 409, 400 (datos), 400
     /// (contraseña, sin Errors para que el diálogo de firma siga abierto) o 423.
     /// </summary>
     [HttpPost("{id:long}/resolver")]
@@ -324,7 +324,7 @@ public class NovedadesController : ControllerBase
 
     /// <summary>
     /// Cambia el estado de una novedad pendiente y, si era la última pendiente de su inspección,
-    /// cierra la inspección: Cerrada con resultado ConNovedad. Todo en una transacción en la que la
+    /// cierra la inspección: Cerrada con resultado Conforme. Todo en una transacción en la que la
     /// fila de la inspección se bloquea primero, para que dos novedades de la misma inspección
     /// resueltas a la vez no se vean pendientes entre sí y la dejen abierta para siempre.
     /// </summary>
@@ -354,7 +354,7 @@ public class NovedadesController : ControllerBase
             if (inspeccionCerrada)
             {
                 novedad.Inspeccion.Estado = InspeccionEstados.Cerrada;
-                novedad.Inspeccion.Resultado = InspeccionResultados.ConNovedad;
+                novedad.Inspeccion.Resultado = InspeccionResultados.Conforme;
             }
 
             _motivoCambio.Establecer(motivo);

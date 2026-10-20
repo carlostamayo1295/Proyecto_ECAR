@@ -215,9 +215,11 @@ namespace ECAR.API.Services
                     Planta = g.Key.Planta,
                     Area = g.Key.Area,
                     TotalInspecciones = g.Count(),
-                    Satisfactorias = g.Count(i => i.Resultado == InspeccionResultados.Conforme),
-                    // Una con novedades pendientes también encontró novedad, aunque no se haya resuelto.
-                    ConNovedad = g.Count(i => i.Resultado == InspeccionResultados.ConNovedad ||
+                    // "Con novedad" es haber encontrado alguna, resuelta o no: al resolverse la última, el
+                    // resultado pasa a Conforme, pero la inspección sigue contando aquí. ConNovedad (sin
+                    // filas en Novedades) es de las firmadas antes de las novedades.
+                    Satisfactorias = g.Count(i => i.Resultado == InspeccionResultados.Conforme && !i.Novedades.Any()),
+                    ConNovedad = g.Count(i => i.Novedades.Any() || i.Resultado == InspeccionResultados.ConNovedad ||
                                               i.Resultado == InspeccionResultados.Pendiente)
                 })
                 .ToListAsync();

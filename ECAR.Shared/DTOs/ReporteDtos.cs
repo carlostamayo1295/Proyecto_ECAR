@@ -119,9 +119,13 @@ public class InspeccionesPorFechasDto
     public DateTime Hasta { get; set; }
     public int TotalInspecciones { get; set; }
 
-    /// <summary>"Inspecciones satisfactorias" del SRS: resultado Conforme.</summary>
+    /// <summary>"Inspecciones satisfactorias" del SRS: Conforme y sin ninguna novedad.</summary>
     public int Satisfactorias { get; set; }
 
+    /// <summary>
+    /// "Inspecciones con novedad" del SRS: las que encontraron alguna, resuelta o no (una resuelta
+    /// queda con resultado Conforme, pero cuenta aquí).
+    /// </summary>
     public int ConNovedad { get; set; }
     public List<InspeccionesPorFechasFilaDto> PorArea { get; set; } = new();
 }

@@ -24,7 +24,7 @@ namespace ECAR.API.Tests;
 /// Novedades: firmar una inspección con respuestas "No" crea una novedad pendiente por cada una,
 /// deja la inspección "NovedadesPendientes" con resultado "Pendiente" y avisa por correo; cada
 /// novedad se resuelve con firma (lo que se hizo, la firma dibujada y la contraseña) por cualquier
-/// Técnico o Administrador, y al resolverse la última la inspección queda Cerrada y "ConNovedad".
+/// Técnico o Administrador, y al resolverse la última la inspección queda Cerrada y "Conforme".
 /// La atomicidad real contra SQL Server está en ECAR.IntegrationTests (NovedadesSqlServerTests).
 /// </summary>
 public class NovedadesTests
@@ -329,7 +329,7 @@ public class NovedadesTests
     }
 
     [Fact]
-    public async Task Al_resolver_la_ultima_la_inspeccion_queda_cerrada_con_novedad_y_sus_sellos_siguen_integros()
+    public async Task Al_resolver_la_ultima_la_inspeccion_queda_cerrada_y_conforme_y_sus_sellos_siguen_integros()
     {
         var e = await SeedAsync();
         var (inspeccion, novedades) = await FirmadaConDosNovedadesAsync(e);
@@ -340,7 +340,7 @@ public class NovedadesTests
         Assert.Contains($"La inspección #{inspeccion.IdInspeccion} quedó cerrada", Respuesta<NovedadDto>(ultima).Message);
         var cerrada = await InspeccionAsync(e, inspeccion.IdInspeccion);
         Assert.Equal(InspeccionEstados.Cerrada, cerrada.Estado);
-        Assert.Equal(InspeccionResultados.ConNovedad, cerrada.Resultado);
+        Assert.Equal(InspeccionResultados.Conforme, cerrada.Resultado);
         Assert.Contains(await e.Db.Auditoria.AsNoTracking().ToListAsync(),
             a => a.Tabla == "Inspecciones" && a.RegistroId == inspeccion.IdInspeccion && a.Accion == AuditoriaAcciones.Cerrar);
 
@@ -439,7 +439,8 @@ public class NovedadesTests
         Assert.Equal(NovedadEstados.Anulada, anulada.Estado);
         Assert.Equal(Motivo, anulada.MotivoAnulacion);
         Assert.Equal(e.Admin.IdUsuario, anulada.IdUsuarioAnulacion);
-        Assert.Equal(InspeccionEstados.Cerrada, (await InspeccionAsync(e, inspeccion.IdInspeccion)).Estado);
+        var cerrada = await InspeccionAsync(e, inspeccion.IdInspeccion);
+        Assert.Equal((InspeccionEstados.Cerrada, InspeccionResultados.Conforme), (cerrada.Estado, cerrada.Resultado));
         Assert.Contains(await e.Db.Auditoria.AsNoTracking().ToListAsync(),
             a => a.Tabla == "Novedades" && a.RegistroId == anulada.IdNovedad && a.Accion == AuditoriaAcciones.Anular);
     }

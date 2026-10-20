@@ -41,13 +41,13 @@
                     <MudText Typo="Typo.body1">@Inspeccion.TotalEvidencias</MudText>
                 </MudItem>
                 <MudItem xs="6" sm="4">
-                    <MudText Typo="Typo.caption">Novedades</MudText>
-                    <MudText Typo="Typo.body1">
-                        @Inspeccion.TotalNovedades
-                        @if (Inspeccion.NovedadesPendientes > 0)
-                        {
-                            <span class="mud-error-text">(@Inspeccion.NovedadesPendientes pendiente(s))</span>
-                        }
+                    <MudText Typo="Typo.caption">Novedades totales</MudText>
+                    <MudText Typo="Typo.body1">@Inspeccion.TotalNovedades</MudText>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption">Novedades pendientes</MudText>
+                    <MudText Typo="Typo.body1" Color="@(Inspeccion.NovedadesPendientes > 0 ? Color.Error : Color.Default)">
+                        @Inspeccion.NovedadesPendientes
                     </MudText>
                 </MudItem>
             </MudGrid>

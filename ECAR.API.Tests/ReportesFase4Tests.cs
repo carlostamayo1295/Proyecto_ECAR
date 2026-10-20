@@ -68,13 +68,13 @@ public class ReportesFase4Tests
             FechaCierre = InspeccionEstados.EstaFirmada(estado) ? DateTime.UtcNow.AddDays(-diasAtras) : null
         };
 
-        var conNovedad = Nueva(balanza, 3, InspeccionEstados.Cerrada, InspeccionResultados.ConNovedad);
+        var conNovedad = Nueva(balanza, 3, InspeccionEstados.Cerrada, InspeccionResultados.Conforme);
         db.Inspecciones.AddRange(
             Nueva(balanza, 0, InspeccionEstados.Cerrada, InspeccionResultados.Conforme),
             conNovedad,
             Nueva(balanza, 1, InspeccionEstados.EnCurso, null));
         await db.SaveChangesAsync();
-        // La novedad ya se resolvió: por eso la inspección está Cerrada y ConNovedad.
+        // Tuvo una novedad y ya se resolvió: por eso la inspección está Cerrada y Conforme.
         db.Novedades.Add(new Novedad
         {
             IdInspeccion = conNovedad.IdInspeccion, IdPregunta = 1, IdRespuesta = 1, Descripcion = "Plato descentrado",
@@ -152,7 +152,7 @@ public class ReportesFase4Tests
     }
 
     [Fact]
-    public async Task Inspecciones_por_fechas_cuenta_conformes_y_con_novedad()
+    public async Task Inspecciones_por_fechas_cuenta_como_con_novedad_la_que_la_tuvo_aunque_ya_este_resuelta()
     {
         var d = await SeedAsync();
 
@@ -184,6 +184,7 @@ public class ReportesFase4Tests
             new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipo = d.Bomba.IdEquipo }));
 
         Assert.Equal(3, totales.TotalInspecciones);
+        Assert.Equal(1, totales.Satisfactorias);
         Assert.Equal(2, totales.ConNovedad);
         Assert.Equal(1, Assert.Single(cumplimiento, f => f.Area == "Producción").EquiposInspeccionados);
         Assert.Equal(InspeccionResultados.Pendiente, Assert.Single(historial.Data).Resultado);

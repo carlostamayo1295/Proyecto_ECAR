@@ -12,7 +12,8 @@ horaria de Colombia.
   `api/hallazgos` a `api/novedades` y la pantalla, de `/hallazgos` a `/novedades` (la ruta anterior sigue abriendo la nueva).
 - Al firmar una inspección se crea una novedad **Pendiente** por cada «No». Con novedades, la inspección queda
   firmada e inmutable, pero en estado **Novedades pendientes** y con resultado **Pendiente**; al resolverse (o
-  anularse) la última, pasa sola a **Cerrada** con resultado **Con novedad**.
+  anularse) la última, pasa sola a **Cerrada** con resultado **Conforme**. El reporte «Inspecciones por fechas»
+  la sigue contando entre las «con novedad», porque la tuvo.
 - Una novedad se **resuelve con firma**, como una inspección: lo que se hizo (10 a 2000 caracteres), la firma
   dibujada y la contraseña. La resuelve cualquier Técnico o Administrador, aunque no haya hecho la inspección.
   Solo el Administrador la anula, con motivo. No hay alta manual, edición, responsable ni reapertura.
@@ -22,6 +23,7 @@ horaria de Colombia.
   `Correo:CarpetaSalida` y no sale.
 - Sello de la inspección `HMACSHA256-v2` (sin el resultado); las firmadas con `HMACSHA256-v1` se siguen verificando.
 - Tablero: novedades pendientes y resueltas; reportes y cumplimiento cuentan como firmadas las que tienen novedades pendientes.
+- Inspecciones, su detalle y la ficha del equipo: columnas separadas de evidencias, novedades totales y novedades pendientes.
 
 ### Añadido
 

@@ -189,7 +189,7 @@ public class NovedadesSqlServerTests(BaseCompartida compartida) : IClassFixture<
             await using var lectura = Base.CrearContexto();
             var cerrada = await lectura.Inspecciones.AsNoTracking().SingleAsync(i => i.IdInspeccion == datos.IdInspeccion);
             Assert.Equal(InspeccionEstados.Cerrada, cerrada.Estado);
-            Assert.Equal(InspeccionResultados.ConNovedad, cerrada.Resultado);
+            Assert.Equal(InspeccionResultados.Conforme, cerrada.Resultado);
         }
     }
 

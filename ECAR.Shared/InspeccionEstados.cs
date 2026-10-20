@@ -42,20 +42,26 @@ public static class InspeccionEstados
 }
 
 /// <summary>
-/// Resultado que el servidor calcula al cerrar la inspección, según haya o no novedades.
+/// Resultado que el servidor calcula al firmar la inspección y, si tuvo novedades, al resolverse la última.
 /// </summary>
 public static class InspeccionResultados
 {
-    /// <summary>Ninguna respuesta reportó novedad.</summary>
+    /// <summary>
+    /// Ninguna respuesta reportó novedad, o todas sus novedades ya se resolvieron (o se anularon).
+    /// Que hubo novedades queda en las propias novedades y en TotalNovedades.
+    /// </summary>
     public const string Conforme = "Conforme";
 
     /// <summary>
     /// La inspección se firmó con novedades y todavía no se resuelven todas. Pasa a
-    /// <see cref="ConNovedad"/> cuando se resuelve la última.
+    /// <see cref="Conforme"/> cuando se resuelve la última.
     /// </summary>
     public const string Pendiente = "Pendiente";
 
-    /// <summary>Al menos una respuesta Sí/No se marcó como "No" y todas sus novedades ya se resolvieron.</summary>
+    /// <summary>
+    /// Inspecciones firmadas antes de las novedades: al menos una respuesta Sí/No fue "No". Ya no lo
+    /// pone el servidor, pero se conserva para leer esos registros.
+    /// </summary>
     public const string ConNovedad = "ConNovedad";
 
     public static bool EsValido(string resultado) => resultado is Conforme or Pendiente or ConNovedad;
