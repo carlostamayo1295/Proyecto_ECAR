@@ -105,7 +105,9 @@ public class InspeccionService : IInspeccionService
             throw new KeyNotFoundException($"No se encontró la inspección con ID {inspeccionId}");
         }
 
-        if (!esAdmin && !esAuditor && inspeccion.IdUsuario != usuarioId)
+        // Un Técnico, las de sus inspecciones y las de las que tienen novedades (AccesoInspeccion).
+        if (!esAdmin && !esAuditor
+            && !await _context.TecnicoPuedeLeerAsync(inspeccionId, inspeccion.IdUsuario, usuarioId))
         {
             throw new UnauthorizedAccessException("No tienes permiso para consultar las respuestas de esta inspección.");
         }

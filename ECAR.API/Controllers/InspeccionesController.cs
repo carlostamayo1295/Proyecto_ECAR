@@ -80,7 +80,8 @@ public class InspeccionesController : ControllerBase
         }
 
         // Consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Un Técnico sigue
-        // viendo solo las suyas: el filtro de arriba ya se aplicó.
+        // viendo solo las suyas: el filtro de arriba ya se aplicó. Las ajenas con novedades las
+        // abre desde la novedad (AccesoInspeccion); en su listado no aparecen.
         if (idEquipo.HasValue)
         {
             query = query.Where(i => i.IdEquipo == idEquipo.Value);
@@ -178,7 +179,7 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<InspeccionDto>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!PuedeLeer(inspeccion))
+        if (!await PuedeLeerAsync(inspeccion))
         {
             return Forbid();
         }
@@ -265,7 +266,7 @@ public class InspeccionesController : ControllerBase
                 "Inspección no encontrada"));
         }
 
-        if (!PuedeLeer(inspeccion))
+        if (!await PuedeLeerAsync(inspeccion))
         {
             return Forbid();
         }
@@ -614,7 +615,7 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!PuedeLeer(inspeccion))
+        if (!await PuedeLeerAsync(inspeccion))
         {
             return Forbid();
         }
@@ -696,7 +697,7 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<InspeccionResultadoDto>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!PuedeLeer(inspeccion))
+        if (!await PuedeLeerAsync(inspeccion))
         {
             return Forbid();
         }
@@ -938,10 +939,15 @@ public class InspeccionesController : ControllerBase
         && !_currentUser.IsInRole("Administrador")
         && !_currentUser.IsInRole("Auditor");
 
-    private bool PuedeLeer(Inspeccion inspeccion) =>
+    /// <summary>
+    /// Administrador y Auditor, cualquiera; un Técnico, las suyas y las que tienen novedades, en
+    /// solo lectura, para orientarse al resolverlas (<see cref="AccesoInspeccion"/>).
+    /// </summary>
+    private async Task<bool> PuedeLeerAsync(Inspeccion inspeccion) =>
         _currentUser.IsInRole("Administrador")
         || _currentUser.IsInRole("Auditor")
-        || (_currentUser.IsInRole("Técnico") && inspeccion.IdUsuario == _currentUser.IdUsuario);
+        || (_currentUser.IsInRole("Técnico")
+            && await _context.TecnicoPuedeLeerAsync(inspeccion.IdInspeccion, inspeccion.IdUsuario, _currentUser.IdUsuario));
 
     private bool PuedeModificar(Inspeccion inspeccion) =>
         _currentUser.IsInRole("Administrador")

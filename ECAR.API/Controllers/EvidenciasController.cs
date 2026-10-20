@@ -126,7 +126,8 @@ public class EvidenciasController : ControllerBase
     /// Evidencias de una inspección (endpoint 8 del contrato, PLAN_FASE3_TAREAS §3.2): una lista,
     /// no una página. Antes esta ruta compartía acción con el listado paginado y devolvía
     /// PagedResultDto, y el cliente, que deserializa List&lt;EvidenciaDto&gt;, recibía null.
-    /// Un Técnico solo ve las de sus propias inspecciones, como en GET {id}/archivo.
+    /// Un Técnico ve las de sus inspecciones y las de las que tienen novedades, para orientarse al
+    /// resolverlas (AccesoInspeccion), como en GET {id}/archivo.
     /// </summary>
     [HttpGet("/api/inspecciones/{idInspeccion:long}/evidencias")]
     public async Task<ActionResult<ApiResponse<List<EvidenciaDto>>>> GetEvidenciasInspeccion(long idInspeccion)
@@ -140,7 +141,8 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<List<EvidenciaDto>>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (User.IsInRole("Técnico") && inspeccion.IdUsuario != _currentUser.IdUsuario)
+        if (User.IsInRole("Técnico")
+            && !await _context.TecnicoPuedeLeerAsync(idInspeccion, inspeccion.IdUsuario, _currentUser.IdUsuario))
         {
             return Forbid();
         }
@@ -182,7 +184,8 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<EvidenciaDto>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        if (User.IsInRole("Técnico") && evidencia.IdUsuarioCarga != _currentUser.IdUsuario && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
+        if (User.IsInRole("Técnico") && evidencia.IdUsuarioCarga != _currentUser.IdUsuario
+            && !await _context.TecnicoPuedeLeerAsync(evidencia.IdInspeccion, evidencia.Inspeccion.IdUsuario, _currentUser.IdUsuario))
         {
             return Forbid();
         }
@@ -209,7 +212,8 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        if (User.IsInRole("Técnico") && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
+        if (User.IsInRole("Técnico")
+            && !await _context.TecnicoPuedeLeerAsync(evidencia.IdInspeccion, evidencia.Inspeccion.IdUsuario, _currentUser.IdUsuario))
         {
             return Forbid();
         }

@@ -17,6 +17,10 @@ horaria de Colombia.
 - Una novedad se **resuelve con firma**, como una inspección: lo que se hizo (10 a 2000 caracteres), la firma
   dibujada y la contraseña. La resuelve cualquier Técnico o Administrador, aunque no haya hecho la inspección.
   Solo el Administrador la anula, con motivo. No hay alta manual, edición, responsable ni reapertura.
+- **Quien resuelve ve la inspección completa** (decisión de ECAR, 20/10/2026): un Técnico consulta, en solo
+  lectura, las inspecciones de otros que tienen novedades (respuestas, fotos, firma y registro PDF), desde el
+  detalle de la novedad («Ver la inspección completa»). Las que están en curso o no tuvieron novedades siguen
+  siendo solo de quien las ejecuta, y su listado de inspecciones sigue mostrando solo las suyas.
 - **Correo a la mesa de ayuda** por cada novedad (`Correo:Destinatarios`), en segundo plano: si el correo falla,
   la firma no se revierte; queda en la auditoría (`NotificacionEnviada` / `NotificacionFallida`) y el Administrador
   puede reenviarlo. Sin `Correo:Usuario` y `Correo:Password` (user-secrets) el mensaje se guarda como `.eml` en

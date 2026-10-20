@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using ECAR.API.Configuration;
 using ECAR.API.Controllers;
 using ECAR.API.Services;
 using ECAR.API.Services.Notificaciones;
@@ -10,12 +12,14 @@ using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace ECAR.API.Tests;
@@ -43,10 +47,11 @@ public class NovedadesTests
         public bool IsInRole(string role) => roles.Contains(role, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>Cada foto es un PNG válido de 1×1, para que el registro PDF la pueda incluir.</summary>
     private sealed class Almacen : IEvidenciaStorage
     {
         public Task<string> GuardarAsync(Stream stream, string extension, long idInspeccion) => Task.FromResult($"{idInspeccion}/f{extension}");
-        public Task<Stream> AbrirAsync(string rutaRelativa) => Task.FromResult<Stream>(new MemoryStream([1, 2, 3]));
+        public Task<Stream> AbrirAsync(string rutaRelativa) => Task.FromResult<Stream>(new MemoryStream(Convert.FromBase64String(FirmaPng)));
         public Task EliminarAsync(string rutaRelativa) => Task.CompletedTask;
     }
 
@@ -563,6 +568,93 @@ public class NovedadesTests
         Assert.IsType<OkObjectResult>(reenviar.Result);
         Assert.IsType<NotFoundObjectResult>(inexistente.Result);
         Assert.Equal([novedades[0].IdNovedad], e.Notificador.Encolados);
+    }
+
+    // ------------------------------------------------------------------ consultar la inspección
+
+    private static EvidenciasController Evidencias(Escenario e, Usuario usuario, string rol = "Técnico") =>
+        new(e.Db, new Usuario1(usuario.IdUsuario, rol), new Almacen(), Options.Create(new EvidenciasOptions()), new MotivoCambio())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, rol)], "Pruebas"))
+                }
+            }
+        };
+
+    /// <summary>Inspección del inspector con una foto, firmada con las respuestas dadas.</summary>
+    private static async Task<(Inspeccion Inspeccion, Evidencia Foto)> FirmadaConFotoAsync(Escenario e, params RespuestaInspeccion[] respuestas)
+    {
+        var inspeccion = await EnCursoAsync(e, respuestas);
+        var foto = new Evidencia
+        {
+            IdInspeccion = inspeccion.IdInspeccion, Archivo = "f.png", NombreOriginal = "f.png", TipoContenido = "image/png",
+            TamanoBytes = 68, IdUsuarioCarga = e.Inspector.IdUsuario
+        };
+        e.Db.Evidencias.Add(foto);
+        await e.Db.SaveChangesAsync();
+        e.Db.ChangeTracker.Clear();
+        Assert.IsType<OkObjectResult>((await FirmarAsync(e, inspeccion.IdInspeccion)).Result);
+        return (inspeccion, foto);
+    }
+
+    [Fact]
+    public async Task Quien_resuelve_consulta_en_solo_lectura_la_inspeccion_completa_de_otro()
+    {
+        var e = await SeedAsync();
+        var (inspeccion, foto) = await FirmadaConFotoAsync(e, No(e.Limpieza, "Polvo en el plato"), Si(e.Nivel));
+        var id = inspeccion.IdInspeccion;
+        var otro = Inspecciones(e, e.OtroTecnico);
+
+        var resultado = Respuesta<InspeccionResultadoDto>(await otro.GetResultado(id)).Data!;
+        Assert.Equal("Ana Inspectora", resultado.NombreUsuario);
+        Assert.Contains(resultado.Preguntas, p => p.Observacion == "Polvo en el plato");
+        Assert.Equal([foto.IdEvidencia], resultado.Evidencias.Select(f => f.IdEvidencia));
+        Assert.Equal(FirmaPng, resultado.FirmaPngBase64);
+        Assert.IsType<OkObjectResult>((await otro.GetInspeccion(id)).Result);
+        Assert.IsType<OkObjectResult>((await otro.GetEjecucion(id)).Result);
+        Assert.IsType<OkObjectResult>((await otro.GetRespuestas(id)).Result);
+        Assert.IsType<FileContentResult>(await otro.ObtenerRegistroPdf(id));
+        Assert.IsType<OkObjectResult>((await Evidencias(e, e.OtroTecnico).GetEvidenciasInspeccion(id)).Result);
+        Assert.IsType<OkObjectResult>((await Evidencias(e, e.OtroTecnico).GetEvidencia(foto.IdEvidencia)).Result);
+        Assert.IsType<FileStreamResult>(await Evidencias(e, e.OtroTecnico).GetArchivo(foto.IdEvidencia));
+
+        // Solo lectura: modificarla sigue siendo del inspector o del Administrador.
+        Assert.IsType<ForbidResult>((await otro.UpdateInspeccion(id, new UpdateInspeccionDto { Observaciones = "Cambio" })).Result);
+
+        // Resuelta la novedad, la inspección (ya Cerrada y Conforme) se sigue pudiendo consultar.
+        var novedad = await e.Db.Novedades.AsNoTracking().SingleAsync();
+        Assert.IsType<OkObjectResult>((await ResolverAsync(e, e.OtroTecnico, novedad.IdNovedad)).Result);
+        Assert.Equal(InspeccionResultados.Conforme, Respuesta<InspeccionResultadoDto>(await otro.GetResultado(id)).Data!.Resultado);
+    }
+
+    [Fact]
+    public async Task Sin_novedades_la_inspeccion_sigue_siendo_solo_de_quien_la_ejecuta()
+    {
+        var e = await SeedAsync();
+        var (conforme, foto) = await FirmadaConFotoAsync(e, Si(e.Limpieza), Si(e.Nivel));
+        var enCurso = await EnCursoAsync(e, No(e.Limpieza, "Aún sin firmar"));
+        var otro = Inspecciones(e, e.OtroTecnico);
+
+        Assert.IsType<ForbidResult>((await otro.GetResultado(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await otro.GetInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await otro.GetRespuestas(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>(await otro.ObtenerRegistroPdf(conforme.IdInspeccion));
+        Assert.IsType<ForbidResult>((await Evidencias(e, e.OtroTecnico).GetEvidenciasInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await Evidencias(e, e.OtroTecnico).GetEvidencia(foto.IdEvidencia)).Result);
+        Assert.IsType<ForbidResult>(await Evidencias(e, e.OtroTecnico).GetArchivo(foto.IdEvidencia));
+
+        // Un «No» todavía sin firmar no es novedad: la inspección en curso es de quien la ejecuta.
+        Assert.IsType<ForbidResult>((await otro.GetEjecucion(enCurso.IdInspeccion)).Result);
+
+        // El listado de un Técnico sigue siendo el de sus inspecciones.
+        var listado = Respuesta<PagedResultDto<InspeccionDto>>(await otro.GetInspecciones()).Data!;
+        Assert.Equal(0, listado.TotalCount);
+
+        // El Auditor, en cambio, consulta cualquiera.
+        Assert.IsType<OkObjectResult>((await Inspecciones(e, e.Admin, "Auditor").GetResultado(conforme.IdInspeccion)).Result);
     }
 
     // ------------------------------------------------------------------ modelo y permisos
