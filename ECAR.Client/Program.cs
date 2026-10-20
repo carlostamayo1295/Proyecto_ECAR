@@ -12,12 +12,21 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // Sesión: SesionService decide cuándo terminó la sesión y manda al login conservando la página.
 builder.Services.AddScoped<SesionService>();
 
+// Dirección del API. Abierta en el PC (localhost), el API está en https://localhost:7296. Abierta
+// desde otra dirección —el celular por Tailscale, donde `tailscale serve` reenvía /api al API, o un
+// servidor con proxy inverso— el API está en el mismo origen que la página. "ApiBaseUrl" en
+// wwwroot/appsettings.json, si existe, manda sobre las dos.
+var origenCliente = new Uri(builder.HostEnvironment.BaseAddress);
+var direccionApi = builder.Configuration["ApiBaseUrl"] is { Length: > 0 } configurada
+    ? new Uri(configurada)
+    : origenCliente.IsLoopback ? new Uri("https://localhost:7296") : new Uri(origenCliente.GetLeftPart(UriPartial.Authority));
+
 // Configurar el HttpClient del API. Pasa por SesionExpiradaHandler: si el API responde 401 a una
 // petición que llevaba token, la sesión venció y se vuelve al login.
 builder.Services.AddScoped(sp => new HttpClient(
     new SesionExpiradaHandler(sp.GetRequiredService<SesionService>()) { InnerHandler = new HttpClientHandler() })
 {
-    BaseAddress = new Uri("https://localhost:7296")
+    BaseAddress = direccionApi
 });
 
 // Registrar los servicios

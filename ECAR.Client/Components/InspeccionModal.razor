@@ -49,8 +49,9 @@
                 </MudSelect>
             }
 
+            @* La fecha la registra el servidor al guardar (ALCOA+ contemporáneo): solo se muestra. *@
             <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
-                Editable="true" Disabled="IsEditMode" Class="mb-3" />
+                Disabled="true" HelperText="@(IsEditMode ? null : "Se registra la fecha y hora del servidor al guardar")" Class="mb-3" />
 
             @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
@@ -95,7 +96,7 @@
                                 <li>@faltante</li>
                             }
                         </ul>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
                             StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="ContinuarEjecucion">
                             Continuar la inspección
                         </MudButton>
@@ -112,7 +113,7 @@
                     StartIcon="@Icons.Material.Filled.Lock"
                     Disabled="@(firmando || string.IsNullOrWhiteSpace(firmaCapturada))"
                     OnClick="FirmarYCerrarAsync">
-                    @(firmando ? "Cerrando la inspección…" : "Firmar y cerrar la inspección")
+                    @(firmando ? "Confirmando su identidad…" : "Firmar y cerrar la inspección")
                 </MudButton>
             }
             else
@@ -312,26 +313,35 @@
         firmando = true;
         faltantes.Clear();
 
+        // Fase 4 (Parte 11 §11.200(a)(1)): la firma pide la contraseña, igual que en la ejecución.
         // El API acepta el PNG con o sin el prefijo "data:image/png;base64,". Las observaciones
         // del modal viajan con la firma, así no hace falta "Guardar" antes de firmar.
-        var result = await HttpClientService.FirmarInspeccionAsync(Inspeccion.IdInspeccion, new FirmarInspeccionDto
+        ApiResponse<InspeccionResultadoDto>? result;
+        try
         {
-            FirmaPngBase64 = firmaCapturada,
-            Observaciones = observaciones
-        });
+            result = await ConfirmarIdentidadDialog.AbrirAsync(DialogService, Inspeccion.IdInspeccion,
+                firmaCapturada, observaciones);
+        }
+        finally
+        {
+            firmando = false;
+        }
 
-        firmando = false;
+        if (result == null)
+        {
+            return; // canceló: la firma dibujada se conserva
+        }
 
         if (result is { Success: true, Data: not null })
         {
-            Snackbar.Add(result.Message ?? "Inspección firmada y cerrada", Severity.Success);
+            Snackbar.Add(result.Message, Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
             return;
         }
 
         // 400 con la lista de obligatorias sin responder o novedades sin observación (reglas 3 y 4).
-        faltantes = result?.Errors?.ToList() ?? new List<string>();
-        Snackbar.Add(result?.Message ?? "No se pudo firmar la inspección", Severity.Error);
+        faltantes = result.Errors?.ToList() ?? new List<string>();
+        Snackbar.Add(result.Message, Severity.Error);
     }
 
     private void ContinuarEjecucion()

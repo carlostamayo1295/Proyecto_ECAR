@@ -16,10 +16,20 @@
                 Variant="Variant.Outlined" Required="true" RequiredError="El correo es requerido"
                 MaxLength="150" Immediate="true" Class="mb-3" />
 
-            <MudTextField T="string" Label="Password" @bind-Value="password" 
-                Variant="Variant.Outlined" Required="@(!IsEditMode)" RequiredError="El password es requerido"
-                InputType="InputType.Password" Immediate="true" Class="mb-3"
-                HelperText="@(IsEditMode ? "Dejar en blanco para mantener el password actual" : "")" />
+            @if (IsEditMode)
+            {
+                @* Fase 4 (Parte 11 §11.300): la contraseña ya no se cambia desde aquí; el Administrador
+                   usa "Restablecer contraseña" en la lista y el usuario la cambia al entrar. *@
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    Para cambiar la contraseña use «Restablecer contraseña» en la lista de usuarios.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTextField T="string" Label="Password" @bind-Value="password" 
+                    Variant="Variant.Outlined" Required="true" RequiredError="El password es requerido"
+                    InputType="InputType.Password" Immediate="true" Class="mb-3" />
+            }
 
             <MudTextField T="string" Label="Usuario AD" @bind-Value="usuarioAD" 
                 Variant="Variant.Outlined" MaxLength="100" Immediate="true" Class="mb-3" />
@@ -105,14 +115,27 @@
         {
             if (IsEditMode && Usuario != null)
             {
+                // Fase 4 (§3.3): desactivar o reactivar desde la edición también pide motivo.
+                string? motivo = null;
+                if (activo != Usuario.Activo)
+                {
+                    motivo = await MotivoDialog.PedirAsync(DialogService, activo ? "Activar usuario" : "Desactivar usuario",
+                        $"Indique por qué va a {(activo ? "activar" : "desactivar")} a «{nombre}».",
+                        activo ? "Activar" : "Desactivar", activo ? Color.Success : Color.Error);
+                    if (motivo is null)
+                    {
+                        return;
+                    }
+                }
+
                 var updateDto = new UpdateUsuarioDto
                 {
                     Nombre = nombre,
                     Correo = correo,
                     UsuarioAD = usuarioAD,
-                    Password = string.IsNullOrEmpty(password) ? null : password,
                     Activo = activo,
-                    RoleIds = selectedRoleIds.ToList()
+                    RoleIds = selectedRoleIds.ToList(),
+                    Motivo = motivo
                 };
 
                 var result = await HttpClientService.UpdateUsuarioAsync(Usuario.IdUsuario, updateDto);

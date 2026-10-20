@@ -1,6 +1,7 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.API.Services;
+using ECAR.API.Services.Documentos;
 using ECAR.API.Exceptions;
 using ECAR.Shared;
 using ECAR.Shared.DTOs;
@@ -21,15 +22,21 @@ public class InspeccionesController : ControllerBase
     private readonly IInspeccionService _inspeccionService;
     private readonly IEvidenciaStorage _storage;
     private readonly ILogger<InspeccionesController> _logger;
+    private readonly IMotivoCambio _motivoCambio;
 
+    /// <param name="motivoCambio">
+    /// Motivo que la auditoría copia en sus filas (anular). Es opcional solo para no cambiar las
+    /// pruebas que ya construyen el controlador; en el API siempre lo inyecta el contenedor.
+    /// </param>
     public InspeccionesController(ECARDbContext context, ICurrentUser currentUser, IInspeccionService inspeccionService,
-        IEvidenciaStorage storage, ILogger<InspeccionesController> logger)
+        IEvidenciaStorage storage, ILogger<InspeccionesController> logger, IMotivoCambio? motivoCambio = null)
     {
         _context = context;
         _currentUser = currentUser;
         _inspeccionService = inspeccionService;
         _storage = storage;
         _logger = logger;
+        _motivoCambio = motivoCambio ?? new MotivoCambio();
     }
 
     [HttpGet]
@@ -58,9 +65,10 @@ public class InspeccionesController : ControllerBase
                 (i.Resultado != null && i.Resultado.Contains(search)));
         }
 
-        // Filtro por estado (EnCurso / Cerrada) antes de paginar. Sin esto el cliente filtraba
-        // sobre la página ya cargada y podía decir "no hay inspecciones en curso" habiéndolas
-        // en otras páginas.
+        // Filtro por estado (EnCurso / Cerrada / Anulada) antes de paginar. Sin esto el cliente
+        // filtraba sobre la página ya cargada y podía decir "no hay inspecciones en curso"
+        // habiéndolas en otras páginas. Sin filtro se listan todas, también las anuladas: se
+        // conservan como evidencia y se distinguen por Estado y por los campos de anulación.
         if (!string.IsNullOrWhiteSpace(estado))
         {
             query = query.Where(i => i.Estado == estado);
@@ -94,8 +102,12 @@ public class InspeccionesController : ControllerBase
                 Resultado = i.Resultado,
                 Observaciones = i.Observaciones,
                 TieneFirma = i.FirmaDigital != null && i.FirmaDigital != "",
-                TotalEvidencias = i.Evidencias.Count,
-                TotalHallazgos = i.Hallazgos.Count
+                TotalEvidencias = i.Evidencias.Count(e => !e.Retirada),
+                TotalHallazgos = i.Hallazgos.Count,
+                MotivoAnulacion = i.MotivoAnulacion,
+                FechaAnulacion = i.FechaAnulacion,
+                IdUsuarioAnulacion = i.IdUsuarioAnulacion,
+                NombreUsuarioAnulacion = i.UsuarioAnulacion != null ? i.UsuarioAnulacion.Nombre : null
             })
             .ToListAsync();
 
@@ -152,6 +164,7 @@ public class InspeccionesController : ControllerBase
             .Include(i => i.Checklist)
             .Include(i => i.Evidencias)
             .Include(i => i.Hallazgos)
+            .Include(i => i.UsuarioAnulacion)
             .FirstOrDefaultAsync(i => i.IdInspeccion == id);
 
         if (inspeccion == null)
@@ -193,6 +206,11 @@ public class InspeccionesController : ControllerBase
         {
             return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(
                 "El checklist indicado no existe o no está activo"));
+        }
+
+        if (!await _context.PreguntasChecklist.AnyAsync(p => p.IdChecklist == iniciarDto.IdChecklist))
+        {
+            return BadRequest(ApiResponse<InspeccionEjecucionDto>.ErrorResponse(MensajeChecklistSinPreguntas));
         }
 
         var existente = await _context.Inspecciones
@@ -275,12 +293,19 @@ public class InspeccionesController : ControllerBase
                 "El checklist indicado no existe o no está activo"));
         }
 
+        if (!await _context.PreguntasChecklist.AnyAsync(p => p.IdChecklist == checklist.IdChecklist))
+        {
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse(MensajeChecklistSinPreguntas));
+        }
+
+        // La fecha es la del servidor, como en iniciar (plan §8; ALCOA+ contemporáneo): la que
+        // mande el cliente se ignora, para que nadie registre una inspección con fecha pasada.
         var inspeccion = new Inspeccion
         {
             IdEquipo = createDto.IdEquipo,
             IdUsuario = usuario.IdUsuario,
             IdChecklist = checklist.IdChecklist,
-            FechaInspeccion = createDto.FechaInspeccion,
+            FechaInspeccion = DateTime.UtcNow,
             Observaciones = createDto.Observaciones,
             Estado = InspeccionEstados.EnCurso
         };
@@ -318,10 +343,11 @@ public class InspeccionesController : ControllerBase
             return Forbid();
         }
 
-        // Regla 6 del SRS: una inspección cerrada es evidencia histórica y no admite cambios.
-        if (EstaCerrada(inspeccion))
+        // Regla 6 del SRS: una inspección cerrada es evidencia histórica y no admite cambios;
+        // una anulada tampoco (§3.6).
+        if (InmutabilidadInspeccion.MensajeSiNoAdmiteCambios(inspeccion.Estado) is { } noAdmite)
         {
-            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(MensajeInspeccionCerrada));
+            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(noAdmite));
         }
 
         if (updateDto.Resultado != null || updateDto.FirmaDigital != null)
@@ -333,7 +359,16 @@ public class InspeccionesController : ControllerBase
         if (updateDto.Observaciones != null)
             inspeccion.Observaciones = updateDto.Observaciones;
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Otra petición la firmó o la anuló mientras tanto (RowVersion): nada se guardó.
+            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(
+                MensajeSegunEstadoActual(await _context.ObtenerEstadoEscrituraAsync(id)) ?? MensajeConcurrencia));
+        }
 
         return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(inspeccion), "Inspección actualizada exitosamente"));
     }
@@ -375,15 +410,30 @@ public class InspeccionesController : ControllerBase
         }
     }
 
-    [HttpDelete("{id}")]
-    [Authorize(Roles = "Administrador,Técnico")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteInspeccion(long id)
-    {
-        var inspeccion = await _context.Inspecciones.FindAsync(id);
+    public const string MensajeMotivoRequerido = "El motivo es requerido y debe tener entre 10 y 500 caracteres";
 
+    /// <summary>
+    /// POST api/inspecciones/{id}/anular (§3.6): sustituye al borrado. Solo una inspección
+    /// EnCurso; la anula el Administrador o el Técnico que la ejecuta, siempre con motivo. Se
+    /// conservan sus respuestas, evidencias, fotos y hallazgos, y queda inmutable. Estado,
+    /// motivo, fecha, usuario y la fila "Anular" de la auditoría se guardan en una transacción.
+    /// Orden: 404, 409 (no está en curso), 403, 400 (motivo).
+    /// </summary>
+    [HttpPost("{id:long}/anular")]
+    [Authorize(Roles = "Administrador,Técnico")]
+    public async Task<ActionResult<ApiResponse<InspeccionDto>>> AnularInspeccion(long id, MotivoDto motivoDto)
+    {
+        var inspeccion = await _context.Inspecciones.FirstOrDefaultAsync(i => i.IdInspeccion == id);
         if (inspeccion == null)
         {
-            return NotFound(ApiResponse<bool>.ErrorResponse("Inspección no encontrada"));
+            return NotFound(ApiResponse<InspeccionDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (inspeccion.Estado != InspeccionEstados.EnCurso)
+        {
+            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(inspeccion.Estado == InspeccionEstados.Anulada
+                ? "La inspección ya está anulada"
+                : "Una inspección cerrada y firmada no se puede anular"));
         }
 
         if (!PuedeModificar(inspeccion))
@@ -391,38 +441,43 @@ public class InspeccionesController : ControllerBase
             return Forbid();
         }
 
-        // Regla 6 del SRS: una inspección cerrada tampoco se borra.
-        if (EstaCerrada(inspeccion))
+        // [Required]/[StringLength] de MotivoDto ya lo rechazan; esto cubre a quien llame sin
+        // validación del modelo y descarta un motivo hecho solo de espacios.
+        var motivo = motivoDto.Motivo?.Trim();
+        if (motivo == null || motivo.Length is < MotivoDto.LongitudMinima or > MotivoDto.LongitudMaxima)
         {
-            return Conflict(ApiResponse<bool>.ErrorResponse(MensajeInspeccionCerrada));
+            return BadRequest(ApiResponse<InspeccionDto>.ErrorResponse(MensajeMotivoRequerido));
         }
 
-        // Las filas de Evidencias se borran con la inspección (cascada en la base de datos), pero
-        // las fotos están en disco: se toman las rutas antes de borrar para eliminarlas después.
-        var fotos = await _context.Evidencias
-            .Where(e => e.IdInspeccion == id && e.Archivo != "")
-            .Select(e => e.Archivo)
-            .ToListAsync();
+        inspeccion.Estado = InspeccionEstados.Anulada;
+        inspeccion.MotivoAnulacion = motivo;
+        inspeccion.FechaAnulacion = DateTime.UtcNow;
+        inspeccion.IdUsuarioAnulacion = _currentUser.IdUsuario;
+        _motivoCambio.Establecer(motivo);
 
-        _context.Inspecciones.Remove(inspeccion);
-        await _context.SaveChangesAsync();
-
-        // Después del SaveChanges, como en DELETE api/evidencias/{id}: si falla el borrado en la
-        // base, las fotos siguen ahí. Una foto que no se pueda borrar no deshace lo anterior;
-        // queda en el log para limpiarla a mano.
-        foreach (var foto in fotos)
+        // Un único SaveChanges: el cambio y su fila de auditoría van en la misma transacción.
+        try
         {
-            try
-            {
-                await _storage.EliminarAsync(foto);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogWarning(ex, "No se pudo borrar la foto {Archivo} de la inspección {IdInspeccion}", foto, id);
-            }
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Otra petición la firmó o la anuló mientras tanto (RowVersion): nada se guardó.
+            return Conflict(ApiResponse<InspeccionDto>.ErrorResponse(
+                MensajeSegunEstadoActual(await _context.ObtenerEstadoEscrituraAsync(id)) ?? MensajeConcurrencia));
         }
 
-        return Ok(ApiResponse<bool>.SuccessResponse(true, "Inspección eliminada exitosamente"));
+        var anulada = await _context.Inspecciones
+            .AsNoTracking()
+            .Include(i => i.Equipo)
+            .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
+            .Include(i => i.Evidencias)
+            .Include(i => i.Hallazgos)
+            .Include(i => i.UsuarioAnulacion)
+            .SingleAsync(i => i.IdInspeccion == id);
+
+        return Ok(ApiResponse<InspeccionDto>.SuccessResponse(MapToDto(anulada), "Inspección anulada exitosamente"));
     }
 
     /// <summary>
@@ -433,7 +488,10 @@ public class InspeccionesController : ControllerBase
     [HttpPost("{id}/firmar")]
     [Authorize(Roles = "Administrador,Técnico")]
     public async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarInspeccion(
-        long id, FirmarInspeccionDto firmarDto)
+        long id,
+        FirmarInspeccionDto firmarDto,
+        [FromServices] IAuthService authService,
+        [FromServices] VerificadorIntegridad verificador)
     {
         var inspeccion = await CargarCierreAsync(id, seguimiento: true);
         if (inspeccion == null)
@@ -448,9 +506,10 @@ public class InspeccionesController : ControllerBase
             return Forbid();
         }
 
-        if (EstaCerrada(inspeccion))
+        // Ni una cerrada ni una anulada se firman.
+        if (InmutabilidadInspeccion.MensajeSiNoAdmiteCambios(inspeccion.Estado) is { } noAdmite)
         {
-            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(MensajeInspeccionCerrada));
+            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(noAdmite));
         }
 
         var faltantes = ValidarContenidoParaCierre(inspeccion);
@@ -463,6 +522,25 @@ public class InspeccionesController : ControllerBase
         if (!FirmaInspeccion.TryValidarPng(firmarDto.FirmaPngBase64, out var firmaPng, out var errorFirma))
         {
             return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(errorFirma));
+        }
+
+        if (string.IsNullOrEmpty(firmarDto.Password))
+        {
+            return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
+                "Debe ingresar su contraseña para firmar"));
+        }
+
+        try
+        {
+            if (!await authService.VerificarPasswordAsync(_currentUser.IdUsuario, firmarDto.Password, AuthService.OperacionFirma))
+            {
+                return BadRequest(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
+                    "La contraseña es incorrecta; la inspección no se cerró"));
+            }
+        }
+        catch (CuentaBloqueadaException ex)
+        {
+            return StatusCode(StatusCodes.Status423Locked, ApiResponse<InspeccionResultadoDto>.ErrorResponse(ex.Message));
         }
 
         var fechaCierre = DateTime.UtcNow;
@@ -478,16 +556,122 @@ public class InspeccionesController : ControllerBase
         }
 
         inspeccion.FirmaDigital = firmaPng;
-        inspeccion.FirmaHash = FirmaInspeccion.CalcularHash(
-            inspeccion, inspeccion.Respuestas, inspeccion.Evidencias, fechaCierre, firmaPng);
+        inspeccion.FirmaNombre = inspeccion.Usuario.Nombre;
+        inspeccion.FirmaSignificado = VerificadorIntegridad.SignificadoEjecucion;
+        inspeccion.FirmaAlgoritmo = VerificadorIntegridad.AlgoritmoHmac;
+        inspeccion.FirmaHash = await verificador.CalcularSelloAsync(inspeccion);
 
-        // Un único SaveChanges: estado, resultado, firma y hash se guardan en la misma
-        // transacción, de modo que no puede quedar una inspección cerrada a medias.
-        await _context.SaveChangesAsync();
+        await AgregarHallazgosDeNovedadesAsync(inspeccion, fechaCierre);
+
+        // Un único SaveChanges: estado, resultado, firma, hash y hallazgos se guardan en la misma
+        // transacción, de modo que no puede quedar una inspección cerrada a medias ni una
+        // novedad sin su hallazgo. Si falla cualquiera de ellos, la firma entera se revierte.
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Otra petición firmó o anuló la inspección entre la comprobación y el guardado: el
+            // RowVersion (o, con novedades, el índice único de hallazgos) rechazó esta y la
+            // transacción entera se revirtió. Se responde como a cualquier escritura sobre una
+            // cerrada o anulada; otro fallo sigue su curso.
+            if (MensajeSegunEstadoActual(await _context.ObtenerEstadoEscrituraAsync(id)) is not { } mensaje)
+            {
+                throw;
+            }
+
+            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(mensaje));
+        }
 
         return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(
             MapToResultadoDto(inspeccion),
             "Inspección firmada y cerrada exitosamente"));
+    }
+
+    /// <summary>
+    /// Endpoint 14 (Parte 11 §11.10(b)): copia legible y completa de una inspección cerrada, con la
+    /// manifestación de la firma. Cada descarga queda en la auditoría como Exportacion.
+    /// </summary>
+    [HttpGet("{id:long}/registro.pdf")]
+    public async Task<IActionResult> ObtenerRegistroPdf(long id)
+    {
+        var inspeccion = await CargarCierreAsync(id, seguimiento: false);
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<bool>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (!PuedeLeer(inspeccion))
+        {
+            return Forbid();
+        }
+
+        if (!EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<bool>.ErrorResponse("Solo las inspecciones firmadas tienen registro PDF"));
+        }
+
+        var imagenes = new Dictionary<long, byte[]>();
+        foreach (var evidencia in inspeccion.Evidencias.Where(e => !e.Retirada))
+        {
+            try
+            {
+                await using var stream = await _storage.AbrirAsync(evidencia.Archivo);
+                using var copia = new MemoryStream();
+                await stream.CopyToAsync(copia);
+                imagenes[evidencia.IdEvidencia] = copia.ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // El registro sale igual; la miniatura que falte se indica en el documento.
+                _logger.LogWarning(ex, "No se pudo leer la evidencia {IdEvidencia} para el registro PDF", evidencia.IdEvidencia);
+            }
+        }
+
+        var bytes = RegistroInspeccionPdf.Generar(inspeccion, imagenes, _currentUser.Nombre, DateTime.UtcNow);
+        await _context.RegistrarEventoAsync(AuditoriaAcciones.Exportacion, inspeccion.IdInspeccion,
+            new { Documento = "registro.pdf", inspeccion.IdInspeccion });
+        return File(bytes, ExportadorTabla.TipoPdf, $"ECAR-INSP-{inspeccion.IdInspeccion}.pdf");
+    }
+
+    /// <summary>
+    /// Endpoint 13 (Parte 11 §11.70): recalcula la huella con el algoritmo con que se firmó y la
+    /// compara con la guardada. Solo Administrador y Auditor (§3.4). Cada verificación queda en la
+    /// auditoría.
+    /// </summary>
+    [HttpGet("{id}/integridad")]
+    [Authorize(Roles = "Administrador,Auditor")]
+    public async Task<ActionResult<ApiResponse<IntegridadInspeccionDto>>> VerificarIntegridad(
+        long id,
+        [FromServices] VerificadorIntegridad verificador)
+    {
+        var inspeccion = await CargarCierreAsync(id, seguimiento: false);
+        if (inspeccion == null)
+        {
+            return NotFound(ApiResponse<IntegridadInspeccionDto>.ErrorResponse("Inspección no encontrada"));
+        }
+
+        if (!EstaCerrada(inspeccion))
+        {
+            return Conflict(ApiResponse<IntegridadInspeccionDto>.ErrorResponse(
+                "Solo se verifica una inspección firmada"));
+        }
+
+        var resultado = new IntegridadInspeccionDto
+        {
+            Integra = await verificador.VerificarAsync(inspeccion),
+            Algoritmo = VerificadorIntegridad.NombreAlgoritmo(inspeccion) ?? string.Empty,
+            VerificadoEn = DateTime.UtcNow
+        };
+
+        await _context.RegistrarEventoAsync(AuditoriaAcciones.VerificacionIntegridad,
+            detalle: new { IdInspeccion = id, resultado.Integra, resultado.Algoritmo });
+
+        return Ok(ApiResponse<IntegridadInspeccionDto>.SuccessResponse(resultado,
+            resultado.Integra
+                ? "La inspección no ha cambiado desde que se firmó"
+                : "La inspección fue alterada después de firmarse"));
     }
 
     /// <summary>Vista de solo lectura de una inspección ya cerrada: resumen, respuestas, evidencias, firma y hash.</summary>
@@ -507,14 +691,26 @@ public class InspeccionesController : ControllerBase
 
         if (!EstaCerrada(inspeccion))
         {
-            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(
-                "La inspección aún está en curso; consúltela en /api/inspecciones/{id}/ejecucion"));
+            return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(inspeccion.Estado == InspeccionEstados.Anulada
+                ? "La inspección está anulada y no tiene resultado firmado; consúltela en /api/inspecciones/{id}/ejecucion"
+                : "La inspección aún está en curso; consúltela en /api/inspecciones/{id}/ejecucion"));
         }
 
         return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(MapToResultadoDto(inspeccion)));
     }
 
     private const string MensajeInspeccionCerrada = InmutabilidadInspeccion.MensajeCerrada;
+
+    public const string MensajeConcurrencia =
+        "La inspección cambió mientras se procesaba la solicitud; vuelva a cargarla";
+
+    /// <summary>Tras un conflicto al guardar: el mensaje del 409 si ahora está cerrada o anulada.</summary>
+    private static string? MensajeSegunEstadoActual(EstadoEscritura estado) => estado switch
+    {
+        EstadoEscritura.Cerrada => InmutabilidadInspeccion.MensajeCerrada,
+        EstadoEscritura.Anulada => InmutabilidadInspeccion.MensajeAnulada,
+        _ => null
+    };
 
     private static bool EstaCerrada(Inspeccion inspeccion) =>
         inspeccion.Estado == InspeccionEstados.Cerrada;
@@ -523,11 +719,20 @@ public class InspeccionesController : ControllerBase
     /// Comprueba las reglas 3 y 4 del SRS y devuelve todos los incumplimientos de una vez,
     /// para que la pantalla de firma pueda listarle al técnico qué le falta sin ir de uno en uno.
     /// </summary>
+    public const string MensajeChecklistSinPreguntas =
+        "El checklist no tiene preguntas: agréguelas antes de usarlo en una inspección";
+
     private static List<string> ValidarContenidoParaCierre(Inspeccion inspeccion)
     {
         var respuestasPorPregunta = inspeccion.Respuestas
             .ToDictionary(respuesta => respuesta.IdPregunta);
         var faltantes = new List<string>();
+
+        // Una inspección sin preguntas no registra nada: no se firma.
+        if (inspeccion.Checklist.Preguntas.Count == 0)
+        {
+            faltantes.Add(MensajeChecklistSinPreguntas);
+        }
 
         foreach (var pregunta in inspeccion.Checklist.Preguntas
             .OrderBy(pregunta => pregunta.Orden)
@@ -561,6 +766,44 @@ public class InspeccionesController : ControllerBase
         return inspeccion.Respuestas.Any(respuesta =>
             tipoPorPregunta.TryGetValue(respuesta.IdPregunta, out var tipo)
             && EsNovedad(tipo, respuesta.Respuesta));
+    }
+
+    /// <summary>
+    /// Un hallazgo Abierto por cada respuesta "No" (regla 4 del SRS), a nombre del inspector que
+    /// firma y con la criticidad del equipo. Solo los agrega al contexto: se guardan en el mismo
+    /// SaveChanges que la firma. Una pregunta que ya tenga su hallazgo en esta inspección se
+    /// salta, así que repetir la firma no duplica nada.
+    /// </summary>
+    private async Task AgregarHallazgosDeNovedadesAsync(Inspeccion inspeccion, DateTime fechaCierre)
+    {
+        var preguntas = inspeccion.Checklist.Preguntas.ToDictionary(pregunta => pregunta.IdPregunta);
+        var yaRegistradas = await _context.Hallazgos
+            .Where(h => h.IdInspeccion == inspeccion.IdInspeccion && h.IdPregunta != null)
+            .Select(h => h.IdPregunta!.Value)
+            .ToListAsync();
+
+        foreach (var respuesta in inspeccion.Respuestas.OrderBy(respuesta => respuesta.IdPregunta))
+        {
+            if (!preguntas.TryGetValue(respuesta.IdPregunta, out var pregunta)
+                || !EsNovedad(pregunta.TipoRespuesta, respuesta.Respuesta)
+                || yaRegistradas.Contains(pregunta.IdPregunta))
+            {
+                continue;
+            }
+
+            _context.Hallazgos.Add(new Hallazgo
+            {
+                IdInspeccion = inspeccion.IdInspeccion,
+                IdPregunta = pregunta.IdPregunta,
+                IdRespuesta = respuesta.IdRespuesta,
+                Descripcion = $"{pregunta.Pregunta}: {respuesta.Observacion!.Trim()}",
+                Criticidad = inspeccion.Equipo.Criticidad,
+                Estado = HallazgoEstados.Abierto,
+                Origen = HallazgoOrigenes.Novedad,
+                FechaRegistro = fechaCierre,
+                IdUsuarioRegistro = inspeccion.IdUsuario
+            });
+        }
     }
 
     /// <summary>Una respuesta Sí/No marcada como "No" es una novedad (regla 4 del SRS).</summary>
@@ -637,6 +880,7 @@ public class InspeccionesController : ControllerBase
             Preguntas = preguntas,
             TotalNovedades = preguntas.Count(pregunta => pregunta.EsNovedad),
             Evidencias = inspeccion.Evidencias
+                .Where(evidencia => !evidencia.Retirada)
                 .OrderBy(evidencia => evidencia.FechaCarga)
                 .Select(evidencia => new EvidenciaDto
                 {
@@ -649,12 +893,16 @@ public class InspeccionesController : ControllerBase
                     TamanoBytes = evidencia.TamanoBytes,
                     FechaCarga = evidencia.FechaCarga,
                     IdUsuarioCarga = evidencia.IdUsuarioCarga,
-                    UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre
+                    UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre,
+                    EstadoInspeccion = inspeccion.Estado
                 })
                 .ToList(),
             TieneFirma = !string.IsNullOrEmpty(inspeccion.FirmaDigital),
             FirmaPngBase64 = inspeccion.FirmaDigital,
-            FirmaHash = inspeccion.FirmaHash
+            FirmaHash = inspeccion.FirmaHash,
+            FirmaNombre = inspeccion.FirmaNombre,
+            FirmaSignificado = inspeccion.FirmaSignificado,
+            FirmaAlgoritmo = VerificadorIntegridad.NombreAlgoritmo(inspeccion)
         };
     }
 
@@ -739,6 +987,7 @@ public class InspeccionesController : ControllerBase
                 })
                 .ToList(),
             Evidencias = inspeccion.Evidencias
+                .Where(evidencia => !evidencia.Retirada)
                 .OrderBy(evidencia => evidencia.FechaCarga)
                 .Select(evidencia => new EvidenciaDto
                 {
@@ -751,7 +1000,8 @@ public class InspeccionesController : ControllerBase
                     TamanoBytes = evidencia.TamanoBytes,
                     FechaCarga = evidencia.FechaCarga,
                     IdUsuarioCarga = evidencia.IdUsuarioCarga,
-                    UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre
+                    UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre,
+                    EstadoInspeccion = inspeccion.Estado
                 })
                 .ToList()
         };
@@ -774,8 +1024,12 @@ public class InspeccionesController : ControllerBase
             Resultado = i.Resultado,
             Observaciones = i.Observaciones,
             TieneFirma = !string.IsNullOrEmpty(i.FirmaDigital),
-            TotalEvidencias = i.Evidencias?.Count ?? 0,
-            TotalHallazgos = i.Hallazgos?.Count ?? 0
+            TotalEvidencias = i.Evidencias?.Count(e => !e.Retirada) ?? 0,
+            TotalHallazgos = i.Hallazgos?.Count ?? 0,
+            MotivoAnulacion = i.MotivoAnulacion,
+            FechaAnulacion = i.FechaAnulacion,
+            IdUsuarioAnulacion = i.IdUsuarioAnulacion,
+            NombreUsuarioAnulacion = i.UsuarioAnulacion?.Nombre
         };
     }
 }

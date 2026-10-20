@@ -21,14 +21,22 @@
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.caption">Resultado</MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                        Color="@ResultadoColor(Inspeccion.Resultado)" Text="@(string.IsNullOrEmpty(Inspeccion.Resultado) ? "Sin registrar" : Inspeccion.Resultado)" />
+                        Color="@ResultadoColor(Inspeccion.Resultado)" Text="@InspeccionResultados.Texto(Inspeccion.Resultado)" />
                 </MudItem>
                 <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Estado</MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                        Color="@(Inspeccion.Estado == InspeccionEstados.Cerrada ? Color.Success : Color.Warning)"
-                        Text="@(Inspeccion.Estado == InspeccionEstados.Cerrada ? "Cerrada" : "En curso")" />
+                        Color="@(Inspeccion.Estado switch { InspeccionEstados.Cerrada => Color.Success, InspeccionEstados.Anulada => Color.Default, _ => Color.Warning })"
+                        Text="@(Inspeccion.Estado == InspeccionEstados.EnCurso ? "En curso" : Inspeccion.Estado)" />
                 </MudItem>
+                @if (Inspeccion.Estado == InspeccionEstados.Anulada)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            Anulada el @(Inspeccion.FechaAnulacion?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")). Motivo: @Inspeccion.MotivoAnulacion
+                        </MudAlert>
+                    </MudItem>
+                }
                 <MudItem xs="6" sm="4">
                     <MudText Typo="Typo.caption">Evidencias</MudText>
                     <MudText Typo="Typo.body1">@Inspeccion.TotalEvidencias</MudText>

@@ -3,11 +3,15 @@
 @if (TipoRespuesta == TiposRespuesta.SiNo)
 {
     <MudText Typo="Typo.caption" Class="mb-1">@Label</MudText>
-    <div class="sino-casillas">
+    @* role="radio" + tabindex: se recorre con Tab y se marca con Enter o la barra espaciadora. *@
+    <div class="sino-casillas" role="radiogroup" aria-label="@Label">
         @foreach (var opcion in Opciones)
         {
             var seleccionada = EsLaMisma(Valor, opcion.Valor);
-            <div class="sino-casilla @(seleccionada ? "sino-seleccionada" : "")" @onclick="() => SeleccionarAsync(opcion.Valor)">
+            <div class="sino-casilla @(seleccionada ? "sino-seleccionada" : "")" role="radio" tabindex="0"
+                 aria-checked="@(seleccionada ? "true" : "false")"
+                 @onclick="() => SeleccionarAsync(opcion.Valor)"
+                 @onkeydown="e => TeclaAsync(e, opcion.Valor)">
                 <MudIcon Icon="@(seleccionada ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
                     Color="@(seleccionada ? Color.Primary : Color.Default)" />
                 <MudText Typo="Typo.body1">@opcion.Etiqueta</MudText>
@@ -52,6 +56,9 @@ else
         return string.Equals(normalizado, opcion, StringComparison.OrdinalIgnoreCase);
     }
 
+    private Task TeclaAsync(KeyboardEventArgs e, string valor) =>
+        e.Key is "Enter" or " " or "Spacebar" ? SeleccionarAsync(valor) : Task.CompletedTask;
+
     private async Task SeleccionarAsync(string valor)
     {
         // En Sí/No, volver a pulsar la casilla marcada la desmarca.
@@ -86,6 +93,11 @@ else
 
 .sino-casilla:hover {
     border-color: #397FDE;
+}
+
+.sino-casilla:focus-visible {
+    outline: 2px solid #397FDE;
+    outline-offset: 2px;
 }
 
 .sino-seleccionada {

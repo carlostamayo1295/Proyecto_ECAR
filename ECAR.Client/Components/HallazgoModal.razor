@@ -1,6 +1,8 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HttpClientService HttpClient
+@inject AuthorizationService AuthorizationService
 
 <MudDialog Options="new DialogOptions { CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small, FullWidth = true }">
     <TitleContent>
@@ -8,11 +10,11 @@
     </TitleContent>
     <DialogContent>
         <MudForm @ref="form">
-            <MudSelect T="long" Label="Inspección" @bind-Value="idInspeccion" Variant="Variant.Outlined"
+            <MudSelect T="long?" Label="Inspección" @bind-Value="idInspeccion" Variant="Variant.Outlined"
                 Required="true" RequiredError="La inspección es requerida" Disabled="IsEditMode" Class="mb-3">
                 @foreach (var inspeccion in inspecciones)
                 {
-                    <MudSelectItem T="long" Value="inspeccion.IdInspeccion">
+                    <MudSelectItem T="long?" Value="@((long?)inspeccion.IdInspeccion)">
                         #@inspeccion.IdInspeccion - @inspeccion.NombreEquipo (@inspeccion.FechaInspeccion.ToString("dd/MM/yyyy"))
                     </MudSelectItem>
                 }
@@ -20,21 +22,24 @@
 
             <MudTextField T="string" Label="Descripción" @bind-Value="descripcion"
                 Variant="Variant.Outlined" Required="true" RequiredError="La descripción es requerida"
-                Lines="3" Immediate="true" Class="mb-3" />
+                Lines="3" Immediate="true" ReadOnly="IsEditMode" Class="mb-3" />
 
             <MudSelect T="string" Label="Criticidad" @bind-Value="criticidad" Variant="Variant.Outlined" Class="mb-3">
                 <MudSelectItem T="string" Value="@("Alta")">Alta</MudSelectItem>
                 <MudSelectItem T="string" Value="@("Media")">Media</MudSelectItem>
                 <MudSelectItem T="string" Value="@("Baja")">Baja</MudSelectItem>
             </MudSelect>
-
-            @if (IsEditMode)
-            {
-                <MudSelect T="string" Label="Estado" @bind-Value="estado" Variant="Variant.Outlined">
-                    <MudSelectItem T="string" Value="@("Abierto")">Abierto</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Cerrado")">Cerrado</MudSelectItem>
-                </MudSelect>
-            }
+            <MudSelect T="long?" Label="Responsable" @bind-Value="idUsuarioResponsable"
+                       Variant="Variant.Outlined" Class="mb-3" Clearable="true"
+                       Disabled="@(!esAdmin)"
+                       HelperText="@(esAdmin ? null : "Solo el administrador asigna responsable")">
+                @foreach (var u in usuarios)
+                {
+                    <MudSelectItem T="long?" Value="@((long?)u.IdUsuario)">@u.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+                <MudDatePicker Label="Fecha de compromiso" @bind-Date="fechaCompromiso" Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy" Editable="true" Class="mb-3" />
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -56,13 +61,31 @@
     private bool IsEditMode => Hallazgo != null;
 
     private List<InspeccionDto> inspecciones = new();
-    private long idInspeccion;
+    private long? idInspeccion;
     private string descripcion = string.Empty;
     private string? criticidad = "Media";
     private string? estado = "Abierto";
+    private DateTime? fechaCompromiso;
+    private long? idUsuarioResponsable;
+    private bool esAdmin;
+    private List<UsuarioDto> usuarios = new();
 
     protected override async Task OnInitializedAsync()
     {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        esAdmin = roles.Contains("Administrador");
+
+        if (esAdmin)
+        {
+            var respUsuarios = await HttpClient.GetUsuariosAsync(1, 50);
+            if (respUsuarios?.Success == true && respUsuarios.Data != null)
+            {
+                usuarios = (respUsuarios.Data.Data ?? new List<UsuarioDto>())
+                    .Where(u => u.Activo && u.Roles != null &&
+                                (u.Roles.Contains("Técnico") || u.Roles.Contains("Administrador")))
+                    .ToList();
+            }
+        }
         var result = await HttpClientService.GetInspeccionesAsync(1, 200);
         inspecciones = result?.Data?.Data ?? new List<InspeccionDto>();
 
@@ -72,6 +95,8 @@
             descripcion = Hallazgo.Descripcion;
             criticidad = Hallazgo.Criticidad ?? "Media";
             estado = Hallazgo.Estado ?? "Abierto";
+            fechaCompromiso = Hallazgo.FechaCompromiso;
+            idUsuarioResponsable = Hallazgo.IdUsuarioResponsable;
         }
         else if (IdInspeccionPredefinida.HasValue)
         {
@@ -92,11 +117,24 @@
 
         if (IsEditMode && Hallazgo != null)
         {
+            var motivo = await MotivoDialog.PedirAsync(DialogService,
+                "Editar hallazgo",
+                "Escriba el motivo del cambio. Quedará registrado en el historial.",
+                "Guardar cambios",
+                Color.Primary);
+
+            if (motivo == null)
+            {
+                return;
+            }
             var updateDto = new UpdateHallazgoDto
             {
                 Descripcion = descripcion,
                 Criticidad = criticidad,
-                Estado = estado
+                Estado = estado,
+                FechaCompromiso = fechaCompromiso?.Date,
+                IdUsuarioResponsable = idUsuarioResponsable,
+                Motivo = motivo
             };
 
             var result = await HttpClientService.UpdateHallazgoAsync(Hallazgo.IdHallazgo, updateDto);
@@ -113,7 +151,7 @@
         }
         else
         {
-            if (idInspeccion == 0)
+            if (idInspeccion == null)
             {
                 Snackbar.Add("Debe seleccionar una inspección", Severity.Warning);
                 return;
@@ -121,9 +159,11 @@
 
             var createDto = new CreateHallazgoDto
             {
-                IdInspeccion = idInspeccion,
+                IdInspeccion = idInspeccion ?? 0,
                 Descripcion = descripcion,
-                Criticidad = criticidad
+                Criticidad = criticidad,
+                FechaCompromiso = fechaCompromiso?.Date,
+                IdUsuarioResponsable = idUsuarioResponsable
             };
 
             var result = await HttpClientService.CreateHallazgoAsync(createDto);

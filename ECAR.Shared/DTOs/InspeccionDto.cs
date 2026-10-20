@@ -19,6 +19,12 @@ public class InspeccionDto
     public bool TieneFirma { get; set; }
     public int TotalEvidencias { get; set; }
     public int TotalHallazgos { get; set; }
+
+    // Fase 4 (§3.6): solo en las inspecciones anuladas; null en las demás.
+    public string? MotivoAnulacion { get; set; }
+    public DateTime? FechaAnulacion { get; set; }
+    public long? IdUsuarioAnulacion { get; set; }
+    public string? NombreUsuarioAnulacion { get; set; }
 }
 
 public class CreateInspeccionDto
@@ -32,7 +38,7 @@ public class CreateInspeccionDto
     [Range(1, long.MaxValue, ErrorMessage = "El checklist es requerido")]
     public long IdChecklist { get; set; }
 
-    [Required(ErrorMessage = "La fecha de inspección es requerida")]
+    // Se conserva para compatibilidad y se ignora: la fecha la pone el servidor al crearla.
     public DateTime FechaInspeccion { get; set; }
 
     [MaxLength(50, ErrorMessage = "El resultado no puede exceder 50 caracteres")]

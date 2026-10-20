@@ -73,8 +73,7 @@ public class ConsultaHistoricaEquipoTests
 
     private static async Task<List<InspeccionDto>> HistorialAsync(Escenario escenario, ICurrentUser usuario, long idEquipo)
     {
-        var controlador = new InspeccionesController(escenario.Context, usuario, new InspeccionService(escenario.Context),
-            new FakeStorage(), NullLogger<InspeccionesController>.Instance);
+        var controlador = Fabrica.Inspecciones(escenario.Context, usuario, new FakeStorage());
 
         var action = await controlador.GetInspecciones(idEquipo: idEquipo);
 

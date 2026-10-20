@@ -1,0 +1,73 @@
+@* Pide el motivo de una acción que lo exige (PLAN_FASE4_TAREAS §3.3): anular una inspección o un
+   hallazgo, retirar una evidencia, reabrir un hallazgo, restablecer una contraseña, desbloquear
+   una cuenta. El motivo viaja en MotivoDto y queda en la fila de auditoría de la acción.
+
+   Uso, desde cualquier pantalla:
+       var motivo = await MotivoDialog.PedirAsync(DialogService, "Anular hallazgo",
+           "El hallazgo quedará anulado y no se podrá modificar.", "Anular", Color.Error);
+       if (motivo is null) return;   // canceló
+*@
+
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true }">
+    <DialogContent>
+        @if (!string.IsNullOrWhiteSpace(Mensaje))
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">@Mensaje</MudText>
+        }
+
+        <MudTextField T="string" Label="Motivo" @bind-Value="motivo" Variant="Variant.Outlined" Lines="3"
+            Immediate="true" AutoFocus="true" MaxLength="@MotivoDto.LongitudMaxima" Counter="@MotivoDto.LongitudMaxima"
+            Error="@(intentoConfirmar && !EsValido)"
+            ErrorText="@($"Escriba entre {MotivoDto.LongitudMinima} y {MotivoDto.LongitudMaxima} caracteres")"
+            HelperText="Queda registrado en la auditoría con su nombre, la fecha y la hora." />
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Cancelar">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@ColorConfirmar" OnClick="Confirmar">@TextoConfirmar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Qué va a pasar si confirma; se muestra encima del campo.</summary>
+    [Parameter] public string? Mensaje { get; set; }
+
+    [Parameter] public string TextoConfirmar { get; set; } = "Confirmar";
+
+    [Parameter] public Color ColorConfirmar { get; set; } = Color.Primary;
+
+    private string? motivo;
+    private bool intentoConfirmar;
+
+    private bool EsValido => (motivo?.Trim().Length ?? 0) is >= MotivoDto.LongitudMinima and <= MotivoDto.LongitudMaxima;
+
+    private void Confirmar()
+    {
+        intentoConfirmar = true;
+        if (!EsValido)
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(motivo!.Trim()));
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    /// <summary>Abre el diálogo y devuelve el motivo escrito, o null si el usuario canceló.</summary>
+    public static async Task<string?> PedirAsync(IDialogService dialogos, string titulo, string? mensaje = null,
+        string textoConfirmar = "Confirmar", Color colorConfirmar = Color.Primary)
+    {
+        var parametros = new DialogParameters<MotivoDialog>
+        {
+            { d => d.Mensaje, mensaje },
+            { d => d.TextoConfirmar, textoConfirmar },
+            { d => d.ColorConfirmar, colorConfirmar }
+        };
+
+        var dialogo = await dialogos.ShowAsync<MotivoDialog>(titulo, parametros);
+        var resultado = await dialogo.Result;
+        return resultado is { Canceled: false, Data: string texto } ? texto : null;
+    }
+}

@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using System.Text;
+using ECAR.Infrastructure.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Registrar los servicios en el contenedor.
-builder.Services.AddControllers()
+builder.Services.AddControllers(options => options.Filters.Add<CambioPasswordPendienteFilter>())
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -66,6 +67,11 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
         ClockSkew = TimeSpan.Zero
     };
+    // Un token deja de valer en cuanto se desactiva al usuario o cambia su contraseña (endpoint 27).
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = SelloSeguridad.ValidarTokenAsync
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -94,7 +100,27 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IActiveDirectoryAuthService, LdapActiveDirectoryAuthService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+// Auditoría transaccional (Fase 4): ECARDbContext recibe IContextoAuditoria por su constructor.
+builder.Services.AddScoped<IMotivoCambio, MotivoCambio>();
+builder.Services.AddScoped<ECAR.Infrastructure.Data.IContextoAuditoria, ContextoAuditoriaHttp>();
 builder.Services.AddScoped<IInspeccionService, InspeccionService>();
+builder.Services.AddScoped<IReporteService, ReporteService>();
+
+// Fase 4: política de cuentas y firma electrónica (PLAN_FASE4_TAREAS §3.2). El API no arranca sin
+// Firma:ClaveHmac (user-secrets en desarrollo; almacén de secretos o variable Firma__ClaveHmac en el servidor).
+builder.Services.AddOptions<ECAR.API.Configuration.SeguridadOptions>()
+    .Bind(builder.Configuration.GetSection(ECAR.API.Configuration.SeguridadOptions.SectionName))
+    .Validate(options => options.LongitudMinimaPassword > 0 && options.MaxIntentosFallidos > 0 && options.MinutosBloqueo > 0,
+        "Seguridad: la longitud mínima, el máximo de intentos y los minutos de bloqueo deben ser mayores que cero")
+    .ValidateOnStart();
+builder.Services.AddOptions<ECAR.API.Configuration.FirmaOptions>()
+    .Bind(builder.Configuration.GetSection(ECAR.API.Configuration.FirmaOptions.SectionName))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.ClaveHmac) &&
+        options.ClaveHmac.Length >= ECAR.API.Configuration.FirmaOptions.LongitudMinimaClave,
+        "Firma:ClaveHmac debe configurarse fuera de Git (user-secrets o variable de entorno Firma__ClaveHmac) con al menos 32 caracteres")
+    .ValidateOnStart();
+builder.Services.AddSingleton<PoliticaPasswords>();
+builder.Services.AddScoped<VerificadorIntegridad>();
 
 // Configurar almacenamiento de evidencias
 builder.Services.Configure<ECAR.API.Configuration.EvidenciasOptions>(builder.Configuration.GetSection("Evidencias"));
@@ -138,8 +164,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
+
+// Cabeceras de seguridad en todas las respuestas del API. La política de contenido estricta no se
+// aplica a la documentación (Scalar, solo en desarrollo), que necesita cargar sus scripts.
+app.Use(async (context, next) =>
+{
+    var cabeceras = context.Response.Headers;
+    cabeceras["X-Content-Type-Options"] = "nosniff";
+    cabeceras["X-Frame-Options"] = "DENY";
+    cabeceras["Referrer-Policy"] = "no-referrer";
+    if (!context.Request.Path.StartsWithSegments("/scalar") && !context.Request.Path.StartsWithSegments("/openapi"))
+    {
+        cabeceras["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    }
+
+    await next();
+});
 
 app.UseCors("AllowBlazorClient");
 

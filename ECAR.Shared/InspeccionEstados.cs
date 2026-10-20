@@ -13,7 +13,13 @@ public static class InspeccionEstados
     /// <summary>La inspección fue firmada y cerrada: no admite ninguna modificación.</summary>
     public const string Cerrada = "Cerrada";
 
-    public static bool EsValido(string estado) => estado is EnCurso or Cerrada;
+    /// <summary>
+    /// Fase 4: una inspección en curso que se descarta con motivo en lugar de borrarse
+    /// (PLAN_FASE4_TAREAS §3.6). Conserva todos sus datos y, como la cerrada, ya no admite cambios.
+    /// </summary>
+    public const string Anulada = "Anulada";
+
+    public static bool EsValido(string estado) => estado is EnCurso or Cerrada or Anulada;
 }
 
 /// <summary>
@@ -28,4 +34,12 @@ public static class InspeccionResultados
     public const string ConNovedad = "ConNovedad";
 
     public static bool EsValido(string resultado) => resultado is Conforme or ConNovedad;
+
+    /// <summary>Texto para pantalla: "Con novedad" en lugar del valor interno "ConNovedad".</summary>
+    public static string Texto(string? resultado) => resultado switch
+    {
+        null or "" => "Sin registrar",
+        ConNovedad => "Con novedad",
+        _ => resultado
+    };
 }

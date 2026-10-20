@@ -32,7 +32,7 @@
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">Estado: Cerrada e Inmutable</MudText>
                 </div>
                 <MudChip T="string" Color="@ObtenerColorResultado(resultado.Resultado)">
-                    @resultado.Resultado
+                    @InspeccionResultados.Texto(resultado.Resultado)
                 </MudChip>
             </div>
 
@@ -56,11 +56,30 @@
                 <MudPaper Elevation="2" Class="pa-4 mb-4">
                     <MudText Typo="Typo.subtitle2" Class="mb-1 text-primary"><b>Auditoría Criptográfica</b></MudText>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
-                        Este hash SHA-256 garantiza la inmutabilidad de la inspección en el servidor.
+                        Esta huella garantiza la inmutabilidad de la inspección: desde la Fase 4 es un
+                        HMAC-SHA256 con una clave que solo tiene el servidor (Parte 11 §11.70).
                     </MudText>
                     <MudPaper Elevation="0" Outlined="true" Class="pa-2">
                         <code style="word-break: break-all;">@resultado.FirmaHash</code>
                     </MudPaper>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.VerifiedUser" Class="mt-3 print-hidden"
+                               Disabled="@_verificando" OnClick="VerificarIntegridadAsync">
+                        @(_verificando ? "Verificando…" : "Verificar integridad")
+                    </MudButton>
+
+                    @if (_integridad != null)
+                    {
+                        <MudAlert Severity="@(_integridad.Integra ? Severity.Success : Severity.Error)" Dense="true" Class="mt-3">
+                            @(_integridad.Integra
+                                ? "Integridad verificada: la inspección no ha cambiado desde que se firmó."
+                                : "Integridad alterada: el contenido no coincide con la huella registrada al firmar.")
+                            <MudText Typo="Typo.caption" Class="d-block">
+                                Algoritmo: @_integridad.Algoritmo · Verificado el @_integridad.VerificadoEn.AddHours(-5).ToString("dd/MM/yyyy HH:mm") (hora de Colombia, UTC−5)
+                            </MudText>
+                        </MudAlert>
+                    }
                 </MudPaper>
             }
 
@@ -123,6 +142,9 @@
                 }
             </div>
 
+            <!-- Hallazgos generados (FE-1, tarea 4): los crea el servidor al firmar, uno por novedad -->
+            <HallazgosDeInspeccion IdInspeccion="@resultado.IdInspeccion" />
+
             <!-- Visualización de la Firma Capturada -->
             <div class="mb-4 text-center">
                 <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del Técnico</b></MudText>
@@ -130,12 +152,23 @@
                 {
                     <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; max-width: 300px; background: white;" />
                 }
+
+                @* Manifestación de la firma (Fase 4, Parte 11 §11.50). Queda dentro del área de
+                   impresión, así que también sale en "Imprimir / PDF". *@
+                @if (ManifestacionFirma(resultado) is { } manifestacion)
+                {
+                    <MudText Typo="Typo.body2" Class="d-block mt-2">@manifestacion</MudText>
+                }
             </div>
 
             <!-- Botones de Acción (Ocultos al imprimir) -->
             <div class="d-flex justify-end gap-3 mt-6 print-hidden">
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="VolverListado">
+                <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="VolverListado">
                     Volver al Listado
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_descargando"
+                           StartIcon="@Icons.Material.Filled.Download" OnClick="DescargarRegistroAsync">
+                    @(_descargando ? "Generando…" : "Descargar registro PDF")
                 </MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImprimirReporte">
                     <MudIcon Icon="@Icons.Material.Filled.Print" Class="mr-2" /> Imprimir / PDF
@@ -156,6 +189,9 @@
     private string? _error;
     private bool _puedeVerHash;
     private Dictionary<long, string?> _miniaturas = new();
+    private IntegridadInspeccionDto? _integridad;
+    private bool _verificando;
+    private bool _descargando;
 
     protected override async Task OnInitializedAsync()
     {
@@ -225,5 +261,58 @@
     private async Task ImprimirReporte()
     {
         await jsRuntime.InvokeVoidAsync("window.print");
+    }
+
+
+    private async Task VerificarIntegridadAsync()
+    {
+        if (_verificando) return;
+
+        _verificando = true;
+        _integridad = null;
+        var respuesta = await Http.VerificarIntegridadInspeccionAsync(IdInspeccion);
+        _verificando = false;
+
+        if (respuesta.Success && respuesta.Data != null)
+        {
+            _integridad = respuesta.Data;
+        }
+        else
+        {
+            Snackbar.Add(string.IsNullOrWhiteSpace(respuesta.Message)
+                ? "No se pudo verificar la integridad." : respuesta.Message, Severity.Error);
+        }
+    }
+
+    // copia completa y legible de la inspección firmada.
+    private async Task DescargarRegistroAsync()
+    {
+        if (_descargando) return;
+
+        _descargando = true;
+        var respuesta = await Http.DescargarRegistroInspeccionAsync(IdInspeccion);
+        _descargando = false;
+
+        if (!respuesta.Success)
+        {
+            Snackbar.Add(string.IsNullOrWhiteSpace(respuesta.Message)
+                ? "No se pudo descargar el registro." : respuesta.Message, Severity.Error);
+        }
+    }
+
+    // Manifestación de la firma : nombre, fecha/hora (Colombia, UTC−5)
+    // y significado, tal como estaban al momento de firmar. Null si la inspección es anterior a
+    // la Fase 4 y no tiene FirmaNombre/FirmaSignificado todavía.
+    private static string? ManifestacionFirma(InspeccionResultadoDto r)
+    {
+        if (string.IsNullOrWhiteSpace(r.FirmaNombre) || string.IsNullOrWhiteSpace(r.FirmaSignificado)
+            || r.FechaCierre is not { } cierre)
+        {
+            return null;
+        }
+
+        var horaColombia = cierre.AddHours(-5);
+        return $"Firmado electrónicamente por {r.FirmaNombre} el {horaColombia:dd/MM/yyyy HH:mm} " +
+               $"(hora de Colombia, UTC−5). Significado: {r.FirmaSignificado}";
     }
 }

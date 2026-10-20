@@ -1,0 +1,122 @@
+@using System.Text.Json
+
+@* Antes y después de una fila de auditoría, campo a campo (Parte 11 §11.10(e): el cambio no
+   oculta lo que había). ValorAnterior y ValorNuevo son JSON con los campos del registro; si una
+   fila antigua trae texto que no es JSON, se muestra tal cual. *@
+
+@if (filas is null)
+{
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.caption">Antes</MudText>
+            <pre class="valor-crudo">@(Registro.ValorAnterior ?? "—")</pre>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.caption">Después</MudText>
+            <pre class="valor-crudo">@(Registro.ValorNuevo ?? "—")</pre>
+        </MudItem>
+    </MudGrid>
+}
+else if (filas.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">Esta acción no cambió ningún campo.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Elevation="0" Class="cambios-auditoria">
+        <thead>
+            <tr>
+                <th>Campo</th>
+                <th>Antes</th>
+                <th>Después</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var fila in filas)
+            {
+                <tr class="@(fila.Cambio ? "campo-cambiado" : null)">
+                    <td><b>@fila.Campo</b></td>
+                    <td class="valor-antes">@fila.Antes</td>
+                    <td class="valor-despues">@fila.Despues</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public AuditoriaDto Registro { get; set; } = null!;
+
+    private sealed record FilaCambio(string Campo, string Antes, string Despues, bool Cambio);
+
+    // null: algún valor no es JSON y se muestra en crudo.
+    private List<FilaCambio>? filas;
+
+    protected override void OnParametersSet()
+    {
+        var antes = Leer(Registro.ValorAnterior, out var antesValido);
+        var despues = Leer(Registro.ValorNuevo, out var despuesValido);
+
+        if (!antesValido || !despuesValido)
+        {
+            filas = null;
+            return;
+        }
+
+        filas = antes.Keys.Union(despues.Keys)
+            .Select(campo =>
+            {
+                var a = antes.GetValueOrDefault(campo, "—");
+                var d = despues.GetValueOrDefault(campo, "—");
+                return new FilaCambio(campo, a, d, a != d);
+            })
+            .ToList();
+    }
+
+    /// <summary>Convierte un objeto JSON en campo → texto. Texto vacío o null es un objeto vacío.</summary>
+    private static Dictionary<string, string> Leer(string? json, out bool valido)
+    {
+        valido = true;
+        var resultado = new Dictionary<string, string>();
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return resultado;
+        }
+
+        try
+        {
+            using var documento = JsonDocument.Parse(json);
+            if (documento.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                valido = false;
+                return resultado;
+            }
+
+            foreach (var propiedad in documento.RootElement.EnumerateObject())
+            {
+                resultado[propiedad.Name] = propiedad.Value.ValueKind switch
+                {
+                    JsonValueKind.Null => "—",
+                    JsonValueKind.String => propiedad.Value.GetString() ?? "—",
+                    JsonValueKind.True => "Sí",
+                    JsonValueKind.False => "No",
+                    _ => propiedad.Value.GetRawText()
+                };
+            }
+        }
+        catch (JsonException)
+        {
+            valido = false;
+        }
+
+        return resultado;
+    }
+}
+
+<style>
+.cambios-auditoria td { vertical-align: top; word-break: break-word; }
+.cambios-auditoria tr.campo-cambiado .valor-antes { background: rgba(244, 67, 54, 0.08); text-decoration: line-through; }
+.cambios-auditoria tr.campo-cambiado .valor-despues { background: rgba(76, 175, 80, 0.12); }
+.valor-crudo { white-space: pre-wrap; word-break: break-word; margin: 0; padding: 8px; border-radius: 6px; background: var(--mud-palette-background-gray); font-size: 0.85rem; }
+</style>

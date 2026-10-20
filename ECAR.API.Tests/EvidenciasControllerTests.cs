@@ -116,7 +116,8 @@ public class EvidenciasControllerTests
                 RutaBase = "EvidenciasPruebas",
                 TamanoMaximoMB = tamanoMaximoMb,
                 TiposPermitidos = "image/jpeg,image/png"
-            }));
+            }),
+            new MotivoCambio());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -220,7 +221,7 @@ public class EvidenciasControllerTests
     }
 
     [Fact]
-    public async Task Eliminar_EnCurso_EliminaFilaYArchivo()
+    public async Task Retirar_EnCurso_MarcaLaEvidenciaYConservaElArchivo()
     {
         await using var context = CreateContext();
         var escenario = await SeedAsync(context);
@@ -238,10 +239,50 @@ public class EvidenciasControllerTests
         await context.SaveChangesAsync();
 
         var action = await CreateController(context, escenario.Tecnico, storage)
-            .DeleteEvidencia(evidencia.IdEvidencia);
+            .RetirarEvidencia(evidencia.IdEvidencia, new MotivoDto { Motivo = "Foto desenfocada, se repite" });
 
-        Assert.IsType<OkObjectResult>(action.Result);
-        Assert.Empty(await context.Evidencias.ToListAsync());
-        Assert.Equal(storage.Ruta, storage.Eliminado);
+        var ok = Assert.IsType<OkObjectResult>(action.Result);
+        var dto = Assert.IsType<ApiResponse<EvidenciaDto>>(ok.Value).Data!;
+        Assert.True(dto.Retirada);
+        Assert.Equal("Foto desenfocada, se repite", dto.MotivoRetiro);
+        var guardada = await context.Evidencias.AsNoTracking().SingleAsync();
+        Assert.True(guardada.Retirada);
+        Assert.Equal(escenario.Tecnico.IdUsuario, guardada.IdUsuarioRetiro);
+        Assert.Null(storage.Eliminado); // el archivo se conserva
     }
+
+    [Fact]
+    public async Task Retirar_DosVeces_Devuelve409()
+    {
+        await using var context = CreateContext();
+        var escenario = await SeedAsync(context);
+        var storage = new FakeStorage();
+        var evidencia = new Evidencia
+        {
+            IdInspeccion = escenario.Inspeccion.IdInspeccion,
+            Archivo = storage.Ruta,
+            NombreOriginal = "foto.jpg",
+            TipoContenido = "image/jpeg",
+            TamanoBytes = 4,
+            IdUsuarioCarga = escenario.Tecnico.IdUsuario,
+            Retirada = true
+        };
+        context.Evidencias.Add(evidencia);
+        await context.SaveChangesAsync();
+
+        var action = await CreateController(context, escenario.Tecnico, storage)
+            .RetirarEvidencia(evidencia.IdEvidencia, new MotivoDto { Motivo = "Foto desenfocada, se repite" });
+
+        Assert.IsType<ConflictObjectResult>(action.Result);
+    }
+
+    [Fact]
+    public void Evidencias_NoTieneDelete()
+    {
+        // Sin acción DELETE, ASP.NET responde 405 en api/evidencias/{id} (PLAN_FASE4_TAREAS §3.6).
+        Assert.DoesNotContain(typeof(EvidenciasController).GetMethods(), m =>
+            m.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpDeleteAttribute), true).Length > 0);
+    }
+    
+    
 }

@@ -14,7 +14,10 @@ public enum EstadoEscritura
     EnCurso,
 
     /// <summary>La inspección está cerrada: responder 409 (regla 6 del SRS).</summary>
-    Cerrada
+    Cerrada,
+
+    /// <summary>La inspección está anulada: responder 409; conserva sus datos tal como estaban (§3.6).</summary>
+    Anulada
 }
 
 /// <summary>
@@ -27,6 +30,20 @@ public static class InmutabilidadInspeccion
     /// <summary>Mensaje único de rechazo, para que el cliente reciba siempre el mismo texto.</summary>
     public const string MensajeCerrada = "La inspección está cerrada y no admite modificaciones";
 
+    /// <summary>Mismo rechazo para una inspección anulada.</summary>
+    public const string MensajeAnulada = "La inspección está anulada y no admite modificaciones";
+
+    /// <summary>
+    /// El mensaje del 409 si la inspección en <paramref name="estado"/> ya no admite cambios
+    /// (Cerrada o Anulada), o null si sigue en curso.
+    /// </summary>
+    public static string? MensajeSiNoAdmiteCambios(string estado) => estado switch
+    {
+        InspeccionEstados.Cerrada => MensajeCerrada,
+        InspeccionEstados.Anulada => MensajeAnulada,
+        _ => null
+    };
+
     /// <summary>Lee solo el estado de la inspección, sin traer el resto de la fila.</summary>
     public static async Task<EstadoEscritura> ObtenerEstadoEscrituraAsync(
         this ECARDbContext context, long idInspeccion)
@@ -37,13 +54,12 @@ public static class InmutabilidadInspeccion
             .Select(i => i.Estado)
             .FirstOrDefaultAsync();
 
-        if (estado == null)
+        return estado switch
         {
-            return EstadoEscritura.NoExiste;
-        }
-
-        return estado == InspeccionEstados.Cerrada
-            ? EstadoEscritura.Cerrada
-            : EstadoEscritura.EnCurso;
+            null => EstadoEscritura.NoExiste,
+            InspeccionEstados.Cerrada => EstadoEscritura.Cerrada,
+            InspeccionEstados.Anulada => EstadoEscritura.Anulada,
+            _ => EstadoEscritura.EnCurso
+        };
     }
 }

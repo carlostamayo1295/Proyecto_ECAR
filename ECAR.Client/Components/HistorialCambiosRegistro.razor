@@ -1,0 +1,79 @@
+@inject HttpClientService HttpClientService
+
+@* Historial completo de un registro (GET /api/auditoria/registro/{tabla}/{id}, endpoint 2):
+   quién lo creó y cada cambio posterior, con el antes y el después. Lo usan el visor de
+   auditoría, la ficha del equipo y el detalle del hallazgo (FE-1). Solo Administrador y Auditor
+   pueden leer la auditoría: no se monta para otros roles. *@
+
+@if (cargando)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-2" />
+}
+else if (error != null)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">@error</MudAlert>
+}
+else if (cambios.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">No hay cambios registrados para este registro.</MudText>
+}
+else
+{
+    <MudExpansionPanels MultiExpansion="true" Elevation="0" Dense="true">
+        @foreach (var cambio in cambios)
+        {
+            <MudExpansionPanel>
+                <TitleContent>
+                    <div class="d-flex flex-wrap align-center gap-2">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                            Color="@FormatoAuditoria.ColorAccion(cambio.Accion)" Text="@cambio.Accion" />
+                        <MudText Typo="Typo.body2">@FormatoAuditoria.FechaHora(cambio.FechaHora)</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">· @cambio.Usuario</MudText>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    @if (!string.IsNullOrWhiteSpace(cambio.Motivo))
+                    {
+                        <MudText Typo="Typo.body2" Class="mb-2"><b>Motivo:</b> @cambio.Motivo</MudText>
+                    }
+                    <CambiosAuditoria Registro="cambio" />
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Tabla { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public long RegistroId { get; set; }
+
+    private List<AuditoriaDto> cambios = new();
+    private bool cargando = true;
+    private string? error;
+    private (string, long) cargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (cargado == (Tabla, RegistroId))
+        {
+            return;
+        }
+
+        cargado = (Tabla, RegistroId);
+        cargando = true;
+        error = null;
+
+        var respuesta = await HttpClientService.GetHistorialRegistroAsync(Tabla, RegistroId);
+        if (respuesta.Success)
+        {
+            cambios = (respuesta.Data ?? new List<AuditoriaDto>()).OrderBy(c => c.FechaHora).ThenBy(c => c.IdAuditoria).ToList();
+        }
+        else
+        {
+            cambios = new List<AuditoriaDto>();
+            error = respuesta.Message;
+        }
+
+        cargando = false;
+    }
+}

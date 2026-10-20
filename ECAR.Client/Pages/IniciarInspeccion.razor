@@ -2,6 +2,8 @@
 @inject HttpClientService HttpClientService
 @inject SesionService Sesion
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 @* Inicio de una inspección desde el QR del equipo (FE-3) o, sin QR, eligiendo el equipo y el
    checklist en la propia página ("Selección de Equipo", SRS §6). Con ?equipo=&checklist= inicia
@@ -24,9 +26,13 @@
         {
             <MudText Typo="Typo.h6" Class="mb-1">Iniciar inspección</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
-                Elija el equipo y el checklist. Con la etiqueta QR del equipo puede saltarse este paso:
-                escanéela con la cámara del teléfono.
+                Escanee la etiqueta QR del equipo o elíjalo de la lista, y luego el checklist.
             </MudText>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true" Class="mb-4"
+                StartIcon="@Icons.Material.Filled.QrCodeScanner" OnClick="EscanearAsync" Disabled="@_resolviendoQr">
+                @(_resolviendoQr ? "Buscando el equipo..." : "Escanear QR del equipo")
+            </MudButton>
 
             <MudAutocomplete T="EquipoDto" Label="Equipo" @bind-Value="_equipo"
                 SearchFunc="BuscarEquiposAsync" ToStringFunc="@(e => e == null ? string.Empty : $"{e.CodigoInterno} - {e.NombreEquipo}")"
@@ -106,9 +112,43 @@
     private async Task MostrarSeleccionAsync()
     {
         var respuesta = await HttpClientService.GetChecklistsAsync(1, 100);
-        _checklists = (respuesta?.Data?.Data ?? new List<ChecklistDto>()).Where(c => c.Activo).ToList();
+        // Un checklist sin preguntas no sirve para inspeccionar: el API lo rechazaría.
+        _checklists = (respuesta?.Data?.Data ?? new List<ChecklistDto>()).Where(c => c.Activo && c.Preguntas.Count > 0).ToList();
         _seleccionando = true;
         _cargando = false;
+    }
+
+    private bool _resolviendoQr;
+
+    /// <summary>
+    /// Abre la cámara, lee la etiqueta y deja elegido el equipo; si solo hay un checklist activo,
+    /// también queda elegido. Un QR regenerado o de un equipo inactivo no se acepta.
+    /// </summary>
+    private async Task EscanearAsync()
+    {
+        var dialogo = await DialogService.ShowAsync<EscanerQrDialog>("Escanear QR");
+        var resultado = await dialogo.Result;
+        if (resultado is not { Canceled: false, Data: string token })
+        {
+            return;
+        }
+
+        _resolviendoQr = true;
+        var respuesta = await HttpClientService.GetEquipoByQrAsync(token);
+        _resolviendoQr = false;
+        if (respuesta is not { Success: true, Data: { } consulta })
+        {
+            Snackbar.Add(respuesta?.Message ?? "No se pudo consultar el equipo del QR", Severity.Error);
+            return;
+        }
+
+        _equipo = consulta.Equipo;
+        if (_checklists.Count == 1)
+        {
+            _idChecklist = _checklists[0].IdChecklist;
+        }
+
+        Snackbar.Add($"Equipo {consulta.Equipo.CodigoInterno} - {consulta.Equipo.NombreEquipo}", Severity.Success);
     }
 
     private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)

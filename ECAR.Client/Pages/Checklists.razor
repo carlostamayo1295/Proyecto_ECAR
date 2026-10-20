@@ -205,11 +205,12 @@
     private async Task DeleteChecklist(ChecklistDto checklist)
     {
         var action = checklist.Activo ? "desactivar" : "activar";
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea {action} el checklist '{checklist.Nombre}'?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
-        var result = await dialog.Result;
+        // Fase 4 (§3.3): desactivar y reactivar piden motivo, que queda en la auditoría.
+        var motivo = await MotivoDialog.PedirAsync(DialogService, $"{char.ToUpper(action[0])}{action[1..]} checklist",
+            $"Indique por qué va a {action} el checklist «{checklist.Nombre}».", $"{char.ToUpper(action[0])}{action[1..]}",
+            checklist.Activo ? Color.Error : Color.Success);
 
-        if (result is not null && !result.Canceled)
+        if (motivo is not null)
         {
             isLoading = true;
             try
@@ -218,8 +219,8 @@
                 // endpoint. Al activar, el servidor desactiva las otras versiones activas del
                 // mismo checklist y lo dice en el mensaje.
                 var resultado = checklist.Activo
-                    ? await HttpClientService.DeleteChecklistAsync(checklist.IdChecklist)
-                    : await HttpClientService.ActivarChecklistAsync(checklist.IdChecklist);
+                    ? await HttpClientService.DeleteChecklistAsync(checklist.IdChecklist, motivo)
+                    : await HttpClientService.ActivarChecklistAsync(checklist.IdChecklist, motivo);
 
                 if (resultado != null && resultado.Success)
                 {

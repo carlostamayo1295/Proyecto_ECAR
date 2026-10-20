@@ -16,8 +16,11 @@ public class ChecklistsController : ControllerBase
 {
     private readonly ECARDbContext _context;
 
-    public ChecklistsController(ECARDbContext context)
+    private readonly ECAR.API.Services.IMotivoCambio _motivoCambio;
+
+    public ChecklistsController(ECARDbContext context, ECAR.API.Services.IMotivoCambio motivoCambio)
     {
+        _motivoCambio = motivoCambio;
         _context = context;
     }
 
@@ -146,6 +149,14 @@ public class ChecklistsController : ControllerBase
             return NotFound(ApiResponse<ChecklistDto>.ErrorResponse("Checklist no encontrado"));
         }
 
+        var errorMotivo = ECAR.API.Services.MotivoObligatorio.Validar(updateDto.Motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<ChecklistDto>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(updateDto.Motivo);
+
         // Regla SRS #6: un checklist ya respondido en inspecciones es evidencia histórica.
         // Sus preguntas no se reemplazan; se crea una versión nueva.
         if (updateDto.Preguntas != null && await TieneRespuestasAsync(id))
@@ -190,7 +201,7 @@ public class ChecklistsController : ControllerBase
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "Administrador")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteChecklist(long id)
+    public async Task<ActionResult<ApiResponse<bool>>> DeleteChecklist(long id, [FromQuery] string? motivo = null)
     {
         var checklist = await _context.Checklists.FindAsync(id);
 
@@ -198,6 +209,14 @@ public class ChecklistsController : ControllerBase
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Checklist no encontrado"));
         }
+
+        var errorMotivo = ECAR.API.Services.MotivoObligatorio.Validar(motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(motivo);
 
         // Borrado lógico: se marca como inactivo en lugar de eliminarlo
         checklist.Activo = false;
@@ -214,7 +233,7 @@ public class ChecklistsController : ControllerBase
     /// </summary>
     [HttpPut("{id}/activar")]
     [Authorize(Roles = "Administrador")]
-    public async Task<ActionResult<ApiResponse<bool>>> ActivarChecklist(long id)
+    public async Task<ActionResult<ApiResponse<bool>>> ActivarChecklist(long id, [FromQuery] string? motivo = null)
     {
         var checklist = await _context.Checklists.FindAsync(id);
 
@@ -222,6 +241,14 @@ public class ChecklistsController : ControllerBase
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Checklist no encontrado"));
         }
+
+        var errorMotivo = ECAR.API.Services.MotivoObligatorio.Validar(motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(motivo);
 
         var otrasActivas = await _context.Checklists
             .Where(c => c.Nombre == checklist.Nombre && c.Activo && c.IdChecklist != id)

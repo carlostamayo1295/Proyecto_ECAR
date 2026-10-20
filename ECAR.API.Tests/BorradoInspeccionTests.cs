@@ -13,8 +13,8 @@ using Xunit;
 namespace ECAR.API.Tests;
 
 /// <summary>
-/// Borrar una inspección en curso elimina también sus fotos del disco, y el alta manual
-/// rechaza un equipo desactivado (la misma regla que iniciar desde el QR).
+/// Fase 4 (PLAN_FASE4_TAREAS §3.6): una inspección en curso ya no se borra, se anula con motivo y
+/// conserva sus fotos; y el alta manual rechaza un equipo desactivado (la misma regla que el QR).
 /// </summary>
 public class BorradoInspeccionTests
 {
@@ -57,7 +57,7 @@ public class BorradoInspeccionTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = "hash", Activo = true };
+        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
         var equipo = new Equipo
         {
             CodigoInterno = "EQ-001",
@@ -106,51 +106,73 @@ public class BorradoInspeccionTests
     }
 
     private static InspeccionesController Controlador(Escenario escenario, IEvidenciaStorage storage) =>
-        new(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Técnico"),
-            new InspeccionService(escenario.Context), storage, NullLogger<InspeccionesController>.Instance);
+        Fabrica.Inspecciones(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Técnico"), storage);
+
+    private static readonly MotivoDto Motivo = new() { Motivo = "Se abrió sobre el equipo equivocado" };
+
+    // Antes DELETE borraba la inspección en curso y sus fotos. Ahora ninguna inspección se borra
+    // físicamente: se anula con POST {id}/anular, y DELETE responde 409 sin tocar nada.
 
     [Fact]
-    public async Task DeleteInspeccion_EnCurso_BorraSusFotosDelDisco()
+    public async Task AnularInspeccion_EnCurso_LaConservaConSusFotosYElMotivo()
     {
         var escenario = await SeedAsync();
         var inspeccion = await AgregarInspeccionAsync(escenario, InspeccionEstados.EnCurso,
             "2026/10/1/a.jpg", "2026/10/1/b.jpg");
         var storage = new FakeStorage();
 
-        var action = await Controlador(escenario, storage).DeleteInspeccion(inspeccion.IdInspeccion);
+        var action = await Controlador(escenario, storage).AnularInspeccion(inspeccion.IdInspeccion, Motivo);
 
         Assert.IsType<OkObjectResult>(action.Result);
-        Assert.Equal(["2026/10/1/a.jpg", "2026/10/1/b.jpg"], storage.Eliminados.Order());
-        Assert.False(await escenario.Context.Inspecciones.AnyAsync(i => i.IdInspeccion == inspeccion.IdInspeccion));
+        Assert.Empty(storage.Eliminados); // §3.6: nada se borra
+        var anulada = await escenario.Context.Inspecciones.AsNoTracking()
+            .Include(i => i.Evidencias)
+            .SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion);
+        Assert.Equal(InspeccionEstados.Anulada, anulada.Estado);
+        Assert.Equal(Motivo.Motivo, anulada.MotivoAnulacion);
+        Assert.Equal(escenario.Tecnico.IdUsuario, anulada.IdUsuarioAnulacion);
+        Assert.NotNull(anulada.FechaAnulacion);
+        Assert.Equal(2, anulada.Evidencias.Count);
     }
 
     [Fact]
-    public async Task DeleteInspeccion_UnaFotoQueNoSePuedeBorrar_NoImpideBorrarLaInspeccionNiLasDemas()
-    {
-        var escenario = await SeedAsync();
-        var inspeccion = await AgregarInspeccionAsync(escenario, InspeccionEstados.EnCurso,
-            "2026/10/1/bloqueada.jpg", "2026/10/1/libre.jpg");
-        var storage = new FakeStorage { FallaAlBorrar = "2026/10/1/bloqueada.jpg" };
-
-        var action = await Controlador(escenario, storage).DeleteInspeccion(inspeccion.IdInspeccion);
-
-        Assert.IsType<OkObjectResult>(action.Result);
-        Assert.Equal(["2026/10/1/libre.jpg"], storage.Eliminados);
-        Assert.False(await escenario.Context.Inspecciones.AnyAsync(i => i.IdInspeccion == inspeccion.IdInspeccion));
-    }
-
-    [Fact]
-    public async Task DeleteInspeccion_Cerrada_NoBorraNadaNiTocaLasFotos()
+    public async Task AnularInspeccion_Cerrada_Devuelve409YNoTocaNada()
     {
         var escenario = await SeedAsync();
         var inspeccion = await AgregarInspeccionAsync(escenario, InspeccionEstados.Cerrada, "2026/10/1/a.jpg");
         var storage = new FakeStorage();
 
-        var action = await Controlador(escenario, storage).DeleteInspeccion(inspeccion.IdInspeccion);
+        var action = await Controlador(escenario, storage).AnularInspeccion(inspeccion.IdInspeccion, Motivo);
 
         Assert.IsType<ConflictObjectResult>(action.Result);
-        Assert.Empty(storage.Eliminados);
-        Assert.True(await escenario.Context.Inspecciones.AnyAsync(i => i.IdInspeccion == inspeccion.IdInspeccion));
+        Assert.Equal(InspeccionEstados.Cerrada, (await escenario.Context.Inspecciones.AsNoTracking()
+            .SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion)).Estado);
+    }
+
+    [Fact]
+    public async Task UnaInspeccionAnulada_NoAdmiteRespuestasNiFirma()
+    {
+        var escenario = await SeedAsync();
+        var inspeccion = await AgregarInspeccionAsync(escenario, InspeccionEstados.Anulada);
+        var controlador = Controlador(escenario, new FakeStorage());
+
+        var respuestas = await controlador.GuardarRespuestas(inspeccion.IdInspeccion, new GuardarRespuestasDto());
+        var firma = await controlador.FirmarConPassword(escenario.Context, inspeccion.IdInspeccion, new FirmarInspeccionDto
+        {
+            Password = Fabrica.ClaveFirma,
+            FirmaPngBase64 = "iVBORw0KGgo="
+        });
+
+        Assert.IsType<ConflictObjectResult>(respuestas.Result);
+        Assert.IsType<ConflictObjectResult>(firma.Result);
+    }
+
+    [Fact]
+    public void Inspecciones_NoTieneDelete()
+    {
+        // Sin acción DELETE, ASP.NET responde 405 en api/inspecciones/{id} (PLAN_FASE4_TAREAS §3.6).
+        Assert.DoesNotContain(typeof(InspeccionesController).GetMethods(), m =>
+            m.GetCustomAttributes(typeof(HttpDeleteAttribute), true).Length > 0);
     }
 
     [Fact]

@@ -1,5 +1,7 @@
+using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -17,9 +19,11 @@ public class EquiposController : ControllerBase
 {
     private readonly ECARDbContext _context;
     private readonly IConfiguration _configuration;
+    private readonly IMotivoCambio _motivoCambio;
 
-    public EquiposController(ECARDbContext context, IConfiguration configuration)
+    public EquiposController(ECARDbContext context, IConfiguration configuration, IMotivoCambio motivoCambio)
     {
+        _motivoCambio = motivoCambio;
         _context = context;
         _configuration = configuration;
     }
@@ -147,6 +151,17 @@ public class EquiposController : ControllerBase
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("La categoría seleccionada no existe"));
         }
 
+        if (!string.IsNullOrWhiteSpace(createDto.FrecuenciaInspeccion) &&
+            !FrecuenciasInspeccion.EsValida(createDto.FrecuenciaInspeccion.Trim()))
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(MensajeFrecuencia));
+        }
+
+        if (!Criticidades.EsValida(createDto.Criticidad))
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(Criticidades.Mensaje));
+        }
+
         if (createDto.IdUbicacion.HasValue &&
             !await _context.Ubicaciones.AnyAsync(u => u.IdUbicacion == createDto.IdUbicacion.Value))
         {
@@ -165,6 +180,7 @@ public class EquiposController : ControllerBase
             Criticidad = NormalizeOptional(createDto.Criticidad),
             IdCategoria = createDto.IdCategoria,
             IdUbicacion = createDto.IdUbicacion,
+            FrecuenciaInspeccion = NormalizeOptional(createDto.FrecuenciaInspeccion),
             Activo = true,
             FechaCreacion = DateTime.UtcNow
         };
@@ -189,6 +205,25 @@ public class EquiposController : ControllerBase
         {
             return NotFound(ApiResponse<EquipoDto>.ErrorResponse("Equipo no encontrado"));
         }
+
+        var errorMotivo = MotivoObligatorio.Validar(updateDto.Motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(errorMotivo));
+        }
+
+        if (!string.IsNullOrWhiteSpace(updateDto.FrecuenciaInspeccion) &&
+            !FrecuenciasInspeccion.EsValida(updateDto.FrecuenciaInspeccion.Trim()))
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(MensajeFrecuencia));
+        }
+
+        if (!Criticidades.EsValida(updateDto.Criticidad))
+        {
+            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(Criticidades.Mensaje));
+        }
+
+        _motivoCambio.Establecer(updateDto.Motivo);
 
         if (updateDto.CodigoInterno != null)
         {
@@ -237,6 +272,9 @@ public class EquiposController : ControllerBase
         if (updateDto.Criticidad != null)
             equipo.Criticidad = NormalizeOptional(updateDto.Criticidad);
 
+        if (updateDto.FrecuenciaInspeccion != null)
+            equipo.FrecuenciaInspeccion = NormalizeOptional(updateDto.FrecuenciaInspeccion);
+
         if (updateDto.IdCategoria.HasValue)
         {
             if (updateDto.IdCategoria.Value == 0)
@@ -282,7 +320,7 @@ public class EquiposController : ControllerBase
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "Administrador")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteEquipo(long id)
+    public async Task<ActionResult<ApiResponse<bool>>> DeleteEquipo(long id, [FromQuery] string? motivo = null)
     {
         var equipo = await _context.Equipos.FindAsync(id);
 
@@ -290,6 +328,14 @@ public class EquiposController : ControllerBase
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Equipo no encontrado"));
         }
+
+        var errorMotivo = MotivoObligatorio.Validar(motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(motivo);
 
         // Se conserva el registro para el historial de inspecciones y se marca como inactivo.
         equipo.Activo = false;
@@ -301,7 +347,7 @@ public class EquiposController : ControllerBase
     /// <summary>Reactiva un equipo desactivado. Contraparte explícita del borrado lógico.</summary>
     [HttpPut("{id}/activar")]
     [Authorize(Roles = "Administrador")]
-    public async Task<ActionResult<ApiResponse<bool>>> ActivarEquipo(long id)
+    public async Task<ActionResult<ApiResponse<bool>>> ActivarEquipo(long id, [FromQuery] string? motivo = null)
     {
         var equipo = await _context.Equipos.FindAsync(id);
 
@@ -309,6 +355,14 @@ public class EquiposController : ControllerBase
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Equipo no encontrado"));
         }
+
+        var errorMotivo = MotivoObligatorio.Validar(motivo);
+        if (errorMotivo != null)
+        {
+            return BadRequest(ApiResponse<bool>.ErrorResponse(errorMotivo));
+        }
+
+        _motivoCambio.Establecer(motivo);
 
         equipo.Activo = true;
         await _context.SaveChangesAsync();
@@ -404,8 +458,9 @@ public class EquiposController : ControllerBase
         return File(png, "image/png", $"QR-{equipo.CodigoInterno}.png");
     }
 
-    // Consulta pública: la abre quien escanea la etiqueta, sin sesión. Solo expone la ficha
-    // básica y los checklists activos; nunca datos de usuarios ni de inspecciones.
+    // Consulta pública: la abre quien escanea la etiqueta, a veces sin sesión. Sin sesión solo
+    // expone lo necesario para reconocer el equipo (nombre, código interno y ubicación) y los
+    // checklists activos; con sesión, la ficha completa. Nunca datos de usuarios ni de inspecciones.
     [HttpGet("qr/{token}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ConsultaQrDto>>> GetByQr(string token)
@@ -426,8 +481,9 @@ public class EquiposController : ControllerBase
         }
 
         // El MVP no asocia checklists a equipos ni categorías: aplican todas las versiones activas
+        // que tienen preguntas (con uno vacío no se puede inspeccionar).
         var checklists = await _context.Checklists
-            .Where(c => c.Activo)
+            .Where(c => c.Activo && c.Preguntas.Any())
             .OrderBy(c => c.Nombre)
             .Select(c => new ChecklistDto
             {
@@ -439,9 +495,20 @@ public class EquiposController : ControllerBase
             })
             .ToListAsync();
 
+        var ficha = MapToDto(equipo);
         var dto = new ConsultaQrDto
         {
-            Equipo = MapToDto(equipo),
+            Equipo = HttpContext?.User.Identity?.IsAuthenticated == true
+                ? ficha
+                : new EquipoDto
+                {
+                    IdEquipo = ficha.IdEquipo,
+                    CodigoInterno = ficha.CodigoInterno,
+                    NombreEquipo = ficha.NombreEquipo,
+                    IdUbicacion = ficha.IdUbicacion,
+                    UbicacionNombre = ficha.UbicacionNombre,
+                    Activo = ficha.Activo
+                },
             ChecklistsActivos = checklists
         };
         // El token no se devuelve en la respuesta pública
@@ -484,8 +551,11 @@ public class EquiposController : ControllerBase
         UbicacionNombre = e.Ubicacion != null ? e.Ubicacion.Planta + " - " + e.Ubicacion.Area : null,
         QRCode = e.QRCode,
         Activo = e.Activo,
-        FechaCreacion = e.FechaCreacion
+        FechaCreacion = e.FechaCreacion,
+        FrecuenciaInspeccion = e.FrecuenciaInspeccion
     };
+
+    private const string MensajeFrecuencia = "La frecuencia debe ser Diaria, Semanal, Mensual o Trimestral";
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

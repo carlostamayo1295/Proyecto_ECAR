@@ -1,0 +1,135 @@
+@using System.Text.RegularExpressions
+@using MudBlazor
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+  Escaneo del QR de un equipo con la cámara (SRS §6 "Escaneo QR", regla 10). Devuelve el token de
+  la etiqueta (DialogResult.Ok(token)) o se cancela. La etiqueta codifica la URL pública
+  {Cliente:BaseUrl}/equipos/qr/{token}; se acepta también el token solo.
+*@
+<MudDialog Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Escanear el QR del equipo</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (error != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@error</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Apunte la cámara a la etiqueta QR del equipo. Si el navegador lo pide, permita el uso de la cámara.
+            </MudText>
+        }
+        @if (aviso != null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@aviso</MudAlert>
+        }
+        <div id="@idLector" class="lector-qr"></div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="CancelarAsync">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.lector-qr {
+    width: 100%;
+    min-height: 240px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #11182722;
+}
+
+.lector-qr video {
+    width: 100% !important;
+    height: auto !important;
+}
+</style>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private static readonly Regex TokenEnTexto = new(@"(?:/equipos/qr/)?([0-9a-fA-F]{32})/?$", RegexOptions.Compiled);
+
+    private readonly string idLector = "lector-qr-" + Guid.NewGuid().ToString("N")[..8];
+    private DotNetObjectReference<EscanerQrDialog>? referencia;
+    private string? error;
+    private string? aviso;
+    private bool cerrado;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        referencia = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("ecarEscanerQr.iniciar", idLector, referencia);
+        }
+        catch (JSException ex)
+        {
+            error = "No se pudo abrir la cámara. Revise que el navegador tenga permiso para usarla, " +
+                    "o escanee la etiqueta con la cámara del teléfono. Detalle: " + ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Lo llama escaner-qr.js con el texto leído. Devuelve true si hay que seguir buscando (el código
+    /// no es una etiqueta de ECAR) y false si ya se cerró el diálogo con el token.
+    /// </summary>
+    [JSInvokable]
+    public async Task<bool> QrLeido(string texto)
+    {
+        var coincidencia = TokenEnTexto.Match((texto ?? string.Empty).Trim());
+        if (!coincidencia.Success)
+        {
+            aviso = "Ese código no es una etiqueta de equipo de ECAR. Siga apuntando a la etiqueta del equipo.";
+            await InvokeAsync(StateHasChanged);
+            return true;
+        }
+
+        await DetenerAsync();
+        MudDialog.Close(DialogResult.Ok(coincidencia.Groups[1].Value.ToLowerInvariant()));
+        return false;
+    }
+
+    private async Task CancelarAsync()
+    {
+        await DetenerAsync();
+        MudDialog.Cancel();
+    }
+
+    private async Task DetenerAsync()
+    {
+        if (cerrado)
+        {
+            return;
+        }
+
+        cerrado = true;
+        try
+        {
+            await JS.InvokeVoidAsync("ecarEscanerQr.detener");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DetenerAsync();
+        referencia?.Dispose();
+    }
+}

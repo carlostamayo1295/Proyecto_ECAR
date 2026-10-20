@@ -1,4 +1,5 @@
 using ECAR.API.Controllers;
+using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared.Responses;
@@ -23,12 +24,12 @@ public class ActivacionTests
         var usuario = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.com", Activo = true };
         context.Usuarios.Add(usuario);
         await context.SaveChangesAsync();
-        var controller = new UsuariosController(context);
+        var controller = Fabrica.Usuarios(context);
 
-        await controller.DeleteUsuario(usuario.IdUsuario);
+        await controller.DeleteUsuario(usuario.IdUsuario, "Motivo de prueba suficientemente largo");
         Assert.False((await context.Usuarios.FindAsync(usuario.IdUsuario))!.Activo);
 
-        var result = await controller.ActivarUsuario(usuario.IdUsuario);
+        var result = await controller.ActivarUsuario(usuario.IdUsuario, "Motivo de prueba suficientemente largo");
 
         Assert.IsType<OkObjectResult>(result.Result);
         Assert.True((await context.Usuarios.FindAsync(usuario.IdUsuario))!.Activo);
@@ -42,7 +43,7 @@ public class ActivacionTests
         context.Equipos.Add(equipo);
         await context.SaveChangesAsync();
 
-        var result = await CreateEquiposController(context).ActivarEquipo(equipo.IdEquipo);
+        var result = await CreateEquiposController(context).ActivarEquipo(equipo.IdEquipo, "Motivo de prueba suficientemente largo");
 
         Assert.IsType<OkObjectResult>(result.Result);
         Assert.True((await context.Equipos.FindAsync(equipo.IdEquipo))!.Activo);
@@ -58,7 +59,7 @@ public class ActivacionTests
         context.Checklists.AddRange(v1, v2, otro);
         await context.SaveChangesAsync();
 
-        var result = await new ChecklistsController(context).ActivarChecklist(v1.IdChecklist);
+        var result = await new ChecklistsController(context, new MotivoCambio()).ActivarChecklist(v1.IdChecklist, "Motivo de prueba suficientemente largo");
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<ApiResponse<bool>>(ok.Value);
@@ -74,9 +75,9 @@ public class ActivacionTests
     {
         await using var context = CreateContext();
 
-        Assert.IsType<NotFoundObjectResult>((await new UsuariosController(context).ActivarUsuario(999)).Result);
+        Assert.IsType<NotFoundObjectResult>((await Fabrica.Usuarios(context).ActivarUsuario(999)).Result);
         Assert.IsType<NotFoundObjectResult>((await CreateEquiposController(context).ActivarEquipo(999)).Result);
-        Assert.IsType<NotFoundObjectResult>((await new ChecklistsController(context).ActivarChecklist(999)).Result);
+        Assert.IsType<NotFoundObjectResult>((await new ChecklistsController(context, new MotivoCambio()).ActivarChecklist(999)).Result);
     }
 
     private static EquiposController CreateEquiposController(ECARDbContext context)
@@ -84,7 +85,7 @@ public class ActivacionTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Cliente:BaseUrl"] = "https://app.ecar.test/" })
             .Build();
-        return new EquiposController(context, configuration);
+        return new EquiposController(context, configuration, new MotivoCambio());
     }
 
     private static ECARDbContext CreateContext()

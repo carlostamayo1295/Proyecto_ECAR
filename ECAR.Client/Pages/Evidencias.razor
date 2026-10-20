@@ -60,13 +60,18 @@
                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="mt-1 ml-0"
                                             Color="@(EsDeInspeccionCerrada(evidencia) ? Color.Success : Color.Warning)"
                                             Text="@(EsDeInspeccionCerrada(evidencia) ? "Inspección cerrada" : "Inspección en curso")" />
+                                        @if (evidencia.Retirada)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="mt-1 ml-1"
+                                                Color="Color.Default" Text="Retirada" title="@MotivoRetiro(evidencia)" />
+                                        }
                                     </MudCardContent>
-                                    @if (!EsDeInspeccionCerrada(evidencia))
+                                    @if (!evidencia.Retirada && !EsDeInspeccionCerrada(evidencia))
                                     {
                                         <MudCardActions>
-                                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
-                                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(evidencia)">
-                                                Eliminar
+                                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                                StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="() => RetirarEvidencia(evidencia)">
+                                                Retirar
                                             </MudButton>
                                         </MudCardActions>
                                     }
@@ -113,15 +118,20 @@
                             <MudTd DataLabel="Subido por">@context.UsuarioCarga</MudTd>
                             <MudTd DataLabel="Fecha de carga">@context.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
                             <MudTd DataLabel="Acciones">
-                                @if (EsDeInspeccionCerrada(context))
+                                @if (context.Retirada)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
+                                        Text="Retirada" title="@MotivoRetiro(context)" />
+                                }
+                                else if (EsDeInspeccionCerrada(context))
                                 {
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Text="Inspección cerrada" />
                                 }
                                 else
                                 {
                                     <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                        StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEvidencia(context)" Class="action-button">
-                                        Eliminar
+                                        StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="() => RetirarEvidencia(context)" Class="action-button">
+                                        Retirar
                                     </MudButton>
                                 }
                             </MudTd>
@@ -239,40 +249,47 @@
         await LoadEvidenciasAsync();
     }
 
-    private async Task DeleteEvidencia(EvidenciaDto evidencia)
+    // Fase 4: ninguna evidencia se borra; se retira con motivo y el archivo se conserva.
+    private async Task RetirarEvidencia(EvidenciaDto evidencia)
     {
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea eliminar la evidencia #{evidencia.IdEvidencia}?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters);
-        var result = await dialog.Result;
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Retirar evidencia",
+            $"La fotografía #{evidencia.IdEvidencia} dejará de verse en la inspección, pero el archivo se conserva.",
+            "Retirar", Color.Error);
 
-        if (result is not null && !result.Canceled)
+        if (motivo is null)
         {
-            isLoading = true;
-            try
-            {
-                var deleteResult = await HttpClientService.DeleteEvidenciaAsync(evidencia.IdEvidencia);
+            return;
+        }
 
-                if (deleteResult != null && deleteResult.Success)
-                {
-                    Snackbar.Add("Evidencia eliminada exitosamente", Severity.Success);
-                    miniaturas.Remove(evidencia.IdEvidencia);
-                    await LoadEvidenciasAsync();
-                }
-                else
-                {
-                    Snackbar.Add(deleteResult?.Message ?? "Error al eliminar evidencia", Severity.Error);
-                }
-            }
-            catch (Exception ex)
+        isLoading = true;
+        try
+        {
+            var result = await HttpClientService.RetirarEvidenciaAsync(evidencia.IdEvidencia, motivo);
+
+            if (result.Success)
             {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                Snackbar.Add("Evidencia retirada", Severity.Success);
+                await LoadEvidenciasAsync();
             }
-            finally
+            else
             {
-                isLoading = false;
+                Snackbar.Add(result.Message, Severity.Error);
             }
         }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
+
+    private static string MotivoRetiro(EvidenciaDto evidencia) =>
+        string.IsNullOrWhiteSpace(evidencia.MotivoRetiro)
+            ? "Retirada"
+            : $"Retirada por {evidencia.UsuarioRetiro}: {evidencia.MotivoRetiro}";
 }
 
 <style>

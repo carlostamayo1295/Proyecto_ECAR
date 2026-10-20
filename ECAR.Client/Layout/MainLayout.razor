@@ -2,6 +2,9 @@
 @inject NavigationManager NavigationManager
 @inject AuthorizationService AuthorizationService
 @inject AuthService AuthService
+@inject HttpClientService HttpClientService
+@inject IWebAssemblyHostEnvironment HostEnvironment
+@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
 
 @using MudBlazor
 
@@ -13,17 +16,24 @@
     <VigilanteSesion />
     
     <MudAppBar Elevation="3" Class="app-bar">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        @if (isAuthenticated)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" title="Menú" />
+        }
         <MudSpacer />
         <img src="images/logo-ecar.png" alt="ECAR Logo" class="app-bar-logo" />
         <MudSpacer />
         @* En el teléfono los botones quedan solo con el icono: con el texto, la barra medía más
            de 375 px y ensanchaba todas las páginas. *@
-        <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="https://localhost:7296/scalar/v1" Target="_blank"
-            title="API Scalar">
-            <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
-            <span class="texto-barra">API Scalar</span>
-        </MudButton>
+        @* La documentación del API solo existe en desarrollo y es para quien administra el sistema. *@
+        @if (isAdmin && HostEnvironment.IsDevelopment())
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="https://localhost:7296/scalar/v1" Target="_blank"
+                title="API Scalar">
+                <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
+                <span class="texto-barra">API Scalar</span>
+            </MudButton>
+        }
         @if (isAuthenticated)
         {
             <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="HandleLogout" title="Cerrar sesión">
@@ -33,7 +43,11 @@
         }
     </MudAppBar>
 
+    @* Sin sesión no hay menú: el login y la consulta del QR no deben mostrar el resto del sistema.
+       El cajón se monta siempre (así abre como antes en escritorio) y solo se cierra sin sesión. *@
     <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Class="sidebar">
+        @if (isAuthenticated)
+        {
         <MudList T="string">
             <MudListItem T="string" Text="Home" Icon="@Icons.Material.Filled.Home" Href="/" Class="nav-item" />
             <MudListItem T="string" Text="Inspecciones" Icon="@Icons.Material.Filled.Assignment" Href="/inspecciones" Class="nav-item" />
@@ -47,6 +61,7 @@
             @if (isAdmin || isAuditor)
             {
                 <MudListItem T="string" Text="Auditoría" Icon="@Icons.Material.Filled.History" Href="/auditoria" Class="nav-item" />
+                <MudListItem T="string" Text="Reportes" Icon="@Icons.Material.Filled.Summarize" Href="/reportes" Class="nav-item" />
             }
 
             @if (isAdmin)
@@ -59,6 +74,7 @@
                 <MudListItem T="string" Text="Preguntas de Checklist" Icon="@Icons.Material.Filled.FactCheck" Href="/checklists/preguntas" Class="nav-item admin-item" />
             }
         </MudList>
+        }
     </MudDrawer>
 
     <MudMainContent Class="main-content">
@@ -158,6 +174,7 @@
     protected override async Task OnInitializedAsync()
     {
         isAuthenticated = await AuthService.IsAuthenticated();
+        drawerOpen = isAuthenticated;
         if (isAuthenticated)
         {
             isAdmin = await AuthorizationService.IsAdminAsync();
@@ -172,6 +189,7 @@
 
     private async Task HandleLogout()
     {
+        await HttpClientService.CerrarSesionAsync();
         await AuthService.ClearTokenAsync();
         NavigationManager.NavigateTo("/login", forceLoad: true);
     }

@@ -320,18 +320,19 @@
     private async Task DeleteEquipo(EquipoDto equipo)
     {
         var action = equipo.Activo ? "desactivar" : "activar";
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea {action} el equipo '{equipo.NombreEquipo}'?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
-        var result = await dialog.Result;
+        // Fase 4 (§3.3): desactivar y reactivar piden motivo, que queda en la auditoría.
+        var motivo = await MotivoDialog.PedirAsync(DialogService, $"{char.ToUpper(action[0])}{action[1..]} equipo",
+            $"Indique por qué va a {action} el equipo «{equipo.NombreEquipo}».", $"{char.ToUpper(action[0])}{action[1..]}",
+            equipo.Activo ? Color.Error : Color.Success);
 
-        if (result is not null && !result.Canceled)
+        if (motivo is not null)
         {
             isLoading = true;
             try
             {
                 if (equipo.Activo)
                 {
-                    var deleteResult = await HttpClientService.DeleteEquipoAsync(equipo.IdEquipo);
+                    var deleteResult = await HttpClientService.DeleteEquipoAsync(equipo.IdEquipo, motivo);
                     if (deleteResult != null && deleteResult.Success)
                     {
                         Snackbar.Add("Equipo desactivado exitosamente", Severity.Success);
@@ -344,7 +345,7 @@
                 }
                 else
                 {
-                    var updateResult = await HttpClientService.ActivarEquipoAsync(equipo.IdEquipo);
+                    var updateResult = await HttpClientService.ActivarEquipoAsync(equipo.IdEquipo, motivo);
                     if (updateResult != null && updateResult.Success)
                     {
                         Snackbar.Add("Equipo activado exitosamente", Severity.Success);

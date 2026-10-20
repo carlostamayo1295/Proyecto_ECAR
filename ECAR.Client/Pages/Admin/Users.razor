@@ -1,4 +1,5 @@
 @page "/admin/users"
+@inject AuthorizationService AuthorizationService
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -29,6 +30,14 @@
             }
             else if (usuarios != null && usuarios.Any())
             {
+                @* Parte 11 §11.300(d): el Administrador ve qué cuentas bloquearon los intentos fallidos. *@
+                @if (usuarios.Count(EstaBloqueado) is var bloqueadas and > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                        @(bloqueadas == 1 ? "Hay 1 cuenta bloqueada" : $"Hay {bloqueadas} cuentas bloqueadas") por intentos
+                        fallidos en esta lista. Se desbloquean solas pasado el tiempo de bloqueo o con «Desbloquear».
+                    </MudAlert>
+                }
                 <MudTable Items="usuarios" Hover="true" Striped="true" Elevation="0">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
@@ -57,16 +66,40 @@
                         <MudTd>
                             <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)" 
                                 Size="Size.Small" Variant="Variant.Outlined" Text="@(context.Activo ? "Activo" : "Inactivo")" />
+                            @if (EstaBloqueado(context))
+                            {
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled"
+                                    Text="@($"Bloqueada hasta {context.BloqueadoHasta!.Value.ToLocalTime():HH:mm}")" />
+                            }
+                            @if (context.DebeCambiarPassword)
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined"
+                                    Text="Contraseña temporal" title="Debe cambiarla al entrar" />
+                            }
                         </MudTd>
                         <MudTd>
-                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" 
-                                StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                Editar
-                            </MudButton>
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" 
-                                StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteUser(context)" Class="action-button">
-                                @(context.Activo ? "Desactivar" : "Activar")
-                            </MudButton>
+                            <div class="d-flex flex-wrap gap-1">
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
+                                    Editar
+                                </MudButton>
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteUser(context)" Class="action-button">
+                                    @(context.Activo ? "Desactivar" : "Activar")
+                                </MudButton>
+                                @* Fase 4 (Parte 11 §11.300): contraseña temporal y desbloqueo, ambos con motivo. *@
+                                <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" 
+                                    StartIcon="@Icons.Material.Filled.LockReset" OnClick="() => RestablecerPassword(context)" Class="action-button">
+                                    Restablecer contraseña
+                                </MudButton>
+                                @if (EstaBloqueado(context))
+                                {
+                                    <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                        StartIcon="@Icons.Material.Filled.LockOpen" OnClick="() => DesbloquearUsuario(context)" Class="action-button">
+                                        Desbloquear
+                                    </MudButton>
+                                }
+                            </div>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -87,6 +120,8 @@
 
 @code {
     private List<UsuarioDto>? usuarios;
+
+    private static bool EstaBloqueado(UsuarioDto usuario) => usuario.BloqueadoHasta > DateTime.UtcNow;
     private List<RolDto>? availableRoles;
     private string searchText = string.Empty;
     private int currentPage = 1;
@@ -96,6 +131,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // AdminRouteGuard es un componente hijo y no detiene la carga de la página: sin esta
+        // comprobación, otro rol dispararía peticiones que el API rechaza con 403 (guía §3.5).
+        if (!await AuthorizationService.IsAdminAsync())
+        {
+            return;
+        }
+
         await LoadDataAsync();
     }
 
@@ -177,14 +219,64 @@
         }
     }
 
+    // Endpoint 25: el servidor genera una contraseña temporal que solo se ve esta vez; el usuario
+    // debe cambiarla al entrar. El motivo queda en la auditoría.
+    private async Task RestablecerPassword(UsuarioDto usuario)
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Restablecer contraseña",
+            $"Se generará una contraseña temporal para '{usuario.Nombre}'. El usuario deberá cambiarla al iniciar sesión.",
+            "Restablecer", Color.Warning);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var respuesta = await HttpClientService.RestablecerPasswordAsync(usuario.IdUsuario, motivo);
+        if (respuesta.Success && respuesta.Data is { } temporal)
+        {
+            await PasswordTemporalDialog.MostrarAsync(DialogService, usuario.Nombre, temporal.PasswordTemporal);
+            // Restablecer también desbloquea y marca «Contraseña temporal»: se recarga la lista.
+            await LoadDataAsync();
+        }
+        else
+        {
+            Snackbar.Add(respuesta.Message ?? "No se pudo completar la accion", Severity.Error);
+        }
+    }
+
+    // Endpoint 26: quita el bloqueo por intentos fallidos. El motivo queda en la auditoría.
+    private async Task DesbloquearUsuario(UsuarioDto usuario)
+    {
+        var motivo = await MotivoDialog.PedirAsync(DialogService, "Desbloquear cuenta",
+            $"La cuenta de '{usuario.Nombre}' volverá a poder iniciar sesión.",
+            "Desbloquear", Color.Info);
+        if (motivo is null)
+        {
+            return;
+        }
+
+        var respuesta = await HttpClientService.DesbloquearUsuarioAsync(usuario.IdUsuario, motivo);
+        if (respuesta.Success)
+        {
+            Snackbar.Add($"Cuenta de '{usuario.Nombre}' desbloqueada", Severity.Success);
+            // El bloqueo y el aviso salen de la lista: hay que recargarla para que desaparezcan.
+            await LoadDataAsync();
+        }
+        else
+        {
+            Snackbar.Add(respuesta.Message ?? "No se pudo completar la accion", Severity.Error);
+        }
+    }
+
     private async Task DeleteUser(UsuarioDto usuario)
     {
         var action = usuario.Activo ? "desactivar" : "activar";
-        var parameters = new DialogParameters { ["Message"] = $"¿Está seguro que desea {action} el usuario '{usuario.Nombre}'?" };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirmar {action}", parameters);
-        var result = await dialog.Result;
+        // Fase 4 (§3.3): desactivar y reactivar piden motivo, que queda en la auditoría.
+        var motivo = await MotivoDialog.PedirAsync(DialogService, $"{char.ToUpper(action[0])}{action[1..]} usuario",
+            $"Indique por qué va a {action} al usuario «{usuario.Nombre}».", $"{char.ToUpper(action[0])}{action[1..]}",
+            usuario.Activo ? Color.Error : Color.Success);
 
-        if (result is not null && !result.Canceled)
+        if (motivo is not null)
         {
             isLoading = true;
             try
@@ -192,8 +284,8 @@
                 // DELETE es el borrado lógico y siempre desactiva: activar tiene su propio
                 // endpoint. Antes los dos botones llamaban a DELETE y "Activar" no hacía nada.
                 var resultado = usuario.Activo
-                    ? await HttpClientService.DeleteUsuarioAsync(usuario.IdUsuario)
-                    : await HttpClientService.ActivarUsuarioAsync(usuario.IdUsuario);
+                    ? await HttpClientService.DeleteUsuarioAsync(usuario.IdUsuario, motivo)
+                    : await HttpClientService.ActivarUsuarioAsync(usuario.IdUsuario, motivo);
 
                 if (resultado != null && resultado.Success)
                 {

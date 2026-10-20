@@ -38,7 +38,9 @@ public class InspeccionService : IInspeccionService
         // Punto 6: 409 Conflict si la inspección no está 'En curso'
         if (inspeccion.Estado != InspeccionEstados.EnCurso)
         {
-            throw new InspeccionCerradaException("La inspección está cerrada y no permite modificaciones.");
+            throw new InspeccionCerradaException(inspeccion.Estado == InspeccionEstados.Anulada
+                ? InmutabilidadInspeccion.MensajeAnulada
+                : "La inspección está cerrada y no permite modificaciones.");
         }
 
         var preguntasValidas = inspeccion.Checklist.Preguntas.ToDictionary(p => p.IdPregunta);
@@ -123,6 +125,7 @@ public class InspeccionService : IInspeccionService
     }
 
     // Punto 2: GET /api/inspecciones/mias?estado=
+    // Sin estado devuelve también las anuladas (se conservan); con estado=EnCurso solo las abiertas.
     public async Task<List<InspeccionDto>> ObtenerMisInspeccionesAsync(long usuarioId, string? estado)
     {
         var query = _context.Inspecciones
@@ -154,8 +157,12 @@ public class InspeccionService : IInspeccionService
                 Resultado = i.Resultado,
                 Observaciones = i.Observaciones,
                 TieneFirma = !string.IsNullOrEmpty(i.FirmaDigital),
-                TotalEvidencias = i.Evidencias.Count,
-                TotalHallazgos = i.Hallazgos.Count
+                TotalEvidencias = i.Evidencias.Count(e => !e.Retirada),
+                TotalHallazgos = i.Hallazgos.Count,
+                MotivoAnulacion = i.MotivoAnulacion,
+                FechaAnulacion = i.FechaAnulacion,
+                IdUsuarioAnulacion = i.IdUsuarioAnulacion,
+                NombreUsuarioAnulacion = i.UsuarioAnulacion != null ? i.UsuarioAnulacion.Nombre : null
             })
             .ToListAsync();
     }

@@ -37,9 +37,37 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("Accion");
 
+                    b.Property<string>("AgenteUsuario")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("AgenteUsuario");
+
+                    b.Property<string>("DireccionIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)")
+                        .HasColumnName("DireccionIp");
+
                     b.Property<DateTime>("FechaHora")
                         .HasColumnType("datetime2")
                         .HasColumnName("FechaHora");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasColumnType("char(64)")
+                        .HasColumnName("Hash");
+
+                    b.Property<string>("HashAnterior")
+                        .HasColumnType("char(64)")
+                        .HasColumnName("HashAnterior");
+
+                    b.Property<long?>("IdUsuario")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuario");
+
+                    b.Property<string>("Motivo")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("Motivo");
 
                     b.Property<long>("RegistroId")
                         .HasColumnType("bigint")
@@ -71,6 +99,8 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasIndex("FechaHora");
 
+                    b.HasIndex("IdUsuario");
+
                     b.HasIndex("RegistroId");
 
                     b.HasIndex("Tabla");
@@ -79,7 +109,12 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasIndex("Tabla", "RegistroId", "FechaHora");
 
-                    b.ToTable("Auditoria");
+                    b.ToTable("Auditoria", t =>
+                        {
+                            t.HasTrigger("TR_Auditoria_SoloInsercion");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.CategoriaEquipo", b =>
@@ -188,6 +223,11 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("FechaCreacion");
 
+                    b.Property<string>("FrecuenciaInspeccion")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("FrecuenciaInspeccion");
+
                     b.Property<long?>("IdCategoria")
                         .HasColumnType("bigint")
                         .HasColumnName("IdCategoria");
@@ -261,6 +301,10 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("FechaCarga");
 
+                    b.Property<DateTime?>("FechaRetiro")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaRetiro");
+
                     b.Property<long>("IdInspeccion")
                         .HasColumnType("bigint")
                         .HasColumnName("IdInspeccion");
@@ -269,11 +313,24 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("IdUsuarioCarga");
 
+                    b.Property<long?>("IdUsuarioRetiro")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioRetiro");
+
+                    b.Property<string>("MotivoRetiro")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("MotivoRetiro");
+
                     b.Property<string>("NombreOriginal")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)")
                         .HasColumnName("NombreOriginal");
+
+                    b.Property<bool>("Retirada")
+                        .HasColumnType("bit")
+                        .HasColumnName("Retirada");
 
                     b.Property<long>("TamanoBytes")
                         .HasColumnType("bigint")
@@ -293,6 +350,8 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasIndex("IdUsuarioCarga");
 
+                    b.HasIndex("IdUsuarioRetiro");
+
                     b.ToTable("Evidencias");
                 });
 
@@ -305,6 +364,10 @@ namespace ECAR.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("IdHallazgo"));
 
+                    b.Property<string>("AccionCorrectiva")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("AccionCorrectiva");
+
                     b.Property<string>("Criticidad")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
@@ -316,9 +379,20 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnName("Descripcion");
 
                     b.Property<string>("Estado")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Abierto")
                         .HasColumnName("Estado");
+
+                    b.Property<DateTime?>("FechaCierre")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaCierre");
+
+                    b.Property<DateTime?>("FechaCompromiso")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaCompromiso");
 
                     b.Property<DateTime>("FechaRegistro")
                         .HasColumnType("datetime2")
@@ -327,6 +401,46 @@ namespace ECAR.Infrastructure.Migrations
                     b.Property<long>("IdInspeccion")
                         .HasColumnType("bigint")
                         .HasColumnName("IdInspeccion");
+
+                    b.Property<long?>("IdPregunta")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdPregunta");
+
+                    b.Property<long?>("IdRespuesta")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdRespuesta");
+
+                    b.Property<long?>("IdUsuarioCierre")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioCierre");
+
+                    b.Property<long>("IdUsuarioRegistro")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioRegistro");
+
+                    b.Property<long?>("IdUsuarioResponsable")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioResponsable");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("MotivoAnulacion");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Manual")
+                        .HasColumnName("Origen");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("RowVersion");
 
                     b.HasKey("IdHallazgo");
 
@@ -338,7 +452,51 @@ namespace ECAR.Infrastructure.Migrations
 
                     b.HasIndex("IdInspeccion");
 
+                    b.HasIndex("IdPregunta");
+
+                    b.HasIndex("IdRespuesta");
+
+                    b.HasIndex("IdUsuarioCierre");
+
+                    b.HasIndex("IdUsuarioRegistro");
+
+                    b.HasIndex("IdUsuarioResponsable");
+
+                    b.HasIndex("IdInspeccion", "IdPregunta")
+                        .IsUnique()
+                        .HasFilter("[IdPregunta] IS NOT NULL");
+
                     b.ToTable("Hallazgos");
+                });
+
+            modelBuilder.Entity("ECAR.Infrastructure.Entities.HistorialPassword", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("Id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("Fecha");
+
+                    b.Property<long>("IdUsuario")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuario");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("PasswordHash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdUsuario", "Fecha");
+
+                    b.ToTable("HistorialPasswords");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Inspeccion", b =>
@@ -358,6 +516,10 @@ namespace ECAR.Infrastructure.Migrations
                         .HasDefaultValue("EnCurso")
                         .HasColumnName("Estado");
 
+                    b.Property<DateTime?>("FechaAnulacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaAnulacion");
+
                     b.Property<DateTime?>("FechaCierre")
                         .HasColumnType("datetime2")
                         .HasColumnName("FechaCierre");
@@ -365,6 +527,11 @@ namespace ECAR.Infrastructure.Migrations
                     b.Property<DateTime>("FechaInspeccion")
                         .HasColumnType("datetime2")
                         .HasColumnName("FechaInspeccion");
+
+                    b.Property<string>("FirmaAlgoritmo")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("FirmaAlgoritmo");
 
                     b.Property<string>("FirmaDigital")
                         .HasColumnType("nvarchar(max)")
@@ -374,6 +541,16 @@ namespace ECAR.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
                         .HasColumnName("FirmaHash");
+
+                    b.Property<string>("FirmaNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("FirmaNombre");
+
+                    b.Property<string>("FirmaSignificado")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("FirmaSignificado");
 
                     b.Property<long>("IdChecklist")
                         .HasColumnType("bigint")
@@ -387,6 +564,15 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("IdUsuario");
 
+                    b.Property<long?>("IdUsuarioAnulacion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IdUsuarioAnulacion");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("MotivoAnulacion");
+
                     b.Property<string>("Observaciones")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("Observaciones");
@@ -395,6 +581,13 @@ namespace ECAR.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("Resultado");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("RowVersion");
 
                     b.HasKey("IdInspeccion");
 
@@ -407,6 +600,8 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasIndex("IdEquipo");
 
                     b.HasIndex("IdUsuario");
+
+                    b.HasIndex("IdUsuarioAnulacion");
 
                     b.HasIndex("Resultado");
 
@@ -563,11 +758,27 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("bit")
                         .HasColumnName("Activo");
 
+                    b.Property<DateTime?>("BloqueadoHasta")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("BloqueadoHasta");
+
                     b.Property<string>("Correo")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)")
                         .HasColumnName("Correo");
+
+                    b.Property<bool>("DebeCambiarPassword")
+                        .HasColumnType("bit")
+                        .HasColumnName("DebeCambiarPassword");
+
+                    b.Property<DateTime?>("FechaCambioPassword")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("FechaCambioPassword");
+
+                    b.Property<int>("IntentosFallidos")
+                        .HasColumnType("int")
+                        .HasColumnName("IntentosFallidos");
 
                     b.Property<string>("Nombre")
                         .IsRequired()
@@ -580,6 +791,16 @@ namespace ECAR.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("PasswordHash");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("SecurityStamp");
+
+                    b.Property<DateTime?>("UltimoAcceso")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("UltimoAcceso");
 
                     b.Property<string>("UsuarioAD")
                         .HasMaxLength(100)
@@ -625,6 +846,14 @@ namespace ECAR.Infrastructure.Migrations
                     b.ToTable("UsuarioRol");
                 });
 
+            modelBuilder.Entity("ECAR.Infrastructure.Entities.Auditoria", b =>
+                {
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Equipo", b =>
                 {
                     b.HasOne("ECAR.Infrastructure.Entities.CategoriaEquipo", "Categoria")
@@ -645,7 +874,7 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Evidencias")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCargaDetalle")
@@ -654,9 +883,16 @@ namespace ECAR.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioRetiro")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioRetiro")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Inspeccion");
 
                     b.Navigation("UsuarioCargaDetalle");
+
+                    b.Navigation("UsuarioRetiro");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Hallazgo", b =>
@@ -664,10 +900,57 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Hallazgos")
                         .HasForeignKey("IdInspeccion")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
+                        .WithMany()
+                        .HasForeignKey("IdPregunta")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECAR.Infrastructure.Entities.RespuestaInspeccion", "Respuesta")
+                        .WithMany()
+                        .HasForeignKey("IdRespuesta")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioCierre")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioCierre")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioRegistro")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioRegistro")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioResponsable")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioResponsable")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Inspeccion");
+
+                    b.Navigation("Pregunta");
+
+                    b.Navigation("Respuesta");
+
+                    b.Navigation("UsuarioCierre");
+
+                    b.Navigation("UsuarioRegistro");
+
+                    b.Navigation("UsuarioResponsable");
+                });
+
+            modelBuilder.Entity("ECAR.Infrastructure.Entities.HistorialPassword", b =>
+                {
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "Usuario")
+                        .WithMany("HistorialPasswords")
+                        .HasForeignKey("IdUsuario")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Inspeccion");
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Inspeccion", b =>
@@ -681,20 +964,27 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Equipo", "Equipo")
                         .WithMany("Inspecciones")
                         .HasForeignKey("IdEquipo")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.Usuario", "Usuario")
                         .WithMany("Inspecciones")
                         .HasForeignKey("IdUsuario")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("ECAR.Infrastructure.Entities.Usuario", "UsuarioAnulacion")
+                        .WithMany()
+                        .HasForeignKey("IdUsuarioAnulacion")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Checklist");
 
                     b.Navigation("Equipo");
 
                     b.Navigation("Usuario");
+
+                    b.Navigation("UsuarioAnulacion");
                 });
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.PreguntaChecklist", b =>
@@ -702,7 +992,7 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Checklist", "Checklist")
                         .WithMany("Preguntas")
                         .HasForeignKey("IdChecklist")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Checklist");
@@ -713,13 +1003,13 @@ namespace ECAR.Infrastructure.Migrations
                     b.HasOne("ECAR.Infrastructure.Entities.Inspeccion", "Inspeccion")
                         .WithMany("Respuestas")
                         .HasForeignKey("IdInspeccion")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ECAR.Infrastructure.Entities.PreguntaChecklist", "Pregunta")
                         .WithMany("Respuestas")
                         .HasForeignKey("IdPregunta")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Inspeccion");
@@ -789,6 +1079,8 @@ namespace ECAR.Infrastructure.Migrations
 
             modelBuilder.Entity("ECAR.Infrastructure.Entities.Usuario", b =>
                 {
+                    b.Navigation("HistorialPasswords");
+
                     b.Navigation("Inspecciones");
 
                     b.Navigation("UsuarioRoles");

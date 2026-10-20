@@ -50,8 +50,7 @@ public class BackendPhaseThreeTests
     private static InspeccionesController CreateController(
         ECARDbContext context,
         ICurrentUser currentUser) =>
-        new(context, currentUser, new InspeccionService(context), new FakeEvidenciaStorage(),
-            NullLogger<InspeccionesController>.Instance);
+        Fabrica.Inspecciones(context, currentUser, new FakeEvidenciaStorage());
 
     private static async Task<(Usuario Tecnico, Usuario OtroTecnico, Equipo Equipo, Checklist Checklist)>
         SeedEscenarioAsync(ECARDbContext context)

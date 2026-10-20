@@ -1,5 +1,11 @@
 # Estado del proyecto ECAR — Sistema de Gestión de Equipos e Inspecciones
 
+> **Actualización del 11/10/2026:** este documento conserva el detalle histórico de las fases
+> anteriores. El estado vigente de Fase 4 se encuentra en
+> [`REVISION_BACKEND_FASE4.md`](REVISION_BACKEND_FASE4.md), la cobertura de requisitos en
+> [`MATRIZ_TRAZABILIDAD.md`](MATRIZ_TRAZABILIDAD.md) y los cambios publicados en
+> [`../CHANGELOG.md`](../CHANGELOG.md).
+
 **Fecha de corte:** 16 de septiembre de 2026 (semana 5 de 12)
 **Rama evaluada:** `main` (`0272fa1`) + cambios de cierre de Fase 2 en `feature_FE_0_ServiceHTTP_nave_y_revision` (pendientes de PR)
 **Documentos de referencia:** [`ECAR-SRS-MVP-Equipos-Inspecciones-v1.0.md`](../ECAR-SRS-MVP-Equipos-Inspecciones-v1.0.md),
