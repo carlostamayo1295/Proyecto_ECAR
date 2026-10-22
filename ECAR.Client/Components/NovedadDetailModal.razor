@@ -3,7 +3,7 @@
    puede firmar cualquier Estándar o Administrador, aunque no haya hecho la inspección, y para
    orientarse puede abrir la inspección completa (respuestas, fotos y firma; el API lo permite en
    solo lectura). El Administrador puede anular con motivo una novedad registrada por error y
-   reenviar su correo.
+   reenviar el correo, que es el de su inspección con todas sus novedades.
 
    Uso:
        await NovedadDetailModal.AbrirAsync(DialogService, idNovedad, resolver: true);
@@ -92,7 +92,8 @@
                 @if (esAdmin)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="@procesando"
-                               StartIcon="@Icons.Material.Filled.Send" OnClick="ReenviarCorreoAsync" Class="print-hidden">
+                               StartIcon="@Icons.Material.Filled.Send" OnClick="ReenviarCorreoAsync" Class="print-hidden"
+                               title="Envía el correo de la inspección, con todas sus novedades">
                         @(d.FechaNotificacion.HasValue ? "Reenviar" : "Enviar")
                     </MudButton>
                 }

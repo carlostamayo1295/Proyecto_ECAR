@@ -418,13 +418,13 @@ public class InspeccionesController : ControllerBase
 
     /// <summary>
     /// POST api/inspecciones/{id}/anular (§3.6): sustituye al borrado. Solo una inspección
-    /// EnCurso; la anula el Administrador o el Operador o Estándar que la ejecuta, siempre con motivo. Se
-    /// conservan sus respuestas, evidencias y fotos, y queda inmutable. Estado,
+    /// EnCurso y solo la anula el Administrador (pedido del 22/10/2026; antes también su inspector),
+    /// siempre con motivo. Se conservan sus respuestas, evidencias y fotos, y queda inmutable. Estado,
     /// motivo, fecha, usuario y la fila "Anular" de la auditoría se guardan en una transacción.
     /// Orden: 404, 409 (no está en curso), 403, 400 (motivo).
     /// </summary>
     [HttpPost("{id:long}/anular")]
-    [Authorize(Roles = RolesSistema.Inspeccionan)]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> AnularInspeccion(long id, MotivoDto motivoDto)
     {
         var inspeccion = await _context.Inspecciones.FirstOrDefaultAsync(i => i.IdInspeccion == id);
@@ -440,7 +440,8 @@ public class InspeccionesController : ControllerBase
                 : "Una inspección cerrada y firmada no se puede anular"));
         }
 
-        if (!PuedeModificar(inspeccion))
+        // El [Authorize] ya lo exige; se repite por quien llame al controlador sin pasar por él.
+        if (!_currentUser.IsInRole(RolesSistema.Administrador))
         {
             return Forbid();
         }
@@ -489,7 +490,8 @@ public class InspeccionesController : ControllerBase
     /// Valida obligatorias (regla 3 del SRS), novedad→observación (regla 4), y la firma PNG;
     /// después calcula Resultado y FirmaHash y deja la inspección inmutable (regla 6). Con
     /// novedades queda NovedadesPendientes y con resultado "Pendiente": se crea una novedad por cada
-    /// "No", se avisa por correo a la mesa de ayuda y pasa sola a Cerrada al resolverse la última.
+    /// "No", se avisa a la mesa de ayuda con un solo correo con todas ellas y pasa sola a Cerrada al
+    /// resolverse la última.
     /// </summary>
     [HttpPost("{id}/firmar")]
     [Authorize(Roles = RolesSistema.Inspeccionan)]
@@ -589,8 +591,12 @@ public class InspeccionesController : ControllerBase
             return Conflict(ApiResponse<InspeccionResultadoDto>.ErrorResponse(mensaje));
         }
 
-        // El correo sale después de confirmar la firma y no la detiene si falla.
-        _notificador?.Encolar(novedades.Select(novedad => novedad.IdNovedad));
+        // El correo sale después de confirmar la firma y no la detiene si falla. Uno solo por
+        // inspección, con todas sus novedades.
+        if (novedades.Count > 0)
+        {
+            _notificador?.Encolar(inspeccion.IdInspeccion);
+        }
 
         return Ok(ApiResponse<InspeccionResultadoDto>.SuccessResponse(
             MapToResultadoDto(inspeccion),

@@ -1091,24 +1091,6 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<InspeccionDto>?> UpdateInspeccionAsync(long id, UpdateInspeccionDto updateDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsJsonAsync($"api/inspecciones/{id}", updateDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<InspeccionDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating inspeccion: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
-
 
     public async Task<ApiResponse<PagedResultDto<EvidenciaDto>>?> GetEvidenciasAsync(int page = 1, int pageSize = 10,
         string? search = null, long? idInspeccion = null)

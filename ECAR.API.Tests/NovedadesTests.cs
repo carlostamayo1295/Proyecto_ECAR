@@ -55,10 +55,11 @@ public class NovedadesTests
         public Task EliminarAsync(string rutaRelativa) => Task.CompletedTask;
     }
 
+    /// <summary>Guarda las inspecciones cuyo correo se puso en cola.</summary>
     private sealed class NotificadorFalso : INotificadorNovedades
     {
         public List<long> Encolados { get; } = new();
-        public void Encolar(IEnumerable<long> idsNovedad) => Encolados.AddRange(idsNovedad);
+        public void Encolar(long idInspeccion) => Encolados.Add(idInspeccion);
     }
 
     /// <summary>Ejecuta <see cref="AlGuardarNovedades"/> justo antes de guardar novedades nuevas.</summary>
@@ -232,8 +233,8 @@ public class NovedadesTests
             Assert.Null(n.FechaNotificacion);
         });
 
-        // Un correo por novedad, en cola después de guardar.
-        Assert.Equal(novedades.Select(n => n.IdNovedad), e.Notificador.Encolados);
+        // Un solo correo para la inspección, con sus dos novedades, en cola después de guardar.
+        Assert.Equal([inspeccion.IdInspeccion], e.Notificador.Encolados);
     }
 
     [Fact]
@@ -264,7 +265,7 @@ public class NovedadesTests
 
         Assert.IsType<ConflictObjectResult>(segunda.Result);
         Assert.Equal(2, await e.Db.Novedades.CountAsync());
-        Assert.Equal(2, e.Notificador.Encolados.Count);
+        Assert.Equal([inspeccion.IdInspeccion], e.Notificador.Encolados);
     }
 
     [Fact]
@@ -556,18 +557,20 @@ public class NovedadesTests
     }
 
     [Fact]
-    public async Task Reenviar_el_correo_lo_vuelve_a_poner_en_cola()
+    public async Task Reenviar_el_correo_pone_en_cola_el_de_su_inspeccion()
     {
         var e = await SeedAsync();
-        var (_, novedades) = await FirmadaConDosNovedadesAsync(e);
+        var (inspeccion, novedades) = await FirmadaConDosNovedadesAsync(e);
         e.Notificador.Encolados.Clear();
 
-        var reenviar = await Novedades(e, e.Admin, "Administrador").Notificar(novedades[0].IdNovedad);
+        var reenviar = await Novedades(e, e.Admin, "Administrador").Notificar(novedades[1].IdNovedad);
         var inexistente = await Novedades(e, e.Admin, "Administrador").Notificar(999);
 
         Assert.IsType<OkObjectResult>(reenviar.Result);
+        Assert.Contains($"inspección #{inspeccion.IdInspeccion}", Respuesta<bool>(reenviar).Message);
         Assert.IsType<NotFoundObjectResult>(inexistente.Result);
-        Assert.Equal([novedades[0].IdNovedad], e.Notificador.Encolados);
+        // El correo es el de la inspección, con todas sus novedades, no el de esa sola.
+        Assert.Equal([inspeccion.IdInspeccion], e.Notificador.Encolados);
     }
 
     // ------------------------------------------------------------------ consultar la inspección

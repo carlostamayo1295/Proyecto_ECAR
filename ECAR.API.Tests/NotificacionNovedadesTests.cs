@@ -15,8 +15,9 @@ using Xunit;
 namespace ECAR.API.Tests;
 
 /// <summary>
-/// Correo de cada novedad a la mesa de ayuda: qué lleva, cómo queda constancia de que salió (o de
-/// por qué no) y que sin credenciales SMTP el mensaje se guarda como .eml en lugar de enviarse.
+/// Correo de las novedades a la mesa de ayuda, uno solo por inspección: qué lleva, cómo queda
+/// constancia de que salió (o de por qué no) y que sin credenciales SMTP el mensaje se guarda como
+/// .eml en lugar de enviarse.
 /// </summary>
 public class NotificacionNovedadesTests
 {
@@ -50,7 +51,10 @@ public class NotificacionNovedadesTests
         return opciones;
     }
 
-    private static async Task<(ECARDbContext Db, Novedad Novedad)> SeedAsync()
+    private sealed record Escenario(ECARDbContext Db, Inspeccion Inspeccion, List<Novedad> Novedades);
+
+    /// <summary>Una inspección firmada con dos novedades (dos respuestas «No»).</summary>
+    private static async Task<Escenario> SeedAsync()
     {
         var db = new ECARDbContext(new DbContextOptionsBuilder<ECARDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         var inspector = new Usuario { Nombre = "Ana Inspectora", Correo = "ana@ecar.test", PasswordHash = "x", Activo = true };
@@ -59,32 +63,54 @@ public class NotificacionNovedadesTests
             CodigoInterno = "BAL-1", ActivoFijo = "AF-1", NombreEquipo = "Balanza", Criticidad = Criticidades.Alta, Activo = true,
             Ubicacion = new Ubicacion { Planta = "Planta 1", Area = "Pesaje" }
         };
-        var pregunta = new PreguntaChecklist { Pregunta = "¿Está limpia?", TipoRespuesta = TiposRespuesta.SiNo, Orden = 1 };
-        var checklist = new Checklist { Nombre = "Diario", Version = "1.0", Preguntas = [pregunta] };
+        var limpia = new PreguntaChecklist { Pregunta = "¿Está limpia?", TipoRespuesta = TiposRespuesta.SiNo, Orden = 1 };
+        var nivelada = new PreguntaChecklist { Pregunta = "¿Está nivelada?", TipoRespuesta = TiposRespuesta.SiNo, Orden = 2 };
+        var checklist = new Checklist { Nombre = "Diario", Version = "1.0", Preguntas = [limpia, nivelada] };
         db.AddRange(inspector, equipo, checklist);
         await db.SaveChangesAsync();
 
-        var respuesta = new RespuestaInspeccion { IdPregunta = pregunta.IdPregunta, Respuesta = "No", Observacion = "Polvo <b>y</b> grasa" };
+        var sucia = new RespuestaInspeccion { IdPregunta = limpia.IdPregunta, Respuesta = "No", Observacion = "Polvo <b>y</b> grasa" };
+        var torcida = new RespuestaInspeccion { IdPregunta = nivelada.IdPregunta, Respuesta = "No", Observacion = "Burbuja corrida" };
+        var firmada = new DateTime(2026, 10, 19, 15, 30, 0, DateTimeKind.Utc);
         var inspeccion = new Inspeccion
         {
             IdEquipo = equipo.IdEquipo, IdChecklist = checklist.IdChecklist, IdUsuario = inspector.IdUsuario,
-            FechaInspeccion = new DateTime(2026, 10, 19, 15, 0, 0, DateTimeKind.Utc), Estado = InspeccionEstados.NovedadesPendientes,
-            Respuestas = [respuesta]
+            FechaInspeccion = new DateTime(2026, 10, 19, 15, 0, 0, DateTimeKind.Utc), FechaCierre = firmada,
+            Estado = InspeccionEstados.NovedadesPendientes, Respuestas = [sucia, torcida]
         };
         db.Inspecciones.Add(inspeccion);
         await db.SaveChangesAsync();
 
-        var novedad = new Novedad
+        var novedades = new List<Novedad>
         {
-            IdInspeccion = inspeccion.IdInspeccion, IdPregunta = pregunta.IdPregunta, IdRespuesta = respuesta.IdRespuesta,
-            Descripcion = "¿Está limpia?: Polvo <b>y</b> grasa", Criticidad = Criticidades.Alta,
-            FechaRegistro = new DateTime(2026, 10, 19, 15, 30, 0, DateTimeKind.Utc), IdUsuarioRegistro = inspector.IdUsuario
+            new()
+            {
+                IdInspeccion = inspeccion.IdInspeccion, IdPregunta = limpia.IdPregunta, IdRespuesta = sucia.IdRespuesta,
+                Descripcion = "¿Está limpia?: Polvo <b>y</b> grasa", Criticidad = Criticidades.Alta,
+                FechaRegistro = firmada, IdUsuarioRegistro = inspector.IdUsuario
+            },
+            new()
+            {
+                IdInspeccion = inspeccion.IdInspeccion, IdPregunta = nivelada.IdPregunta, IdRespuesta = torcida.IdRespuesta,
+                Descripcion = "¿Está nivelada?: Burbuja corrida", Criticidad = Criticidades.Alta,
+                FechaRegistro = firmada, IdUsuarioRegistro = inspector.IdUsuario
+            }
         };
-        db.Novedades.Add(novedad);
+        db.Novedades.AddRange(novedades);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
-        return (db, novedad);
+        return new Escenario(db, inspeccion, novedades);
     }
+
+    /// <summary>La inspección con lo que necesita el correo, como la carga NotificacionNovedades.</summary>
+    private static Task<Inspeccion> CompletaAsync(Escenario e) =>
+        e.Db.Inspecciones
+            .Include(i => i.Equipo).ThenInclude(eq => eq.Ubicacion)
+            .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
+            .Include(i => i.Novedades).ThenInclude(n => n.Pregunta)
+            .Include(i => i.Novedades).ThenInclude(n => n.Respuesta)
+            .SingleAsync(i => i.IdInspeccion == e.Inspeccion.IdInspeccion);
 
     private static NotificacionNovedades Servicio(ECARDbContext db, IEnviadorCorreo enviador, CorreoOptions? opciones = null) =>
         new(db, enviador, Options.Create(opciones ?? Opciones()),
@@ -92,23 +118,23 @@ public class NotificacionNovedadesTests
             NullLogger<NotificacionNovedades>.Instance);
 
     [Fact]
-    public async Task El_correo_lleva_los_datos_de_la_novedad_y_el_enlace()
+    public async Task El_correo_es_uno_por_inspeccion_con_todas_sus_novedades_y_el_enlace()
     {
-        var (db, novedad) = await SeedAsync();
-        var completa = await db.Novedades
-            .Include(n => n.Pregunta).Include(n => n.Respuesta)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Equipo).ThenInclude(e => e.Ubicacion)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Usuario)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Checklist)
-            .SingleAsync();
+        var e = await SeedAsync();
+        var inspeccion = await CompletaAsync(e);
+        var id = inspeccion.IdInspeccion;
 
-        using var mensaje = CorreoNovedad.Construir(completa, Opciones(), "https://ecar.test/");
+        using var mensaje = CorreoNovedad.Construir(inspeccion, inspeccion.Novedades.OrderBy(n => n.IdNovedad).ToList(),
+            Opciones(), "https://ecar.test/");
 
-        Assert.Equal($"[ECAR] Novedad #{novedad.IdNovedad} - BAL-1 Balanza", mensaje.Subject);
+        Assert.Equal($"[ECAR] Inspección #{id} - 2 novedad(es) - BAL-1 Balanza", mensaje.Subject);
         Assert.Equal(Destinatario, mensaje.To.Single().Address);
         Assert.Equal("ecar@ecar.test", mensaje.From!.Address);
-        foreach (var dato in new[] { "BAL-1 - Balanza", "AF-1", "Planta 1 - Pesaje", "Alta", "¿Está limpia?", "Polvo <b>y</b> grasa",
-                     "Ana Inspectora", "Diario v. 1.0", "19/10/2026 10:30", $"https://ecar.test/novedades/{novedad.IdNovedad}" })
+        foreach (var dato in new[] { "Se registraron 2 novedades", $"#{id} (Diario v. 1.0)", "BAL-1 - Balanza", "AF-1",
+                     "Planta 1 - Pesaje", "Alta", "Ana Inspectora", "19/10/2026 10:30",
+                     $"Novedad #{e.Novedades[0].IdNovedad} (Pendiente)", "¿Está limpia?", "Polvo <b>y</b> grasa",
+                     $"Novedad #{e.Novedades[1].IdNovedad} (Pendiente)", "¿Está nivelada?", "Burbuja corrida",
+                     $"https://ecar.test/novedades?inspeccion={id}" })
         {
             Assert.Contains(dato, mensaje.Body);
         }
@@ -117,65 +143,85 @@ public class NotificacionNovedadesTests
         using var html = new StreamReader(mensaje.AlternateViews.Single().ContentStream);
         var cuerpo = await html.ReadToEndAsync();
         Assert.Contains("Polvo &lt;b&gt;y&lt;/b&gt; grasa", cuerpo);
+        Assert.Contains("Burbuja corrida", cuerpo);
         Assert.DoesNotContain("<b>y</b>", cuerpo);
     }
 
     [Fact]
     public async Task Sin_cuenta_configurada_el_remitente_es_el_de_por_defecto()
     {
-        var (db, _) = await SeedAsync();
-        var completa = await db.Novedades
-            .Include(n => n.Pregunta).Include(n => n.Respuesta)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Equipo).ThenInclude(e => e.Ubicacion)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Usuario)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Checklist)
-            .SingleAsync();
+        var e = await SeedAsync();
+        var inspeccion = await CompletaAsync(e);
 
         // Así quedan Remitente y Usuario en appsettings.json: cadenas vacías, no null.
-        using var mensaje = CorreoNovedad.Construir(completa, Opciones(o => { o.Usuario = ""; o.Remitente = " "; }), null);
+        using var mensaje = CorreoNovedad.Construir(inspeccion, inspeccion.Novedades.ToList(),
+            Opciones(o => { o.Usuario = ""; o.Remitente = " "; }), null);
 
         Assert.Equal(CorreoNovedad.RemitentePorDefecto, mensaje.From!.Address);
-        Assert.DoesNotContain("/novedades/", mensaje.Body);
+        Assert.DoesNotContain("/novedades", mensaje.Body);
     }
 
     [Fact]
-    public async Task Si_el_correo_sale_se_anota_la_fecha_y_queda_en_la_auditoria()
+    public async Task Si_el_correo_sale_es_uno_solo_se_anota_la_fecha_en_todas_y_queda_en_la_auditoria()
     {
-        var (db, novedad) = await SeedAsync();
+        var e = await SeedAsync();
         var enviador = new EnviadorFalso(_ => ResultadoEnvio.Enviado);
 
-        var enviado = await Servicio(db, enviador).NotificarAsync(novedad.IdNovedad);
+        var enviado = await Servicio(e.Db, enviador).NotificarAsync(e.Inspeccion.IdInspeccion);
 
         Assert.True(enviado);
         Assert.Single(enviador.Enviados);
-        Assert.NotNull((await db.Novedades.AsNoTracking().SingleAsync()).FechaNotificacion);
-        var evento = await db.Auditoria.AsNoTracking().SingleAsync(a => a.Accion == AuditoriaAcciones.NotificacionEnviada);
-        Assert.Equal(novedad.IdNovedad, evento.RegistroId);
+        Assert.All(await e.Db.Novedades.AsNoTracking().ToListAsync(), n => Assert.NotNull(n.FechaNotificacion));
+        var evento = await e.Db.Auditoria.AsNoTracking().SingleAsync(a => a.Accion == AuditoriaAcciones.NotificacionEnviada);
+        Assert.Equal(e.Inspeccion.IdInspeccion, evento.RegistroId);
         Assert.Contains(Destinatario, evento.ValorNuevo);
+        Assert.Contains($"[{e.Novedades[0].IdNovedad},{e.Novedades[1].IdNovedad}]", evento.ValorNuevo);
     }
 
     [Fact]
-    public async Task Sin_credenciales_el_mensaje_no_sale_y_la_novedad_queda_sin_enviar()
+    public async Task Sin_credenciales_el_mensaje_no_sale_y_las_novedades_quedan_sin_enviar()
     {
-        var (db, novedad) = await SeedAsync();
+        var e = await SeedAsync();
         var enviador = new EnviadorFalso(_ => ResultadoEnvio.GuardadoEnCarpeta);
 
-        var enviado = await Servicio(db, enviador).NotificarAsync(novedad.IdNovedad);
+        var enviado = await Servicio(e.Db, enviador).NotificarAsync(e.Inspeccion.IdInspeccion);
 
         Assert.False(enviado);
-        Assert.Null((await db.Novedades.AsNoTracking().SingleAsync()).FechaNotificacion);
-        var evento = await db.Auditoria.AsNoTracking().SingleAsync(a => a.Accion == AuditoriaAcciones.NotificacionFallida);
+        Assert.Single(enviador.Enviados);
+        Assert.All(await e.Db.Novedades.AsNoTracking().ToListAsync(), n => Assert.Null(n.FechaNotificacion));
+        var evento = await e.Db.Auditoria.AsNoTracking().SingleAsync(a => a.Accion == AuditoriaAcciones.NotificacionFallida);
+        Assert.Equal(e.Inspeccion.IdInspeccion, evento.RegistroId);
         Assert.Contains("Correo:Usuario", evento.ValorNuevo);
+    }
+
+    [Fact]
+    public async Task Una_inspeccion_sin_novedades_no_envia_nada()
+    {
+        var e = await SeedAsync();
+        var sinNovedades = new Inspeccion
+        {
+            IdEquipo = e.Inspeccion.IdEquipo, IdChecklist = e.Inspeccion.IdChecklist, IdUsuario = e.Inspeccion.IdUsuario,
+            FechaInspeccion = DateTime.UtcNow, Estado = InspeccionEstados.Cerrada
+        };
+        e.Db.Inspecciones.Add(sinNovedades);
+        await e.Db.SaveChangesAsync();
+        var enviador = new EnviadorFalso(_ => ResultadoEnvio.Enviado);
+
+        var enviado = await Servicio(e.Db, enviador).NotificarAsync(sinNovedades.IdInspeccion);
+
+        Assert.False(enviado);
+        Assert.Empty(enviador.Enviados);
     }
 
     [Fact]
     public async Task Si_el_servidor_falla_no_se_lanza_la_excepcion_y_queda_el_motivo()
     {
-        var (db, novedad) = await SeedAsync();
+        var e = await SeedAsync();
+        var db = e.Db;
         var enviador = new EnviadorFalso(_ => throw new SmtpException("Servidor no disponible"));
 
-        var enviado = await Servicio(db, enviador).NotificarAsync(novedad.IdNovedad);
-        var sinDestinatarios = await Servicio(db, enviador, Opciones(o => o.Destinatarios = [])).NotificarAsync(novedad.IdNovedad);
+        var enviado = await Servicio(db, enviador).NotificarAsync(e.Inspeccion.IdInspeccion);
+        var sinDestinatarios = await Servicio(db, enviador, Opciones(o => o.Destinatarios = [])).NotificarAsync(e.Inspeccion.IdInspeccion);
         var inexistente = await Servicio(db, enviador).NotificarAsync(999);
 
         Assert.False(enviado);
@@ -223,13 +269,13 @@ public class NotificacionNovedadesTests
     [Fact]
     public async Task Con_las_notificaciones_apagadas_no_se_envia_ni_se_registra_nada()
     {
-        var (db, novedad) = await SeedAsync();
+        var e = await SeedAsync();
         var enviador = new EnviadorFalso(_ => ResultadoEnvio.Enviado);
 
-        var enviado = await Servicio(db, enviador, Opciones(o => o.Habilitado = false)).NotificarAsync(novedad.IdNovedad);
+        var enviado = await Servicio(e.Db, enviador, Opciones(o => o.Habilitado = false)).NotificarAsync(e.Inspeccion.IdInspeccion);
 
         Assert.False(enviado);
         Assert.Empty(enviador.Enviados);
-        Assert.False(await db.Auditoria.AnyAsync(a => a.Accion == AuditoriaAcciones.NotificacionFallida));
+        Assert.False(await e.Db.Auditoria.AnyAsync(a => a.Accion == AuditoriaAcciones.NotificacionFallida));
     }
 }

@@ -19,8 +19,8 @@ namespace ECAR.API.Tests;
 
 /// <summary>
 /// Fase 2 de la anulación: POST api/inspecciones/{id}/anular sustituye al borrado. Solo se anula
-/// una inspección EnCurso, con motivo, por el Administrador o su inspector; después la inspección
-/// es inmutable como una cerrada.
+/// una inspección EnCurso, con motivo, y solo el Administrador (desde el 22/10/2026; antes también su
+/// inspector); después la inspección es inmutable como una cerrada.
 /// </summary>
 public class InspeccionesAnulacionTests
 {
@@ -174,7 +174,7 @@ public class InspeccionesAnulacionTests
     private static async Task<Escenario> AnuladaAsync()
     {
         var e = await SeedAsync();
-        Assert.IsType<OkObjectResult>((await AnularAsync(e, e.Tecnico)).Result);
+        Assert.IsType<OkObjectResult>((await AnularAsync(e, e.Admin, rol: RolesSistema.Administrador)).Result);
         e.Context.ChangeTracker.Clear();
         return e;
     }
@@ -185,23 +185,23 @@ public class InspeccionesAnulacionTests
     // ------------------------------------------------------------------ anular
 
     [Fact]
-    public async Task Anular_ElInspectorConMotivo_LaDejaAnuladaConMotivoFechaYUsuario()
+    public async Task Anular_ElAdministradorConMotivo_LaDejaAnuladaConMotivoFechaYUsuario()
     {
         var e = await SeedAsync();
 
-        var action = await AnularAsync(e, e.Tecnico, motivo: "  " + MotivoValido + "  ");
+        var action = await AnularAsync(e, e.Admin, motivo: "  " + MotivoValido + "  ", rol: RolesSistema.Administrador);
 
         var dto = Assert.IsType<ApiResponse<InspeccionDto>>(Assert.IsType<OkObjectResult>(action.Result).Value).Data!;
         Assert.Equal(InspeccionEstados.Anulada, dto.Estado);
         Assert.Equal(MotivoValido, dto.MotivoAnulacion);
-        Assert.Equal(e.Tecnico.IdUsuario, dto.IdUsuarioAnulacion);
-        Assert.Equal("Ana Técnica", dto.NombreUsuarioAnulacion);
+        Assert.Equal(e.Admin.IdUsuario, dto.IdUsuarioAnulacion);
+        Assert.Equal("Admin", dto.NombreUsuarioAnulacion);
         Assert.NotNull(dto.FechaAnulacion);
 
         var guardada = await GuardadaAsync(e);
         Assert.Equal(InspeccionEstados.Anulada, guardada.Estado);
         Assert.Equal(MotivoValido, guardada.MotivoAnulacion);
-        Assert.Equal(e.Tecnico.IdUsuario, guardada.IdUsuarioAnulacion);
+        Assert.Equal(e.Admin.IdUsuario, guardada.IdUsuarioAnulacion);
         Assert.NotNull(guardada.FechaAnulacion);
     }
 
@@ -221,7 +221,7 @@ public class InspeccionesAnulacionTests
     {
         var e = await SeedAsync();
 
-        await AnularAsync(e, e.Tecnico);
+        await AnularAsync(e, e.Admin, rol: RolesSistema.Administrador);
 
         var fila = await e.Context.Auditoria.AsNoTracking()
             .Where(a => a.Tabla == "Inspecciones" && a.RegistroId == e.Inspeccion.IdInspeccion)
@@ -250,7 +250,7 @@ public class InspeccionesAnulacionTests
     {
         var e = await SeedAsync();
 
-        var action = await AnularAsync(e, e.Tecnico, motivo);
+        var action = await AnularAsync(e, e.Admin, motivo, RolesSistema.Administrador);
 
         Assert.IsType<BadRequestObjectResult>(action.Result);
         Assert.Equal(InspeccionesController.MensajeMotivoRequerido, Mensaje(action));
@@ -275,15 +275,30 @@ public class InspeccionesAnulacionTests
         Assert.Null(guardada.IdUsuarioAnulacion);
     }
 
-    [Fact]
-    public async Task Anular_UnTecnicoQueNoEsElInspector_Devuelve403()
+    [Theory]
+    [InlineData(true, RolesSistema.Operador)]
+    [InlineData(true, RolesSistema.Estandar)]
+    [InlineData(false, RolesSistema.Operador)]
+    public async Task Anular_QuienNoEsAdministrador_Devuelve403AunqueSeaElInspector(bool esElInspector, string rol)
     {
         var e = await SeedAsync();
 
-        var action = await AnularAsync(e, e.OtroTecnico);
+        var action = await AnularAsync(e, esElInspector ? e.Tecnico : e.OtroTecnico, rol: rol);
 
         Assert.IsType<ForbidResult>(action.Result);
-        Assert.Equal(InspeccionEstados.EnCurso, (await GuardadaAsync(e)).Estado);
+        var guardada = await GuardadaAsync(e);
+        Assert.Equal(InspeccionEstados.EnCurso, guardada.Estado);
+        Assert.Null(guardada.MotivoAnulacion);
+    }
+
+    [Fact]
+    public void Anular_SoloLoAutorizaElRolAdministrador()
+    {
+        var atributo = typeof(InspeccionesController).GetMethod(nameof(InspeccionesController.AnularInspeccion))!
+            .GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), false)
+            .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Single();
+
+        Assert.Equal(RolesSistema.Administrador, atributo.Roles);
     }
 
     [Fact]
@@ -302,7 +317,7 @@ public class InspeccionesAnulacionTests
         var e = await SeedAsync();
         e.Interceptor.AlGuardar = () => throw new DbUpdateException("Fallo simulado al guardar");
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => AnularAsync(e, e.Tecnico));
+        await Assert.ThrowsAsync<DbUpdateException>(() => AnularAsync(e, e.Admin, rol: RolesSistema.Administrador));
 
         await using var lectura = NuevoContexto(e.NombreBase);
         var guardada = await lectura.Inspecciones.SingleAsync(i => i.IdInspeccion == e.Inspeccion.IdInspeccion);
@@ -431,7 +446,7 @@ public class InspeccionesAnulacionTests
         var e = await SeedAsync();
         var antes = await InstantaneaAsync(e);
 
-        await AnularAsync(e, e.Tecnico);
+        await AnularAsync(e, e.Admin, rol: RolesSistema.Administrador);
         e.Context.ChangeTracker.Clear();
 
         Assert.Equal(antes, await InstantaneaAsync(e));
@@ -484,7 +499,7 @@ public class InspeccionesAnulacionTests
         var anulada = pagina.Data.Single(i => i.IdInspeccion == e.Inspeccion.IdInspeccion);
         Assert.Equal(InspeccionEstados.Anulada, anulada.Estado);
         Assert.Equal(MotivoValido, anulada.MotivoAnulacion);
-        Assert.Equal("Ana Técnica", anulada.NombreUsuarioAnulacion);
+        Assert.Equal("Admin", anulada.NombreUsuarioAnulacion);
         Assert.NotNull(anulada.FechaAnulacion);
         Assert.Equal(1, anulada.TotalEvidencias);
         Assert.Equal(0, anulada.TotalNovedades);
@@ -515,8 +530,8 @@ public class InspeccionesAnulacionTests
         var dto = Assert.IsType<ApiResponse<InspeccionDto>>(Assert.IsType<OkObjectResult>(action.Result).Value).Data!;
         Assert.Equal(InspeccionEstados.Anulada, dto.Estado);
         Assert.Equal(MotivoValido, dto.MotivoAnulacion);
-        Assert.Equal(e.Tecnico.IdUsuario, dto.IdUsuarioAnulacion);
-        Assert.Equal("Ana Técnica", dto.NombreUsuarioAnulacion);
+        Assert.Equal(e.Admin.IdUsuario, dto.IdUsuarioAnulacion);
+        Assert.Equal("Admin", dto.NombreUsuarioAnulacion);
     }
 
     [Theory]
@@ -566,7 +581,7 @@ public class InspeccionesAnulacionTests
         var e = await SeedAsync();
         e.Interceptor.AlGuardar = OtraPeticionLaDejaEn(e, InspeccionEstados.Cerrada);
 
-        var action = await AnularAsync(e, e.Tecnico);
+        var action = await AnularAsync(e, e.Admin, rol: RolesSistema.Administrador);
 
         Assert.IsType<ConflictObjectResult>(action.Result);
         Assert.Equal(InmutabilidadInspeccion.MensajeCerrada, Mensaje(action));

@@ -32,10 +32,14 @@ public static class AuditoriaAcciones
     public const string Exportacion = "Exportacion";
     public const string VerificacionIntegridad = "VerificacionIntegridad";
 
-    /// <summary>Salió el correo de una novedad a la mesa de ayuda (RegistroId = la novedad).</summary>
+    /// <summary>
+    /// Salió el correo de las novedades de una inspección a la mesa de ayuda (RegistroId = la
+    /// inspección; el detalle lista las novedades). Antes del 22/10/2026 era uno por novedad
+    /// (RegistroId = la novedad).
+    /// </summary>
     public const string NotificacionEnviada = "NotificacionEnviada";
 
-    /// <summary>No se pudo enviar el correo de una novedad; el Administrador puede reenviarlo.</summary>
+    /// <summary>No se pudo enviar el correo de una inspección; el Administrador puede reenviarlo.</summary>
     public const string NotificacionFallida = "NotificacionFallida";
 
     public static readonly IReadOnlyList<string> Todas =

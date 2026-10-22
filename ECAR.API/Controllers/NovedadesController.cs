@@ -327,19 +327,25 @@ public class NovedadesController : ControllerBase
                 : "La resolución fue alterada después de firmarse"));
     }
 
-    /// <summary>POST api/novedades/{id}/notificar: el Administrador vuelve a poner en cola el correo.</summary>
+    /// <summary>
+    /// POST api/novedades/{id}/notificar: el Administrador vuelve a poner en cola el correo. El correo
+    /// es el de la inspección de la novedad, con todas sus novedades.
+    /// </summary>
     [HttpPost("{id:long}/notificar")]
     [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> Notificar(long id)
     {
-        if (!await _context.Novedades.AnyAsync(n => n.IdNovedad == id))
+        var idInspeccion = await _context.Novedades.Where(n => n.IdNovedad == id)
+            .Select(n => (long?)n.IdInspeccion).FirstOrDefaultAsync();
+        if (idInspeccion == null)
         {
             return NotFound(ApiResponse<bool>.ErrorResponse("Novedad no encontrada"));
         }
 
-        _notificador?.Encolar([id]);
+        _notificador?.Encolar(idInspeccion.Value);
         return Ok(ApiResponse<bool>.SuccessResponse(true,
-            "El correo de la novedad se está enviando; el estado del envío aparece en el detalle en unos segundos"));
+            $"El correo de la inspección #{idInspeccion}, con todas sus novedades, se está enviando; " +
+            "el estado del envío aparece en el detalle en unos segundos"));
     }
 
     /// <summary>

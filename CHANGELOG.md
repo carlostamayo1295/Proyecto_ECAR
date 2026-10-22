@@ -37,7 +37,7 @@ horaria de Colombia.
   lectura, las inspecciones de otros que tienen novedades (respuestas, fotos, firma y registro PDF), desde el
   detalle de la novedad («Ver la inspección completa»). Las que están en curso o no tuvieron novedades siguen
   siendo solo de quien las ejecuta, y su listado de inspecciones sigue mostrando solo las suyas.
-- **Correo a la mesa de ayuda** por cada novedad (`Correo:Destinatarios`), en segundo plano: si el correo falla,
+- **Correo a la mesa de ayuda** de las novedades (`Correo:Destinatarios`; uno por inspección desde el 22/10), en segundo plano: si el correo falla,
   la firma no se revierte; queda en la auditoría (`NotificacionEnviada` / `NotificacionFallida`) y el Administrador
   puede reenviarlo. Sin `Correo:Usuario` y `Correo:Password` (user-secrets) el mensaje se guarda como `.eml` en
   `Correo:CarpetaSalida` y no sale.
@@ -68,6 +68,14 @@ horaria de Colombia.
   círculo negro. Se quitó de `index.html`: mientras arranca solo se ve el fondo.
 - **Sin el botón «API Scalar»** en la barra superior (22/10/2026). La documentación del API sigue en el API
   (`Scalar.AspNetCore`, `/scalar/v1`, solo en desarrollo).
+- **Un solo correo por inspección** (22/10/2026): al firmar una inspección con novedades sale un correo a la mesa de
+  ayuda con todas ellas (pregunta, observación del inspector y estado de cada una), no uno por novedad. La cola lleva
+  inspecciones; «Reenviar» en el detalle de una novedad manda el correo de su inspección. En la auditoría,
+  `NotificacionEnviada` / `NotificacionFallida` tienen como `RegistroId` la inspección y listan sus novedades.
+- **Inspecciones sin «Editar»** (22/10/2026): se completan y se firman en la ejecución («Continuar»). El formulario
+  de inspección queda solo para el registro manual del Administrador. `PUT /api/inspecciones/{id}` sigue en el API.
+- **Anular una inspección es solo del Administrador** (22/10/2026), en la pantalla y en el API
+  (`POST /api/inspecciones/{id}/anular`); antes también la anulaba su inspector.
 
 ### Añadido
 

@@ -119,16 +119,11 @@
                                 StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => OpenViewDialog(context)" Class="action-button">
                                 Ver
                             </MudButton>
-                            @if (puedeEjecutar && context.Estado != InspeccionEstados.Anulada)
-                            {
-                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                    StartIcon="@Icons.Material.Filled.Edit" OnClick="() => OpenEditDialog(context)" Class="action-button">
-                                    Editar
-                                </MudButton>
-                            }
-                            @* Fase 4 (§3.6): una inspección en curso ya no se borra, se anula con motivo y se
-                               conserva con sus respuestas y fotos. Una cerrada no se toca (regla 6). *@
-                            @if (puedeEjecutar && context.Estado == InspeccionEstados.EnCurso)
+                            @* Sin «Editar» (22/10/2026): la inspección se completa en la ejecución («Continuar»).
+                               Fase 4 (§3.6): una inspección en curso no se borra, se anula con motivo y se
+                               conserva con sus respuestas y fotos; solo la anula el Administrador, igual que
+                               el API. Una cerrada no se toca (regla 6). *@
+                            @if (esAdmin && context.Estado == InspeccionEstados.EnCurso)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.Block" OnClick="() => AnularInspeccion(context)" Class="action-button">
@@ -161,7 +156,7 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
-    // Administrador, Operador y Estándar ejecutan y editan; el Supervisor solo consulta.
+    // Administrador, Operador y Estándar ejecutan; el Supervisor solo consulta. Anular es del Administrador.
     private bool esAdmin;
     private bool puedeEjecutar;
 
@@ -259,18 +254,6 @@
         }
 
         var dialog = await DialogService.ShowAsync<InspeccionModal>("Registrar Nueva Inspección");
-        var result = await dialog.Result;
-
-        if (result is not null && !result.Canceled)
-        {
-            await LoadInspeccionesAsync();
-        }
-    }
-
-    private async Task OpenEditDialog(InspeccionDto inspeccion)
-    {
-        var parameters = new DialogParameters { ["Inspeccion"] = inspeccion };
-        var dialog = await DialogService.ShowAsync<InspeccionModal>("Editar Inspección", parameters);
         var result = await dialog.Result;
 
         if (result is not null && !result.Canceled)

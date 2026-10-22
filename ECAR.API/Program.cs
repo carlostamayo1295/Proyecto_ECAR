@@ -123,10 +123,11 @@ builder.Services.AddOptions<ECAR.API.Configuration.FirmaOptions>()
 builder.Services.AddSingleton<PoliticaPasswords>();
 builder.Services.AddScoped<VerificadorIntegridad>();
 
-// Correo de cada novedad a la mesa de ayuda (SRS v1.1, regla 4). Firmar solo deja las novedades en
-// la cola; un servicio en segundo plano las envía, así que un correo caído no detiene ni revierte
-// la firma. Sin Correo:Usuario y Correo:Password (user-secrets) los mensajes se guardan como .eml
-// en Correo:CarpetaSalida y la novedad queda "sin enviar" para reenviarla después.
+// Correo a la mesa de ayuda (SRS v1.1, regla 4): uno por inspección con novedades, con todas
+// ellas. Firmar solo deja la inspección en la cola; un servicio en segundo plano envía el correo,
+// así que un correo caído no detiene ni revierte la firma. Sin Correo:Usuario y Correo:Password
+// (user-secrets) los mensajes se guardan como .eml en Correo:CarpetaSalida y las novedades quedan
+// "sin enviar" para reenviar el correo después.
 builder.Services.AddOptions<ECAR.API.Configuration.CorreoOptions>()
     .Bind(builder.Configuration.GetSection(ECAR.API.Configuration.CorreoOptions.SectionName));
 builder.Services.AddSingleton<ColaNotificaciones>();

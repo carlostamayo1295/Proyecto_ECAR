@@ -105,8 +105,9 @@ public class BorradoInspeccionTests
         return inspeccion;
     }
 
-    private static InspeccionesController Controlador(Escenario escenario, IEvidenciaStorage storage) =>
-        Fabrica.Inspecciones(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Operador"), storage);
+    private static InspeccionesController Controlador(Escenario escenario, IEvidenciaStorage storage,
+        string rol = RolesSistema.Operador) =>
+        Fabrica.Inspecciones(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, rol), storage);
 
     private static readonly MotivoDto Motivo = new() { Motivo = "Se abrió sobre el equipo equivocado" };
 
@@ -121,7 +122,9 @@ public class BorradoInspeccionTests
             "2026/10/1/a.jpg", "2026/10/1/b.jpg");
         var storage = new FakeStorage();
 
-        var action = await Controlador(escenario, storage).AnularInspeccion(inspeccion.IdInspeccion, Motivo);
+        // Solo el Administrador anula (22/10/2026).
+        var action = await Controlador(escenario, storage, RolesSistema.Administrador)
+            .AnularInspeccion(inspeccion.IdInspeccion, Motivo);
 
         Assert.IsType<OkObjectResult>(action.Result);
         Assert.Empty(storage.Eliminados); // §3.6: nada se borra

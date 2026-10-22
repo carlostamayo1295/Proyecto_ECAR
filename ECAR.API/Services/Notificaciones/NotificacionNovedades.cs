@@ -8,9 +8,9 @@ using Microsoft.Extensions.Options;
 namespace ECAR.API.Services.Notificaciones;
 
 /// <summary>
-/// Envía el correo de una novedad y deja constancia en la auditoría: NotificacionEnviada (y la
-/// fecha en la novedad) si salió, NotificacionFallida si no, con la causa. Nunca se escribe la
-/// contraseña del correo en ningún mensaje.
+/// Envía el correo de las novedades de una inspección (uno solo, con todas ellas) y deja constancia
+/// en la auditoría: NotificacionEnviada (y la fecha en cada novedad) si salió, NotificacionFallida
+/// si no, con la causa. Nunca se escribe la contraseña del correo en ningún mensaje.
 /// </summary>
 public sealed class NotificacionNovedades(
     ECARDbContext context,
@@ -24,19 +24,19 @@ public sealed class NotificacionNovedades(
 
     public const string MensajeSinDestinatarios = "No hay destinatarios configurados en Correo:Destinatarios";
 
-    /// <summary>true si el correo salió. false si la novedad no existe o el envío falló.</summary>
-    public async Task<bool> NotificarAsync(long idNovedad, CancellationToken cancellationToken = default)
+    /// <summary>true si el correo salió. false si la inspección no existe, no tiene novedades o el envío falló.</summary>
+    public async Task<bool> NotificarAsync(long idInspeccion, CancellationToken cancellationToken = default)
     {
-        var novedad = await context.Novedades
-            .Include(n => n.Pregunta)
-            .Include(n => n.Respuesta)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Equipo).ThenInclude(e => e.Ubicacion)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Usuario)
-            .Include(n => n.Inspeccion).ThenInclude(i => i.Checklist)
-            .FirstOrDefaultAsync(n => n.IdNovedad == idNovedad, cancellationToken);
-        if (novedad == null)
+        var inspeccion = await context.Inspecciones
+            .Include(i => i.Equipo).ThenInclude(e => e.Ubicacion)
+            .Include(i => i.Usuario)
+            .Include(i => i.Checklist)
+            .Include(i => i.Novedades).ThenInclude(n => n.Pregunta)
+            .Include(i => i.Novedades).ThenInclude(n => n.Respuesta)
+            .FirstOrDefaultAsync(i => i.IdInspeccion == idInspeccion, cancellationToken);
+        if (inspeccion == null || inspeccion.Novedades.Count == 0)
         {
-            logger.LogWarning("No se notificó la novedad {IdNovedad}: no existe", idNovedad);
+            logger.LogWarning("No se notificó la inspección {IdInspeccion}: no existe o no tiene novedades", idInspeccion);
             return false;
         }
 
@@ -46,6 +46,8 @@ public sealed class NotificacionNovedades(
             return false;
         }
 
+        var novedades = inspeccion.Novedades.OrderBy(n => n.IdNovedad).ToList();
+        var idsNovedad = novedades.Select(n => n.IdNovedad).ToList();
         string? error = null;
         var resultado = ResultadoEnvio.Desactivado;
         if (o.Destinatarios.All(string.IsNullOrWhiteSpace))
@@ -56,7 +58,7 @@ public sealed class NotificacionNovedades(
         {
             try
             {
-                using var mensaje = CorreoNovedad.Construir(novedad, o, configuracion["Cliente:BaseUrl"]);
+                using var mensaje = CorreoNovedad.Construir(inspeccion, novedades, o, configuracion["Cliente:BaseUrl"]);
                 resultado = await enviador.EnviarAsync(mensaje, cancellationToken);
                 if (resultado == ResultadoEnvio.GuardadoEnCarpeta)
                 {
@@ -65,16 +67,16 @@ public sealed class NotificacionNovedades(
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogWarning(ex, "No se pudo enviar el correo de la novedad {IdNovedad}", idNovedad);
+                logger.LogWarning(ex, "No se pudo enviar el correo de la inspección {IdInspeccion}", idInspeccion);
                 error = Recortar(ex.Message);
             }
         }
 
         if (resultado != ResultadoEnvio.Enviado)
         {
-            logger.LogInformation("Novedad {IdNovedad} sin enviar: {Error}", idNovedad, error);
-            await context.RegistrarEventoAsync(AuditoriaAcciones.NotificacionFallida, novedad.IdNovedad,
-                new { novedad.IdNovedad, Error = error }, cancellationToken: cancellationToken);
+            logger.LogInformation("Inspección {IdInspeccion} sin enviar: {Error}", idInspeccion, error);
+            await context.RegistrarEventoAsync(AuditoriaAcciones.NotificacionFallida, idInspeccion,
+                new { IdInspeccion = idInspeccion, Novedades = idsNovedad, Error = error }, cancellationToken: cancellationToken);
             return false;
         }
 
@@ -82,26 +84,31 @@ public sealed class NotificacionNovedades(
         var destinatarios = string.Join(", ", o.Destinatarios);
         try
         {
-            await RegistrarEnvioAsync(novedad, enviadoEn, destinatarios, cancellationToken);
+            await RegistrarEnvioAsync(idInspeccion, novedades, enviadoEn, destinatarios, cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Alguien resolvió o anuló la novedad mientras salía el correo: se relee y se vuelve a
-            // anotar la fecha sobre la versión nueva.
+            // Alguien resolvió o anuló una de las novedades mientras salía el correo: se releen y se
+            // vuelve a anotar la fecha sobre la versión nueva.
             context.ChangeTracker.Clear();
-            var actual = await context.Novedades.SingleAsync(n => n.IdNovedad == idNovedad, cancellationToken);
-            await RegistrarEnvioAsync(actual, enviadoEn, destinatarios, cancellationToken);
+            var actuales = await context.Novedades.Where(n => idsNovedad.Contains(n.IdNovedad))
+                .OrderBy(n => n.IdNovedad).ToListAsync(cancellationToken);
+            await RegistrarEnvioAsync(idInspeccion, actuales, enviadoEn, destinatarios, cancellationToken);
         }
 
         return true;
     }
 
-    private async Task RegistrarEnvioAsync(Novedad novedad, DateTime enviadoEn,
+    private async Task RegistrarEnvioAsync(long idInspeccion, List<Novedad> novedades, DateTime enviadoEn,
         string destinatarios, CancellationToken cancellationToken)
     {
-        novedad.FechaNotificacion = enviadoEn;
-        context.RegistrarEvento(AuditoriaAcciones.NotificacionEnviada, novedad.IdNovedad,
-            new { novedad.IdNovedad, Destinatarios = destinatarios });
+        foreach (var novedad in novedades)
+        {
+            novedad.FechaNotificacion = enviadoEn;
+        }
+
+        context.RegistrarEvento(AuditoriaAcciones.NotificacionEnviada, idInspeccion,
+            new { IdInspeccion = idInspeccion, Novedades = novedades.Select(n => n.IdNovedad), Destinatarios = destinatarios });
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -109,8 +116,9 @@ public sealed class NotificacionNovedades(
 }
 
 /// <summary>
-/// Vacía la cola de notificaciones: cada novedad en su propio ámbito (y su propio DbContext), una
-/// detrás de otra. Un fallo no detiene el servicio; la novedad queda sin enviar y se puede reenviar.
+/// Vacía la cola de notificaciones: cada inspección en su propio ámbito (y su propio DbContext),
+/// una detrás de otra. Un fallo no detiene el servicio; sus novedades quedan sin enviar y el correo
+/// se puede reenviar.
 /// </summary>
 public sealed class EnvioNotificacionesService(
     ColaNotificaciones cola,
@@ -121,17 +129,17 @@ public sealed class EnvioNotificacionesService(
     {
         try
         {
-            await foreach (var idNovedad in cola.Lector.ReadAllAsync(stoppingToken))
+            await foreach (var idInspeccion in cola.Lector.ReadAllAsync(stoppingToken))
             {
                 try
                 {
                     await using var ambito = ambitos.CreateAsyncScope();
                     await ambito.ServiceProvider.GetRequiredService<NotificacionNovedades>()
-                        .NotificarAsync(idNovedad, stoppingToken);
+                        .NotificarAsync(idInspeccion, stoppingToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    logger.LogError(ex, "Error al procesar la notificación de la novedad {IdNovedad}", idNovedad);
+                    logger.LogError(ex, "Error al procesar la notificación de la inspección {IdInspeccion}", idInspeccion);
                 }
             }
         }
