@@ -285,6 +285,10 @@
         if (result is not null && !result.Canceled)
         {
             await LoadDataAsync();
+            if (result.Data is EquipoDto creado)
+            {
+                await OpenQrDialog(creado, equipoNuevo: true);
+            }
         }
     }
 
@@ -305,13 +309,14 @@
         }
     }
 
-    private async Task OpenQrDialog(EquipoDto equipo)
+    private async Task OpenQrDialog(EquipoDto equipo, bool equipoNuevo = false)
     {
         var parameters = new DialogParameters
         {
             ["IdEquipo"] = equipo.IdEquipo,
             ["CodigoInterno"] = equipo.CodigoInterno,
-            ["NombreEquipo"] = equipo.NombreEquipo
+            ["NombreEquipo"] = equipo.NombreEquipo,
+            ["EquipoNuevo"] = equipoNuevo
         };
         var dialog = await DialogService.ShowAsync<EquipoQrModal>("Codigo QR del Equipo", parameters);
         await dialog.Result;

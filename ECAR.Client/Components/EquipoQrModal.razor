@@ -8,7 +8,7 @@
         <MudText Typo="Typo.h6">Código QR</MudText>
     </TitleContent>
     <DialogContent>
-        <div class="qr-print-area">
+        <div>
             @if (cargando)
             {
                 <div class="d-flex justify-center my-6">
@@ -32,7 +32,7 @@
             </MudText>
         </div>
 
-        @if (esTokenNuevo)
+        @if (esTokenNuevo || EquipoNuevo)
         {
             <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
                 Se generó un código QR nuevo para este equipo. Imprima y pegue la etiqueta.
@@ -40,8 +40,8 @@
         }
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Cerrar">Cerrar</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Cerrar">Cerrar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="@(qrDataUrl == null)"
             StartIcon="@Icons.Material.Filled.Print" OnClick="Imprimir">
             Imprimir etiqueta
         </MudButton>
@@ -63,6 +63,8 @@
     [Parameter] public long IdEquipo { get; set; }
     [Parameter] public string CodigoInterno { get; set; } = string.Empty;
     [Parameter] public string NombreEquipo { get; set; } = string.Empty;
+    // Recién creado: el API ya le generó el QR al guardarlo y aquí solo se muestra para imprimirlo.
+    [Parameter] public bool EquipoNuevo { get; set; }
 
     private bool cargando = true;
     private bool esTokenNuevo;
@@ -100,9 +102,13 @@
         MudDialog.Close(DialogResult.Ok(true));
     }
 
+    // Solo la etiqueta, en un iframe aparte (wwwroot/js/etiqueta-qr.js): imprimir el diálogo la cortaba.
     private async Task Imprimir()
     {
-        await JS.InvokeVoidAsync("window.print");
+        if (qrDataUrl != null)
+        {
+            await JS.InvokeVoidAsync("ecarEtiquetaQr.imprimir", qrDataUrl, CodigoInterno, NombreEquipo);
+        }
     }
 
     private async Task Regenerar()

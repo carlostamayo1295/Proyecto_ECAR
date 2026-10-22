@@ -26,6 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ECAR.API.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ECAR.Infrastructure\ECAR.Infrastructure.csproj" />
     <ProjectReference Include="..\ECAR.Shared\ECAR.Shared.csproj" />
   </ItemGroup>

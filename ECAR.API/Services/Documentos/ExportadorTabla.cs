@@ -8,7 +8,10 @@ using PdfSharp.Fonts;
 
 namespace ECAR.API.Services.Documentos;
 
-/// <summary>Una columna del documento; el ancho solo se usa en el PDF (horizontal, 25,7 cm útiles).</summary>
+/// <summary>
+/// Una columna del documento. El ancho solo se usa en el PDF y es una proporción: las columnas se
+/// escalan para ocupar el ancho útil de la hoja (horizontal, 25,7 cm).
+/// </summary>
 public sealed record Columna(string Titulo, double AnchoCm);
 
 /// <summary>
@@ -147,9 +150,9 @@ public static class ExportadorTabla
         tabla.Borders.Width = 0.4;
         tabla.Borders.Color = Colors.Gray;
         tabla.Format.Font.Size = 7.5;
-        foreach (var columna in columnas)
+        foreach (var ancho in AnchosAjustados(columnas, AnchoUtilCm(seccion.PageSetup)))
         {
-            tabla.AddColumn(Unit.FromCentimeter(columna.AnchoCm));
+            tabla.AddColumn(Unit.FromCentimeter(ancho));
         }
 
         var encabezado = tabla.AddRow();
@@ -196,8 +199,12 @@ public static class ExportadorTabla
 
         var seccion = documento.AddSection();
         seccion.PageSetup = documento.DefaultPageSetup.Clone();
-        seccion.PageSetup.PageFormat = PageFormat.A4;
-        seccion.PageSetup.Orientation = horizontal ? Orientation.Landscape : Orientation.Portrait;
+        // A4 con las medidas puestas a mano. Con PDFsharp-MigraDoc 6, «Orientation = Landscape» sobre
+        // «PageFormat = A4» dejaba la hoja vertical (21 cm de ancho) mientras las tablas se medían para
+        // la horizontal, y los reportes salían cortados por la derecha.
+        seccion.PageSetup.Orientation = Orientation.Portrait;
+        seccion.PageSetup.PageWidth = Unit.FromCentimeter(horizontal ? 29.7 : 21);
+        seccion.PageSetup.PageHeight = Unit.FromCentimeter(horizontal ? 21 : 29.7);
         seccion.PageSetup.TopMargin = Unit.FromCentimeter(1.5);
         seccion.PageSetup.BottomMargin = Unit.FromCentimeter(2);
         seccion.PageSetup.LeftMargin = Unit.FromCentimeter(2);
@@ -217,6 +224,22 @@ public static class ExportadorTabla
         encabezado.Format.SpaceAfter = Unit.FromPoint(6);
 
         return documento;
+    }
+
+    /// <summary>Ancho de la hoja menos los márgenes, en cm.</summary>
+    internal static double AnchoUtilCm(PageSetup pagina) =>
+        pagina.PageWidth.Centimeter - pagina.LeftMargin.Centimeter - pagina.RightMargin.Centimeter;
+
+    /// <summary>
+    /// Los anchos de cada reporte son proporciones: se escalan para que la tabla ocupe justo el ancho
+    /// útil. Así nunca se sale de la hoja, aunque cambien las columnas o los márgenes.
+    /// </summary>
+    internal static IReadOnlyList<double> AnchosAjustados(IReadOnlyList<Columna> columnas, double anchoUtilCm)
+    {
+        var total = columnas.Sum(c => c.AnchoCm);
+        return total <= 0
+            ? columnas.Select(_ => anchoUtilCm / Math.Max(columnas.Count, 1)).ToList()
+            : columnas.Select(c => c.AnchoCm * anchoUtilCm / total).ToList();
     }
 
     internal static byte[] Renderizar(Document documento)

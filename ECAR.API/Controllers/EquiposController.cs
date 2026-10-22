@@ -175,7 +175,9 @@ public class EquiposController : ControllerBase
             IdCategoria = createDto.IdCategoria,
             IdUbicacion = createDto.IdUbicacion,
             Activo = true,
-            FechaCreacion = DateTime.UtcNow
+            FechaCreacion = DateTime.UtcNow,
+            // El QR se crea al guardar el equipo, para imprimir la etiqueta enseguida.
+            QRCode = GenerarToken()
         };
 
         _context.Equipos.Add(equipo);
@@ -293,6 +295,10 @@ public class EquiposController : ControllerBase
 
         if (updateDto.Activo.HasValue)
             equipo.Activo = updateDto.Activo.Value;
+
+        // Los equipos creados antes de que el QR se generara al guardar lo reciben en su próxima edición.
+        if (string.IsNullOrEmpty(equipo.QRCode))
+            equipo.QRCode = GenerarToken();
 
         await _context.SaveChangesAsync();
 

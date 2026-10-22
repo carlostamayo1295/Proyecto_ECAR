@@ -131,6 +131,41 @@ public class BackendPhaseTwoTests
     }
 
     [Fact]
+    public async Task CrearUnEquipoLeGeneraElQrAlGuardarlo()
+    {
+        await using var context = CreateContext();
+        var controller = CreateEquiposController(context);
+
+        var result = await controller.CreateEquipo(new CreateEquipoDto
+        {
+            CodigoInterno = "EQ-QR", ActivoFijo = "AF-QR", NombreEquipo = "Horno", Criticidad = Criticidades.Media
+        });
+
+        var creado = Assert.IsType<ApiResponse<EquipoDto>>(Assert.IsType<CreatedAtActionResult>(result.Result).Value).Data!;
+        Assert.Matches("^[0-9a-f]{32}$", creado.QRCode);
+        var qr = Data(await controller.GenerateQr(creado.IdEquipo));
+        Assert.False(qr.EsNuevo); // el diálogo del QR muestra el mismo, no crea otro
+        Assert.Equal(creado.QRCode, qr.Token);
+        Assert.IsType<FileContentResult>(await controller.GetQrImage(creado.IdEquipo));
+    }
+
+    [Fact]
+    public async Task EditarUnEquipoSinQrLeGeneraUnoYNoCambiaElQueYaTiene()
+    {
+        await using var context = CreateContext();
+        var equipo = await SeedEquipoAsync(context); // como los creados antes del cambio: sin QR
+        var controller = CreateEquiposController(context);
+        var cambio = new UpdateEquipoDto { Marca = "Mettler", Motivo = "Se corrige la marca del equipo" };
+
+        Assert.IsType<OkObjectResult>((await controller.UpdateEquipo(equipo.IdEquipo, cambio)).Result);
+        var token = equipo.QRCode;
+        Assert.IsType<OkObjectResult>((await controller.UpdateEquipo(equipo.IdEquipo, cambio)).Result);
+
+        Assert.Matches("^[0-9a-f]{32}$", token);
+        Assert.Equal(token, equipo.QRCode); // las etiquetas impresas siguen sirviendo
+    }
+
+    [Fact]
     public async Task ConsultaPublicaPorQrDevuelveFichaYChecklistsActivos()
     {
         await using var context = CreateContext();

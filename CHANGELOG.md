@@ -54,6 +54,15 @@ horaria de Colombia.
   - Los diálogos anchos (ficha del equipo, detalle y edición de inspecciones, checklists, versiones y detalle de
     auditoría) salían todos con 600 px: MudBlazor 9 solo aplica las `Options` de `<MudDialog>` a los diálogos en
     línea. Ahora las aplican al abrirse (`SetOptionsAsync`). En el teléfono, todos los diálogos usan casi todo el ancho.
+- **El QR se crea al guardar el equipo** (22/10/2026): `POST /api/equipos` le asigna el token y, al guardar, la
+  pantalla abre su etiqueta para imprimirla. Los equipos creados antes lo reciben en su próxima edición (o al abrir
+  «Código QR», como hasta ahora). Regenerar sigue siendo una acción aparte.
+- **La etiqueta del QR ya no sale cortada:** se imprimía el diálogo ocultando el resto de la página con CSS
+  (`css/print-qr.css`, retirado). Ahora se imprime solo la etiqueta, en un iframe aparte (`wwwroot/js/etiqueta-qr.js`),
+  ajustada a la hoja: el QR mide hasta 60 mm y se encoge en papel de etiqueta pequeño.
+- **Los reportes en PDF ya no salen cortados por la derecha:** con PDFsharp-MigraDoc 6, `Orientation = Landscape`
+  sobre `PageFormat.A4` dejaba la hoja vertical mientras la tabla se medía para la horizontal. La hoja lleva ahora sus
+  medidas a mano (29,7 × 21 cm) y los anchos de las columnas se escalan al ancho útil (25,7 cm).
 
 ### Añadido
 

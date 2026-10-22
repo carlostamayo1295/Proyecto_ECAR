@@ -204,7 +204,8 @@
                 if (result != null && result.Success)
                 {
                     Snackbar.Add("Equipo creado exitosamente", Severity.Success);
-                    MudDialog.Close(DialogResult.Ok(true));
+                    // El API ya le creó el QR: la página abre la etiqueta con el equipo devuelto.
+                    MudDialog.Close(DialogResult.Ok(result.Data));
                 }
                 else
                 {

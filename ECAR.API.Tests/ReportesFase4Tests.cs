@@ -1,6 +1,7 @@
 using ClosedXML.Excel;
 using ECAR.API.Controllers;
 using ECAR.API.Services;
+using ECAR.API.Services.Documentos;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
 using ECAR.Shared;
@@ -8,6 +9,7 @@ using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PdfSharp.Pdf.IO;
 using Xunit;
 
 namespace ECAR.API.Tests;
@@ -217,6 +219,24 @@ public class ReportesFase4Tests
     }
 
     [Fact]
+    public async Task El_PDF_de_un_reporte_sale_en_A4_horizontal_y_la_tabla_cabe_en_la_hoja()
+    {
+        // Con «Orientation = Landscape» la hoja salía vertical y la tabla, medida para la horizontal, se cortaba.
+        var d = await SeedAsync();
+        var pdf = Assert.IsType<FileContentResult>(await Controlador(d.Db).GetHistorialEquipo(Mes(), ReporteFormatos.Pdf));
+
+        var (ancho, alto) = TamanoPrimeraPagina(pdf.FileContents);
+        Assert.InRange(ancho, 841, 843); // 29,7 cm en puntos
+        Assert.InRange(alto, 594, 596);  // 21 cm
+
+        var pie = new PieDocumento("Prueba", "ninguno", "Carla Admin", DateTime.UtcNow);
+        var pagina = ExportadorTabla.Documento("Prueba", pie, horizontal: true).LastSection.PageSetup;
+        var anchos = ExportadorTabla.AnchosAjustados([new("A", 2), new("B", 30), new("C", 4)], ExportadorTabla.AnchoUtilCm(pagina));
+        Assert.Equal(25.7, anchos.Sum(), 3); // MigraDoc guarda las medidas como float
+        Assert.Equal(15 * anchos[0], anchos[1], 3);
+    }
+
+    [Fact]
     public async Task Los_reportes_de_totales_tambien_salen_en_archivo()
     {
         var d = await SeedAsync();
@@ -254,7 +274,15 @@ public class ReportesFase4Tests
 
         Assert.Equal($"ECAR-INSP-{inspeccion.IdInspeccion}.pdf", archivo.FileDownloadName);
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(archivo.FileContents, 0, 4));
+        Assert.InRange(TamanoPrimeraPagina(archivo.FileContents).Ancho, 594, 596); // el registro sigue en vertical
         Assert.Contains(await d.Db.Auditoria.Select(a => a.Accion).ToListAsync(), a => a == AuditoriaAcciones.Exportacion);
+    }
+
+    private static (double Ancho, double Alto) TamanoPrimeraPagina(byte[] pdf)
+    {
+        using var documento = PdfReader.Open(new MemoryStream(pdf), PdfDocumentOpenMode.Import);
+        var caja = documento.Pages[0].MediaBox;
+        return (caja.Width, caja.Height);
     }
 
     private sealed class FakeTecnico(Usuario usuario) : ICurrentUser
