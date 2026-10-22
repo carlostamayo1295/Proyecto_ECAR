@@ -3,8 +3,6 @@
 @inject AuthorizationService AuthorizationService
 @inject AuthService AuthService
 @inject HttpClientService HttpClientService
-@inject IWebAssemblyHostEnvironment HostEnvironment
-@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
 
 @using MudBlazor
 
@@ -25,15 +23,6 @@
         <MudSpacer />
         @* En el teléfono los botones quedan solo con el icono: con el texto, la barra medía más
            de 375 px y ensanchaba todas las páginas. *@
-        @* La documentación del API solo existe en desarrollo y es para quien administra el sistema. *@
-        @if (isAdmin && HostEnvironment.IsDevelopment())
-        {
-            <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="https://localhost:7296/scalar/v1" Target="_blank"
-                title="API Scalar">
-                <MudIcon Icon="@Icons.Material.Filled.Api" Class="mr-2" />
-                <span class="texto-barra">API Scalar</span>
-            </MudButton>
-        }
         @if (isAuthenticated)
         {
             <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="HandleLogout" title="Cerrar sesión">

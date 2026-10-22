@@ -63,6 +63,11 @@ horaria de Colombia.
 - **Los reportes en PDF ya no salen cortados por la derecha:** con PDFsharp-MigraDoc 6, `Orientation = Landscape`
   sobre `PageFormat.A4` dejaba la hoja vertical mientras la tabla se medía para la horizontal. La hoja lleva ahora sus
   medidas a mano (29,7 × 21 cm) y los anchos de las columnas se escalan al ancho útil (25,7 cm).
+- **Sin círculo negro al iniciar sesión** (22/10/2026): al entrar, la página se recarga y mientras arranca mostraba el
+  indicador de carga de la plantilla de Blazor, cuyos estilos están en `css/app.css`, que no se carga; se veía como un
+  círculo negro. Se quitó de `index.html`: mientras arranca solo se ve el fondo.
+- **Sin el botón «API Scalar»** en la barra superior (22/10/2026). La documentación del API sigue en el API
+  (`Scalar.AspNetCore`, `/scalar/v1`, solo en desarrollo).
 
 ### Añadido
 
