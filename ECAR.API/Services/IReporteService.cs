@@ -11,7 +11,7 @@ namespace ECAR.API.Services
     {
         IQueryable<HistorialEquipoFilaDto> HistorialEquipo(ReporteFiltroDto filtro);
         IQueryable<HistorialAreaFilaDto> HistorialArea(ReporteFiltroDto filtro);
-        IQueryable<HistorialTecnicoFilaDto> HistorialTecnico(ReporteFiltroDto filtro);
+        IQueryable<HistorialUsuarioFilaDto> HistorialUsuario(ReporteFiltroDto filtro);
         IQueryable<EquipoNovedadFilaDto> EquiposNovedades(ReporteFiltroDto filtro);
         Task<InspeccionesPorFechasDto> InspeccionesPorFechasAsync(ReporteFiltroDto filtro);
     }

@@ -149,35 +149,35 @@
                     }
                 </MudTabPanel>
 
-                @* ---------- Historial por Técnico ---------- *@
-                <MudTabPanel Text="Historial por Técnico">
+                @* ---------- Historial por Usuario ---------- *@
+                <MudTabPanel Text="Historial por Usuario">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="4">
-                            <MudAutocomplete T="UsuarioDto" Label="Técnico" @bind-Value="tecnicoSeleccionado"
-                                SearchFunc="BuscarTecnicosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
+                            <MudAutocomplete T="UsuarioDto" Label="Usuario" @bind-Value="usuarioSeleccionado"
+                                SearchFunc="BuscarUsuariosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
                                 Variant="Variant.Outlined" Clearable="true" ResetValueOnEmptyText="true"
-                                HelperText="Opcional: deje vacío para todos los técnicos" />
+                                HelperText="Opcional: deje vacío para todos los usuarios" />
                         </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
-                            <MudDatePicker Label="Desde" @bind-Date="estadoTecnico.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
+                            <MudDatePicker Label="Desde" @bind-Date="estadoUsuario.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
                         </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
-                            <MudDatePicker Label="Hasta" @bind-Date="estadoTecnico.Filtro.Hasta" Variant="Variant.Outlined" Editable="true" />
+                            <MudDatePicker Label="Hasta" @bind-Date="estadoUsuario.Filtro.Hasta" Variant="Variant.Outlined" Editable="true" />
                         </MudItem>
-                        @BotonesConsulta(() => ConsultarAsync(estadoTecnico, ReporteTipos.HistorialTecnico),
-                            f => DescargarAsync(estadoTecnico, ReporteTipos.HistorialTecnico, f), estadoTecnico)
+                        @BotonesConsulta(() => ConsultarAsync(estadoUsuario, ReporteTipos.HistorialUsuario),
+                            f => DescargarAsync(estadoUsuario, ReporteTipos.HistorialUsuario, f), estadoUsuario)
                     </MudGrid>
 
-                    @if (estadoTecnico.Cargando)
+                    @if (estadoUsuario.Cargando)
                     {
                         <MudProgressLinear Indeterminate="true" Class="my-4" />
                     }
-                    else if (estadoTecnico.Filas.Any())
+                    else if (estadoUsuario.Filas.Any())
                     {
-                        <MudTable Items="estadoTecnico.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
+                        <MudTable Items="estadoUsuario.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
                             <HeaderContent>
                                 <MudTh>Inspección</MudTh>
-                                <MudTh>Técnico</MudTh>
+                                <MudTh>Usuario</MudTh>
                                 <MudTh>Equipo</MudTh>
                                 <MudTh>Fecha</MudTh>
                                 <MudTh>Resultado</MudTh>
@@ -185,7 +185,7 @@
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
-                                <MudTd DataLabel="Técnico">@context.Tecnico</MudTd>
+                                <MudTd DataLabel="Usuario">@context.Usuario</MudTd>
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
                                 <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                                 <MudTd DataLabel="Resultado">
@@ -195,9 +195,9 @@
                                 <MudTd DataLabel="Observaciones">@(context.Observaciones ?? "—")</MudTd>
                             </RowTemplate>
                         </MudTable>
-                        @Paginacion(estadoTecnico, p => CambiarPaginaAsync(estadoTecnico, ReporteTipos.HistorialTecnico, p))
+                        @Paginacion(estadoUsuario, p => CambiarPaginaAsync(estadoUsuario, ReporteTipos.HistorialUsuario, p))
                     }
-                    else if (estadoTecnico.Consultado)
+                    else if (estadoUsuario.Consultado)
                     {
                         <MudAlert Severity="Severity.Info" Class="my-4">No hay inspecciones con estos filtros</MudAlert>
                     }
@@ -395,7 +395,7 @@
 
     private readonly EstadoReporte<HistorialEquipoFilaDto> estadoEquipo = new();
     private readonly EstadoReporte<HistorialAreaFilaDto> estadoArea = new();
-    private readonly EstadoReporte<HistorialTecnicoFilaDto> estadoTecnico = new();
+    private readonly EstadoReporte<HistorialUsuarioFilaDto> estadoUsuario = new();
     private readonly EstadoReporte<EquipoNovedadFilaDto> estadoNovedades = new();
 
     // Inspecciones por Fechas no pagina: el servidor devuelve un único objeto con los totales
@@ -406,9 +406,9 @@
     private bool descargandoFechas;
 
     private EquipoDto? equipoSeleccionado;
-    private UsuarioDto? tecnicoSeleccionado;
+    private UsuarioDto? usuarioSeleccionado;
     private bool errorEquiposAvisado;
-    private bool errorTecnicosAvisado;
+    private bool errorUsuariosAvisado;
 
     private List<UbicacionDto> ubicacionesFiltro = new();
     private IEnumerable<string> Plantas => ubicacionesFiltro.Select(u => u.Planta).Distinct().OrderBy(p => p);
@@ -423,7 +423,7 @@
     protected override void OnParametersSet()
     {
         estadoEquipo.Filtro.IdEquipo = equipoSeleccionado?.IdEquipo;
-        estadoTecnico.Filtro.IdUsuario = tecnicoSeleccionado?.IdUsuario;
+        estadoUsuario.Filtro.IdUsuario = usuarioSeleccionado?.IdUsuario;
     }
 
     private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)
@@ -443,20 +443,20 @@
         return respuesta.Data?.Data ?? new List<EquipoDto>();
     }
 
-    private async Task<IEnumerable<UsuarioDto>> BuscarTecnicosAsync(string valor, CancellationToken token)
+    private async Task<IEnumerable<UsuarioDto>> BuscarUsuariosAsync(string valor, CancellationToken token)
     {
         var respuesta = await HttpClientService.GetUsuariosAsync(1, MaxResultadosBusqueda, valor);
         if (respuesta == null || !respuesta.Success)
         {
-            if (!errorTecnicosAvisado)
+            if (!errorUsuariosAvisado)
             {
-                errorTecnicosAvisado = true;
-                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los técnicos", Severity.Error);
+                errorUsuariosAvisado = true;
+                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los usuarios", Severity.Error);
             }
             return Array.Empty<UsuarioDto>();
         }
 
-        errorTecnicosAvisado = false;
+        errorUsuariosAvisado = false;
         return respuesta.Data?.Data ?? new List<UsuarioDto>();
     }
 

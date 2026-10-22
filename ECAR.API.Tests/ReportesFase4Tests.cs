@@ -122,19 +122,19 @@ public class ReportesFase4Tests
     }
 
     [Fact]
-    public async Task Historial_por_area_y_por_tecnico_filtran()
+    public async Task Historial_por_area_y_por_usuario_filtran()
     {
         var d = await SeedAsync();
         var c = Controlador(d.Db);
 
         var produccion = Datos_<PagedResultDto<HistorialAreaFilaDto>>(await c.GetHistorialArea(
             new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, Area = "Producción" }));
-        var tecnico = Datos_<PagedResultDto<HistorialTecnicoFilaDto>>(await c.GetHistorialTecnico(
+        var porUsuario = Datos_<PagedResultDto<HistorialUsuarioFilaDto>>(await c.GetHistorialUsuario(
             new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdUsuario = d.Tecnico.IdUsuario }));
 
         Assert.Equal(0, produccion.TotalCount);
-        Assert.Equal(2, tecnico.TotalCount);
-        Assert.All(tecnico.Data, f => Assert.Equal("Ana Técnica", f.Tecnico));
+        Assert.Equal(2, porUsuario.TotalCount);
+        Assert.All(porUsuario.Data, f => Assert.Equal("Ana Técnica", f.Usuario));
     }
 
     [Fact]

@@ -11,7 +11,7 @@ public static class ReporteTipos
 {
     public const string HistorialEquipo = "historial-equipo";
     public const string HistorialArea = "historial-area";
-    public const string HistorialTecnico = "historial-tecnico";
+    public const string HistorialUsuario = "historial-usuario";
     public const string EquiposNovedades = "equipos-novedades";
     public const string InspeccionesFechas = "inspecciones-fechas";
 }
@@ -67,11 +67,14 @@ public class HistorialAreaFilaDto
     public string Responsable { get; set; } = string.Empty;
 }
 
-/// <summary>Reporte "Historial por Técnico" (SRS §7).</summary>
-public class HistorialTecnicoFilaDto
+/// <summary>
+/// Reporte "Historial por Usuario" (SRS §7, antes «por Técnico»: con los roles del 21/10/2026 ya no hay
+/// técnicos, e inspeccionan el Operador, el Estándar y el Administrador).
+/// </summary>
+public class HistorialUsuarioFilaDto
 {
     public long IdInspeccion { get; set; }
-    public string Tecnico { get; set; } = string.Empty;
+    public string Usuario { get; set; } = string.Empty;
     public string Equipo { get; set; } = string.Empty;
     public DateTime FechaInspeccion { get; set; }
     public string? Resultado { get; set; }

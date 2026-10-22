@@ -51,14 +51,14 @@ namespace ECAR.API.Controllers
                  new("Resultado", 3), new("Responsable", 4.7)],
                 f => [f.IdInspeccion, f.Planta, f.Area, f.Equipo, HoraColombia.DesdeUtc(f.Fecha), Resultado(f.Resultado), f.Responsable]);
 
-        [HttpGet("historial-tecnico")]
-        public Task<IActionResult> GetHistorialTecnico([FromQuery] ReporteFiltroDto filtro,
+        [HttpGet("historial-usuario")]
+        public Task<IActionResult> GetHistorialUsuario([FromQuery] ReporteFiltroDto filtro,
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
-            Tabular(ReporteTipos.HistorialTecnico, "Historial por técnico", filtro, formato, page, pageSize,
-                () => _reporteService.HistorialTecnico(filtro),
-                [new("Inspección", 2), new("Técnico", 4.5), new("Equipo", 6), new("Fecha", 3), new("Resultado", 3),
+            Tabular(ReporteTipos.HistorialUsuario, "Historial por usuario", filtro, formato, page, pageSize,
+                () => _reporteService.HistorialUsuario(filtro),
+                [new("Inspección", 2), new("Usuario", 4.5), new("Equipo", 6), new("Fecha", 3), new("Resultado", 3),
                  new("Observaciones", 7.2)],
-                f => [f.IdInspeccion, f.Tecnico, f.Equipo, HoraColombia.DesdeUtc(f.FechaInspeccion), Resultado(f.Resultado), f.Observaciones]);
+                f => [f.IdInspeccion, f.Usuario, f.Equipo, HoraColombia.DesdeUtc(f.FechaInspeccion), Resultado(f.Resultado), f.Observaciones]);
 
         [HttpGet("equipos-novedades")]
         public Task<IActionResult> GetEquiposNovedades([FromQuery] ReporteFiltroDto filtro,
@@ -173,7 +173,7 @@ namespace ECAR.API.Controllers
             if (!string.IsNullOrWhiteSpace(f.Planta)) partes.Add($"planta {f.Planta}");
             if (!string.IsNullOrWhiteSpace(f.Area)) partes.Add($"área {f.Area}");
             if (f.IdEquipo.HasValue) partes.Add($"equipo {f.IdEquipo}");
-            if (f.IdUsuario.HasValue) partes.Add($"técnico {f.IdUsuario}");
+            if (f.IdUsuario.HasValue) partes.Add($"usuario {f.IdUsuario}");
             if (!string.IsNullOrWhiteSpace(f.Estado)) partes.Add($"estado {f.Estado}");
             if (!string.IsNullOrWhiteSpace(f.Criticidad)) partes.Add($"criticidad {f.Criticidad}");
             return string.Join(", ", partes);

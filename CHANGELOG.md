@@ -17,6 +17,8 @@ horaria de Colombia.
   - Al arrancar, el API renombra en la base «Técnico» → «Operador» y «Auditor» → «Supervisor» (la fila del rol;
     los usuarios lo conservan y queda en la auditoría) y crea «Estándar». Quien tenía sesión abierta debe volver a
     entrar. Los antiguos técnicos que resuelven novedades necesitan el rol Estándar.
+  - El reporte «Historial por técnico» pasa a **«Historial por usuario»** (22/10/2026): ruta
+    `GET /api/reportes/historial-usuario` (antes `historial-tecnico`), columna y filtro «Usuario».
 - **Sin frecuencia de inspección ni cumplimiento** (decisión de ECAR, 21/10/2026): la migración
   `QuitarFrecuenciaInspeccion` borra la columna de `Equipos`; el formulario del equipo ya no la pide, el tablero
   cambia «Inspecciones pendientes del periodo» por «Inspecciones en curso» y se retira el reporte de cumplimiento.

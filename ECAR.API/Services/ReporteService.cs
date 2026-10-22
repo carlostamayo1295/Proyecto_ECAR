@@ -53,13 +53,13 @@ namespace ECAR.API.Services
                     Responsable = i.Usuario.Nombre
                 });
 
-        public IQueryable<HistorialTecnicoFilaDto> HistorialTecnico(ReporteFiltroDto filtro) =>
+        public IQueryable<HistorialUsuarioFilaDto> HistorialUsuario(ReporteFiltroDto filtro) =>
             Cerradas(filtro)
                 .OrderBy(i => i.Usuario.Nombre).ThenBy(i => i.FechaInspeccion)
-                .Select(i => new HistorialTecnicoFilaDto
+                .Select(i => new HistorialUsuarioFilaDto
                 {
                     IdInspeccion = i.IdInspeccion,
-                    Tecnico = i.Usuario.Nombre,
+                    Usuario = i.Usuario.Nombre,
                     Equipo = i.Equipo.CodigoInterno + " - " + i.Equipo.NombreEquipo,
                     FechaInspeccion = i.FechaInspeccion,
                     Resultado = i.Resultado,
