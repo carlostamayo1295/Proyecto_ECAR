@@ -113,7 +113,7 @@ public class FirmaIntegridadTests
     }
 
     private static InspeccionesController Controlador(Escenario escenario, long idUsuario, params string[] roles) =>
-        new(escenario.Context, new UsuarioActual(idUsuario, roles.Length == 0 ? ["Técnico"] : roles),
+        new(escenario.Context, new UsuarioActual(idUsuario, roles.Length == 0 ? ["Operador"] : roles),
             new InspeccionService(escenario.Context), escenario.Almacen, NullLogger<InspeccionesController>.Instance);
 
     private static Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarAsync(Escenario escenario, string? password) =>
@@ -126,7 +126,7 @@ public class FirmaIntegridadTests
     private static async Task<IntegridadInspeccionDto> VerificarAsync(Escenario escenario, string clave = FirmaPruebas.ClaveHmac)
     {
         escenario.Context.ChangeTracker.Clear();
-        var resultado = await Controlador(escenario, 99, "Auditor").VerificarIntegridad(
+        var resultado = await Controlador(escenario, 99, "Supervisor").VerificarIntegridad(
             escenario.Inspeccion.IdInspeccion, FirmaPruebas.CrearVerificador(escenario.Almacen, clave));
         var ok = Assert.IsType<OkObjectResult>(resultado.Result);
         return Assert.IsType<ApiResponse<IntegridadInspeccionDto>>(ok.Value).Data!;
@@ -306,7 +306,7 @@ public class FirmaIntegridadTests
         var escenario = await CrearEscenarioAsync();
         await using var _ = escenario.Context;
 
-        var resultado = await Controlador(escenario, 99, "Auditor").VerificarIntegridad(
+        var resultado = await Controlador(escenario, 99, "Supervisor").VerificarIntegridad(
             escenario.Inspeccion.IdInspeccion, FirmaPruebas.CrearVerificador(escenario.Almacen));
 
         Assert.IsType<ConflictObjectResult>(resultado.Result);

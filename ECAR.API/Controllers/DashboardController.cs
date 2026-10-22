@@ -13,11 +13,11 @@ namespace ECAR.API.Controllers;
 /// <summary>
 /// Indicadores de la portada (SRS §6 "Dashboard"): equipos, inspecciones y novedades. Son conteos
 /// sin datos personales, así que los
-/// ven los tres roles. Una inspección con novedades pendientes ya está firmada: cuenta como realizada.
+/// ven todos los roles. Una inspección con novedades pendientes ya está firmada: cuenta como realizada.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class DashboardController : ControllerBase
 {
     private const string SinCriticidad = "Sin criticidad";
@@ -36,9 +36,7 @@ public class DashboardController : ControllerBase
         var ahora = DateTime.UtcNow;
         var hoy = HoraColombia.DesdeUtc(ahora).Date;
         var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
-        var inicioTrimestre = new DateTime(hoy.Year, (hoy.Month - 1) / 3 * 3 + 1, 1);
         var (inicioMesUtc, _) = HoraColombia.RangoUtc(inicioMes, null);
-        var (inicioTrimestreUtc, _) = HoraColombia.RangoUtc(inicioTrimestre, null);
 
         var equipos = await _context.Equipos.AsNoTracking()
             .Where(e => e.Activo)
@@ -46,7 +44,6 @@ public class DashboardController : ControllerBase
             {
                 e.IdEquipo,
                 e.Criticidad,
-                e.FrecuenciaInspeccion,
                 Area = e.Ubicacion != null ? e.Ubicacion.Planta + " - " + e.Ubicacion.Area : SinUbicacion
             })
             .ToListAsync();
@@ -65,22 +62,6 @@ public class DashboardController : ControllerBase
             .OrderByDescending(c => c.Cantidad)
             .ThenBy(c => c.Etiqueta)
             .ToList();
-
-        // Periodo vigente de cada equipo programado: el mes, o el trimestre si es trimestral (la misma
-        // ventana que usa el reporte de cumplimiento).
-        var programados = equipos.Where(e => e.FrecuenciaInspeccion != null).ToList();
-        var idsProgramados = programados.Select(e => e.IdEquipo).ToList();
-        var firmadasDelTrimestre = await _context.Inspecciones.AsNoTracking()
-            .Where(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes)
-                        && i.FechaInspeccion >= inicioTrimestreUtc!.Value
-                        && idsProgramados.Contains(i.IdEquipo))
-            .Select(i => new { i.IdEquipo, i.FechaInspeccion })
-            .ToListAsync();
-        var pendientes = programados.Count(e =>
-        {
-            var desde = e.FrecuenciaInspeccion == FrecuenciasInspeccion.Trimestral ? inicioTrimestreUtc!.Value : inicioMesUtc!.Value;
-            return !firmadasDelTrimestre.Any(i => i.IdEquipo == e.IdEquipo && i.FechaInspeccion >= desde);
-        });
 
         var estadosInspeccion = await _context.Inspecciones.AsNoTracking()
             .GroupBy(i => i.Estado)
@@ -104,8 +85,6 @@ public class DashboardController : ControllerBase
             InspeccionesRealizadas = estadosInspeccion.GetValueOrDefault(InspeccionEstados.Cerrada) + conPendientes,
             InspeccionesRealizadasMes = firmadasMes,
             InspeccionesEnCurso = estadosInspeccion.GetValueOrDefault(InspeccionEstados.EnCurso),
-            InspeccionesPendientes = pendientes,
-            EquiposProgramados = programados.Count,
             InspeccionesConNovedadesPendientes = conPendientes,
             NovedadesPendientes = estadosNovedad.GetValueOrDefault(NovedadEstados.Pendiente),
             NovedadesResueltas = estadosNovedad.GetValueOrDefault(NovedadEstados.Resuelta),

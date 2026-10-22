@@ -11,7 +11,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class ChecklistsController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -95,7 +95,7 @@ public class ChecklistsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<ChecklistDto>>> CreateChecklist(CreateChecklistDto createDto)
     {
         var tipoInvalido = GetInvalidTipoRespuesta(createDto.Preguntas);
@@ -137,7 +137,7 @@ public class ChecklistsController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<ChecklistDto>>> UpdateChecklist(long id, UpdateChecklistDto updateDto)
     {
         var checklist = await _context.Checklists
@@ -200,7 +200,7 @@ public class ChecklistsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteChecklist(long id, [FromQuery] string? motivo = null)
     {
         var checklist = await _context.Checklists.FindAsync(id);
@@ -232,7 +232,7 @@ public class ChecklistsController : ControllerBase
     /// consulta por QR ofrecía las dos.
     /// </summary>
     [HttpPut("{id}/activar")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> ActivarChecklist(long id, [FromQuery] string? motivo = null)
     {
         var checklist = await _context.Checklists.FindAsync(id);
@@ -301,7 +301,7 @@ public class ChecklistsController : ControllerBase
 
     // Crea una versión nueva copiando las preguntas de la actual y deja la anterior como histórica
     [HttpPost("{id}/nueva-version")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<ChecklistDto>>> CreateVersion(long id, CreateChecklistVersionDto createDto)
     {
         var origen = await _context.Checklists

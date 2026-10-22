@@ -119,8 +119,8 @@ public class NovedadesTests
             return usuario;
         }
 
-        var inspector = Nuevo("Ana Inspectora", "ana@ecar.test", "Técnico");
-        var otro = Nuevo("Luis Técnico", "luis@ecar.test", "Técnico");
+        var inspector = Nuevo("Ana Inspectora", "ana@ecar.test", "Operador");
+        var otro = Nuevo("Luis Técnico", "luis@ecar.test", RolesSistema.Estandar);
         var admin = Nuevo("Carla Admin", "carla@ecar.test", "Administrador");
         var equipo = new Equipo
         {
@@ -161,11 +161,11 @@ public class NovedadesTests
         return inspeccion;
     }
 
-    private static InspeccionesController Inspecciones(Escenario e, Usuario usuario, string rol = "Técnico") =>
+    private static InspeccionesController Inspecciones(Escenario e, Usuario usuario, string rol = "Operador") =>
         new(e.Db, new Usuario1(usuario.IdUsuario, rol), new InspeccionService(e.Db), new Almacen(),
             NullLogger<InspeccionesController>.Instance, new MotivoCambio(), e.Notificador);
 
-    private static NovedadesController Novedades(Escenario e, Usuario usuario, string rol = "Técnico") =>
+    private static NovedadesController Novedades(Escenario e, Usuario usuario, string rol = RolesSistema.Estandar) =>
         new(e.Db, new Usuario1(usuario.IdUsuario, rol), new MotivoCambio(), e.Notificador);
 
     private static async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarAsync(Escenario e, long idInspeccion)
@@ -186,7 +186,7 @@ public class NovedadesTests
     }
 
     private static async Task<ActionResult<ApiResponse<NovedadDto>>> ResolverAsync(Escenario e, Usuario usuario, long idNovedad,
-        string? password = FirmaPruebas.Password, string solucion = Solucion, string firma = FirmaPng, string rol = "Técnico")
+        string? password = FirmaPruebas.Password, string solucion = Solucion, string firma = FirmaPng, string rol = RolesSistema.Estandar)
     {
         var resultado = await Novedades(e, usuario, rol).ResolverNovedad(idNovedad,
             new ResolverNovedadDto { Solucion = solucion, FirmaPngBase64 = firma, Password = password },
@@ -350,12 +350,12 @@ public class NovedadesTests
             a => a.Tabla == "Inspecciones" && a.RegistroId == inspeccion.IdInspeccion && a.Accion == AuditoriaAcciones.Cerrar);
 
         // El resultado cambió después de firmar, pero no forma parte del sello v2.
-        var integridadInspeccion = await Inspecciones(e, e.Admin, "Auditor")
+        var integridadInspeccion = await Inspecciones(e, e.Admin, "Supervisor")
             .VerificarIntegridad(inspeccion.IdInspeccion, FirmaPruebas.CrearVerificador(new Almacen()));
         Assert.True(Respuesta<IntegridadInspeccionDto>(integridadInspeccion).Data!.Integra);
         foreach (var novedad in novedades)
         {
-            var integridad = await Novedades(e, e.Admin, "Auditor")
+            var integridad = await Novedades(e, e.Admin, "Supervisor")
                 .VerificarIntegridad(novedad.IdNovedad, FirmaPruebas.CrearVerificador(new Almacen()));
             Assert.True(Respuesta<IntegridadInspeccionDto>(integridad).Data!.Integra);
         }
@@ -465,9 +465,9 @@ public class NovedadesTests
         await e.Db.SaveChangesAsync();
         e.Db.ChangeTracker.Clear();
 
-        var alterada = await Novedades(e, e.Admin, "Auditor").VerificarIntegridad(id, FirmaPruebas.CrearVerificador(new Almacen()));
-        var pendiente = await Novedades(e, e.Admin, "Auditor").VerificarIntegridad(novedades[1].IdNovedad, FirmaPruebas.CrearVerificador(new Almacen()));
-        var otraClave = await Novedades(e, e.Admin, "Auditor").VerificarIntegridad(id,
+        var alterada = await Novedades(e, e.Admin, "Supervisor").VerificarIntegridad(id, FirmaPruebas.CrearVerificador(new Almacen()));
+        var pendiente = await Novedades(e, e.Admin, "Supervisor").VerificarIntegridad(novedades[1].IdNovedad, FirmaPruebas.CrearVerificador(new Almacen()));
+        var otraClave = await Novedades(e, e.Admin, "Supervisor").VerificarIntegridad(id,
             FirmaPruebas.CrearVerificador(new Almacen(), "otra-clave-de-prueba-con-mas-de-32-caracteres"));
 
         Assert.False(Respuesta<IntegridadInspeccionDto>(alterada).Data!.Integra);
@@ -541,8 +541,8 @@ public class NovedadesTests
         var (inspeccion, novedades) = await FirmadaConDosNovedadesAsync(e);
         await ResolverAsync(e, e.OtroTecnico, novedades[1].IdNovedad);
 
-        var detalle = Respuesta<NovedadDetalleDto>(await Novedades(e, e.Admin, "Auditor").GetNovedad(novedades[1].IdNovedad)).Data!;
-        var inexistente = await Novedades(e, e.Admin, "Auditor").GetNovedad(999);
+        var detalle = Respuesta<NovedadDetalleDto>(await Novedades(e, e.Admin, "Supervisor").GetNovedad(novedades[1].IdNovedad)).Data!;
+        var inexistente = await Novedades(e, e.Admin, "Supervisor").GetNovedad(999);
 
         Assert.Equal(" Burbuja corrida ", detalle.ObservacionRespuesta);
         Assert.Equal(InspeccionEstados.NovedadesPendientes, detalle.EstadoInspeccion);
@@ -572,7 +572,7 @@ public class NovedadesTests
 
     // ------------------------------------------------------------------ consultar la inspección
 
-    private static EvidenciasController Evidencias(Escenario e, Usuario usuario, string rol = "Técnico") =>
+    private static EvidenciasController Evidencias(Escenario e, Usuario usuario, string rol = "Operador") =>
         new(e.Db, new Usuario1(usuario.IdUsuario, rol), new Almacen(), Options.Create(new EvidenciasOptions()), new MotivoCambio())
         {
             ControllerContext = new ControllerContext
@@ -606,7 +606,7 @@ public class NovedadesTests
         var e = await SeedAsync();
         var (inspeccion, foto) = await FirmadaConFotoAsync(e, No(e.Limpieza, "Polvo en el plato"), Si(e.Nivel));
         var id = inspeccion.IdInspeccion;
-        var otro = Inspecciones(e, e.OtroTecnico);
+        var otro = Inspecciones(e, e.OtroTecnico, RolesSistema.Estandar);
 
         var resultado = Respuesta<InspeccionResultadoDto>(await otro.GetResultado(id)).Data!;
         Assert.Equal("Ana Inspectora", resultado.NombreUsuario);
@@ -617,9 +617,10 @@ public class NovedadesTests
         Assert.IsType<OkObjectResult>((await otro.GetEjecucion(id)).Result);
         Assert.IsType<OkObjectResult>((await otro.GetRespuestas(id)).Result);
         Assert.IsType<FileContentResult>(await otro.ObtenerRegistroPdf(id));
-        Assert.IsType<OkObjectResult>((await Evidencias(e, e.OtroTecnico).GetEvidenciasInspeccion(id)).Result);
-        Assert.IsType<OkObjectResult>((await Evidencias(e, e.OtroTecnico).GetEvidencia(foto.IdEvidencia)).Result);
-        Assert.IsType<FileStreamResult>(await Evidencias(e, e.OtroTecnico).GetArchivo(foto.IdEvidencia));
+        var fotos = Evidencias(e, e.OtroTecnico, RolesSistema.Estandar);
+        Assert.IsType<OkObjectResult>((await fotos.GetEvidenciasInspeccion(id)).Result);
+        Assert.IsType<OkObjectResult>((await fotos.GetEvidencia(foto.IdEvidencia)).Result);
+        Assert.IsType<FileStreamResult>(await fotos.GetArchivo(foto.IdEvidencia));
 
         // Solo lectura: modificarla sigue siendo del inspector o del Administrador.
         Assert.IsType<ForbidResult>((await otro.UpdateInspeccion(id, new UpdateInspeccionDto { Observaciones = "Cambio" })).Result);
@@ -636,25 +637,52 @@ public class NovedadesTests
         var e = await SeedAsync();
         var (conforme, foto) = await FirmadaConFotoAsync(e, Si(e.Limpieza), Si(e.Nivel));
         var enCurso = await EnCursoAsync(e, No(e.Limpieza, "Aún sin firmar"));
-        var otro = Inspecciones(e, e.OtroTecnico);
+        // Ni siquiera un Estándar, que sí ve las ajenas con novedades.
+        var otro = Inspecciones(e, e.OtroTecnico, RolesSistema.Estandar);
+        var fotos = Evidencias(e, e.OtroTecnico, RolesSistema.Estandar);
 
         Assert.IsType<ForbidResult>((await otro.GetResultado(conforme.IdInspeccion)).Result);
         Assert.IsType<ForbidResult>((await otro.GetInspeccion(conforme.IdInspeccion)).Result);
         Assert.IsType<ForbidResult>((await otro.GetRespuestas(conforme.IdInspeccion)).Result);
         Assert.IsType<ForbidResult>(await otro.ObtenerRegistroPdf(conforme.IdInspeccion));
-        Assert.IsType<ForbidResult>((await Evidencias(e, e.OtroTecnico).GetEvidenciasInspeccion(conforme.IdInspeccion)).Result);
-        Assert.IsType<ForbidResult>((await Evidencias(e, e.OtroTecnico).GetEvidencia(foto.IdEvidencia)).Result);
-        Assert.IsType<ForbidResult>(await Evidencias(e, e.OtroTecnico).GetArchivo(foto.IdEvidencia));
+        Assert.IsType<ForbidResult>((await fotos.GetEvidenciasInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await fotos.GetEvidencia(foto.IdEvidencia)).Result);
+        Assert.IsType<ForbidResult>(await fotos.GetArchivo(foto.IdEvidencia));
 
         // Un «No» todavía sin firmar no es novedad: la inspección en curso es de quien la ejecuta.
         Assert.IsType<ForbidResult>((await otro.GetEjecucion(enCurso.IdInspeccion)).Result);
 
-        // El listado de un Técnico sigue siendo el de sus inspecciones.
+        // El listado de un Estándar sigue siendo el de sus inspecciones.
         var listado = Respuesta<PagedResultDto<InspeccionDto>>(await otro.GetInspecciones()).Data!;
         Assert.Equal(0, listado.TotalCount);
 
-        // El Auditor, en cambio, consulta cualquiera.
-        Assert.IsType<OkObjectResult>((await Inspecciones(e, e.Admin, "Auditor").GetResultado(conforme.IdInspeccion)).Result);
+        // El Supervisor, en cambio, consulta cualquiera.
+        Assert.IsType<OkObjectResult>((await Inspecciones(e, e.Admin, "Supervisor").GetResultado(conforme.IdInspeccion)).Result);
+    }
+
+    [Fact]
+    public async Task El_Operador_solo_ve_las_novedades_de_sus_inspecciones_y_no_abre_las_ajenas()
+    {
+        var e = await SeedAsync();
+        var (propia, _) = await FirmadaConDosNovedadesAsync(e);
+        // Otro Operador, que no hizo la inspección.
+        var otroOperador = Inspecciones(e, e.OtroTecnico, RolesSistema.Operador);
+        var novedadesDelOtro = Novedades(e, e.OtroTecnico, RolesSistema.Operador);
+
+        Assert.IsType<ForbidResult>((await otroOperador.GetResultado(propia.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await otroOperador.GetRespuestas(propia.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await Evidencias(e, e.OtroTecnico, RolesSistema.Operador)
+            .GetEvidenciasInspeccion(propia.IdInspeccion)).Result);
+        Assert.Equal(0, Respuesta<PagedResultDto<NovedadDto>>(
+            await novedadesDelOtro.GetNovedades(new NovedadFiltroDto())).Data!.TotalCount);
+        var unaNovedad = await e.Db.Novedades.AsNoTracking().FirstAsync();
+        Assert.IsType<ForbidResult>((await novedadesDelOtro.GetNovedad(unaNovedad.IdNovedad)).Result);
+
+        // El Operador que la hizo ve sus dos novedades y su detalle, aunque no las pueda resolver.
+        var delInspector = Novedades(e, e.Inspector, RolesSistema.Operador);
+        Assert.Equal(2, Respuesta<PagedResultDto<NovedadDto>>(
+            await delInspector.GetNovedades(new NovedadFiltroDto { IdInspeccion = propia.IdInspeccion })).Data!.TotalCount);
+        Assert.IsType<OkObjectResult>((await delInspector.GetNovedad(unaNovedad.IdNovedad)).Result);
     }
 
     // ------------------------------------------------------------------ modelo y permisos
@@ -676,16 +704,16 @@ public class NovedadesTests
     }
 
     [Theory]
-    [InlineData(nameof(NovedadesController.ResolverNovedad), "Administrador,Técnico")]
+    [InlineData(nameof(NovedadesController.ResolverNovedad), "Administrador,Estándar")]
     [InlineData(nameof(NovedadesController.AnularNovedad), "Administrador")]
-    [InlineData(nameof(NovedadesController.VerificarIntegridad), "Administrador,Auditor")]
+    [InlineData(nameof(NovedadesController.VerificarIntegridad), "Administrador,Supervisor")]
     [InlineData(nameof(NovedadesController.Notificar), "Administrador")]
     public void Cada_accion_exige_su_rol(string accion, string roles)
     {
         var metodo = typeof(NovedadesController).GetMethod(accion)!;
 
         Assert.Equal(roles, metodo.GetCustomAttribute<AuthorizeAttribute>()!.Roles);
-        Assert.Equal("Administrador,Técnico,Auditor", typeof(NovedadesController).GetCustomAttribute<AuthorizeAttribute>()!.Roles);
+        Assert.Equal("Administrador,Operador,Estándar,Supervisor", typeof(NovedadesController).GetCustomAttribute<AuthorizeAttribute>()!.Roles);
     }
 
     [Fact]

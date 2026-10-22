@@ -15,7 +15,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = RolesSistema.Administrador)]
 public class UsuariosController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -363,7 +363,7 @@ public class UsuariosController : ControllerBase
     /// nada y avisaba de un éxito falso.
     /// </summary>
     [HttpPut("{id}/activar")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> ActivarUsuario(long id, [FromQuery] string? motivo = null)
     {
         var usuario = await _context.Usuarios.FindAsync(id);

@@ -2,6 +2,7 @@
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Mvc;
@@ -118,8 +119,8 @@ public class BackendPhaseOneTests
     public async Task UpdatingRoleAssignmentReturnsTheNewUserAndRole()
     {
         await using var context = CreateContext();
-        var auditor = new Rol { Nombre = "Auditor" };
-        var tecnico = new Rol { Nombre = "Técnico" };
+        var auditor = new Rol { Nombre = "Supervisor" };
+        var tecnico = new Rol { Nombre = "Operador" };
         var firstUser = new Usuario
         {
             Nombre = "Primer usuario",
@@ -148,14 +149,14 @@ public class BackendPhaseOneTests
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<ApiResponse<UsuarioRolDto>>(ok.Value);
         Assert.Equal("Segundo usuario", response.Data!.UsuarioNombre);
-        Assert.Equal("Técnico", response.Data.RolNombre);
+        Assert.Equal("Operador", response.Data.RolNombre);
     }
 
     [Fact]
     public async Task SeederCompletesPartiallyPopulatedDatabase()
     {
         await using var context = CreateContext();
-        context.Roles.Add(new Rol { Nombre = "Auditor" });
+        context.Roles.Add(new Rol { Nombre = "Supervisor" });
         context.CategoriasEquipo.Add(new CategoriaEquipo { Nombre = "Instrumentación" });
         context.Ubicaciones.Add(new Ubicacion { Planta = "Planta Principal", Area = "Producción" });
         await context.SaveChangesAsync();
@@ -169,11 +170,37 @@ public class BackendPhaseOneTests
         await DataSeeder.SeedDataAsync(context, configuration);
         await DataSeeder.SeedDataAsync(context, configuration);
 
-        Assert.Equal(3, await context.Roles.CountAsync());
+        Assert.Equal(RolesSistema.DelSistema.OrderBy(r => r), (await context.Roles.Select(r => r.Nombre).ToListAsync()).OrderBy(r => r));
         Assert.Equal(1, await context.Usuarios.CountAsync(u => u.Correo == "admin@ecar.com"));
         Assert.Equal(1, await context.UsuarioRoles.CountAsync());
         Assert.Equal(4, await context.CategoriasEquipo.CountAsync());
         Assert.Equal(3, await context.Ubicaciones.CountAsync());
+    }
+
+    [Fact]
+    public async Task El_seeder_renombra_Tecnico_y_Auditor_y_sus_usuarios_conservan_el_rol()
+    {
+        await using var context = CreateContext();
+        var tecnico = new Rol { Nombre = RolesSistema.TecnicoAnterior };
+        var auditor = new Rol { Nombre = RolesSistema.AuditorAnterior };
+        var ana = new Usuario { Nombre = "Ana", Correo = "ana@ecar.test", PasswordHash = "x" };
+        var raul = new Usuario { Nombre = "Raúl", Correo = "raul@ecar.test", PasswordHash = "x" };
+        ana.UsuarioRoles.Add(new UsuarioRol { Rol = tecnico });
+        raul.UsuarioRoles.Add(new UsuarioRol { Rol = auditor });
+        context.AddRange(ana, raul);
+        await context.SaveChangesAsync();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AdminPassword"] = "ClaveTemporalSegura123!" })
+            .Build();
+
+        await DataSeeder.SeedDataAsync(context, configuration);
+        await DataSeeder.SeedDataAsync(context, configuration);
+
+        Assert.Equal(RolesSistema.DelSistema.OrderBy(r => r), (await context.Roles.Select(r => r.Nombre).ToListAsync()).OrderBy(r => r));
+        string RolDe(Usuario u) => context.UsuarioRoles.Include(ur => ur.Rol).Single(ur => ur.IdUsuario == u.IdUsuario).Rol.Nombre;
+        Assert.Equal(RolesSistema.Operador, RolDe(ana));
+        Assert.Equal(RolesSistema.Supervisor, RolDe(raul));
+        Assert.Equal(tecnico.IdRol, (await context.Roles.SingleAsync(r => r.Nombre == RolesSistema.Operador)).IdRol);
     }
 
     private static ECARDbContext CreateContext()

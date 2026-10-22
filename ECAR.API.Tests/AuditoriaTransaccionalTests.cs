@@ -325,7 +325,7 @@ public class AuditoriaTransaccionalTests
     {
         await using var db = CrearContexto(new ContextoFalso());
         var usuario = NuevoUsuario();
-        var rol = new Rol { Nombre = "Auditor" };
+        var rol = new Rol { Nombre = "Supervisor" };
         db.AddRange(usuario, rol);
         await db.SaveChangesAsync();
         var asignacion = new UsuarioRol { IdUsuario = usuario.IdUsuario, IdRol = rol.IdRol };
@@ -369,7 +369,7 @@ public class AuditoriaTransaccionalTests
     {
         await using var db = CrearContexto();
 
-        db.Roles.Add(new Rol { Nombre = "Técnico" });
+        db.Roles.Add(new Rol { Nombre = "Operador" });
         await db.SaveChangesAsync();
 
         var fila = Assert.Single(await FilasAsync(db));
@@ -384,7 +384,7 @@ public class AuditoriaTransaccionalTests
         var nombreBase = Guid.NewGuid().ToString();
         await using (var db = CrearContexto(new ContextoFalso(), nombreBase))
         {
-            db.AddRange(NuevoEquipo(), new Rol { Nombre = "Auditor" }, new CategoriaEquipo { Nombre = "Lab" });
+            db.AddRange(NuevoEquipo(), new Rol { Nombre = "Supervisor" }, new CategoriaEquipo { Nombre = "Lab" });
             await db.SaveChangesAsync();
             db.Ubicaciones.Add(new Ubicacion { Planta = "Principal", Area = "QC" });
             await db.SaveChangesAsync();

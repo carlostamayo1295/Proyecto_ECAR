@@ -71,7 +71,7 @@ public class MigracionFase4Tests
         // Lo que se escribe después cuelga de la última fila sellada.
         await using (var db = baseDePruebas.CrearContexto(new ContextoDePrueba()))
         {
-            db.Roles.Add(new Rol { Nombre = "Auditor" });
+            db.Roles.Add(new Rol { Nombre = "Supervisor" });
             await db.SaveChangesAsync();
         }
 

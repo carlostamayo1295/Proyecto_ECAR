@@ -112,7 +112,7 @@ public class BackendPhaseThreeTests
             new Claim(ClaimTypes.NameIdentifier, "42"),
             new Claim(ClaimTypes.Name, "Carlos Tamayo"),
             new Claim(ClaimTypes.Role, "Administrador"),
-            new Claim(ClaimTypes.Role, "Técnico")
+            new Claim(ClaimTypes.Role, "Operador")
         ], "Test"));
         var accessor = new HttpContextAccessor
         {
@@ -123,7 +123,7 @@ public class BackendPhaseThreeTests
 
         Assert.Equal(42, currentUser.IdUsuario);
         Assert.Equal("Carlos Tamayo", currentUser.Nombre);
-        Assert.Equal(["Administrador", "Técnico"], currentUser.Roles);
+        Assert.Equal(["Administrador", "Operador"], currentUser.Roles);
         Assert.True(currentUser.IsInRole("Administrador"));
     }
 
@@ -153,7 +153,7 @@ public class BackendPhaseThreeTests
         var currentUser = new FakeCurrentUser(
             escenario.Tecnico.IdUsuario,
             escenario.Tecnico.Nombre,
-            "Técnico");
+            "Operador");
         var controller = CreateController(context, currentUser);
 
         var action = await controller.IniciarInspeccion(new IniciarInspeccionDto
@@ -181,7 +181,7 @@ public class BackendPhaseThreeTests
         var escenario = await SeedEscenarioAsync(context);
         var controller = CreateController(
             context,
-            new FakeCurrentUser(escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico"));
+            new FakeCurrentUser(escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Operador"));
         var dto = new IniciarInspeccionDto
         {
             IdEquipo = escenario.Equipo.IdEquipo,
@@ -227,7 +227,7 @@ public class BackendPhaseThreeTests
         await context.SaveChangesAsync();
         var controller = CreateController(
             context,
-            new FakeCurrentUser(escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico"));
+            new FakeCurrentUser(escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Operador"));
 
         var action = await controller.GetEjecucion(inspeccion.IdInspeccion);
 
@@ -255,7 +255,7 @@ public class BackendPhaseThreeTests
         await context.SaveChangesAsync();
         var controller = CreateController(
             context,
-            new FakeCurrentUser(escenario.OtroTecnico.IdUsuario, escenario.OtroTecnico.Nombre, "Técnico"));
+            new FakeCurrentUser(escenario.OtroTecnico.IdUsuario, escenario.OtroTecnico.Nombre, "Operador"));
 
         var action = await controller.GetEjecucion(inspeccion.IdInspeccion);
 

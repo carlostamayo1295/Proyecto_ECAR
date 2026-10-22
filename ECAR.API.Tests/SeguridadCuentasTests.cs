@@ -44,7 +44,7 @@ public class SeguridadCuentasTests
 
     private static async Task<Usuario> CrearUsuarioAsync(ECARDbContext context)
     {
-        var rol = new Rol { Nombre = "Técnico" };
+        var rol = new Rol { Nombre = "Operador" };
         var usuario = new Usuario
         {
             Nombre = "Cuenta de Prueba",

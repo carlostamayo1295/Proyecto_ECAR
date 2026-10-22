@@ -18,7 +18,7 @@ namespace ECAR.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Administrador,Auditor")]
+    [Authorize(Roles = RolesSistema.Supervisan)]
     public class ReportesController : ControllerBase
     {
         private readonly IReporteService _reporteService;
@@ -69,40 +69,6 @@ namespace ECAR.API.Controllers
                  new("Fecha", 2.4), new("Responsable", 3), new("Estado", 2.2)],
                 f => [f.IdNovedad, f.Equipo, f.Area, f.Novedad, f.Criticidad, HoraColombia.DesdeUtc(f.Fecha),
                       f.Responsable ?? "Sin resolver", f.Estado]);
-
-        [HttpGet("cumplimiento")]
-        public async Task<IActionResult> GetCumplimiento([FromQuery] ReporteFiltroDto filtro,
-            [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
-        {
-            var error = Validar(filtro, formato);
-            if (error != null)
-            {
-                return BadRequest(ApiResponse<bool>.ErrorResponse(error));
-            }
-
-            var filas = await _reporteService.CumplimientoAsync(filtro);
-            if (formato == ReporteFormatos.Json)
-            {
-                return Ok(ApiResponse<PagedResultDto<CumplimientoFilaDto>>.SuccessResponse(Paginar(filas, page, pageSize)));
-            }
-
-            var programados = filas.Sum(f => f.EquiposProgramados);
-            var inspeccionados = filas.Sum(f => f.EquiposInspeccionados);
-            var resumen = new List<(string, string)>
-            {
-                ("Equipos programados", programados.ToString()),
-                ("Equipos inspeccionados", inspeccionados.ToString()),
-                ("Cumplimiento total", programados == 0 ? "—" : $"{Math.Round(100m * inspeccionados / programados, 1)} %"),
-                ("Definición", "programados = equipos activos con frecuencia de inspección; inspeccionados = con al menos una inspección firmada en el periodo")
-            };
-
-            return await Archivo(ReporteTipos.Cumplimiento, "Cumplimiento de inspecciones", filtro, formato,
-                [new("Periodo", 2.5), new("Planta", 5), new("Área", 5), new("Programados", 3.5), new("Inspeccionados", 3.5),
-                 new("Cumplimiento %", 3.5)],
-                filas.Select(f => (IReadOnlyList<object?>)[f.Periodo, f.Planta, f.Area, f.EquiposProgramados,
-                    f.EquiposInspeccionados, f.PorcentajeCumplimiento]).ToList(),
-                resumen);
-        }
 
         [HttpGet("inspecciones-fechas")]
         public async Task<IActionResult> GetInspeccionesFechas([FromQuery] ReporteFiltroDto filtro,
@@ -199,19 +165,6 @@ namespace ECAR.API.Controllers
             if (filtro.Hasta.Value.Date > filtro.Desde.Value.Date.AddYears(1))
                 return "El rango no puede superar un año";
             return null;
-        }
-
-        private static PagedResultDto<T> Paginar<T>(List<T> filas, int page, int pageSize)
-        {
-            page = Math.Max(page, 1);
-            pageSize = Math.Clamp(pageSize, 1, 200);
-            return new PagedResultDto<T>
-            {
-                Data = filas.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
-                TotalCount = filas.Count,
-                Page = page,
-                PageSize = pageSize
-            };
         }
 
         private static string TextoFiltros(ReporteFiltroDto f)

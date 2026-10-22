@@ -51,14 +51,21 @@
         <MudList T="string">
             <MudListItem T="string" Text="Home" Icon="@Icons.Material.Filled.Home" Href="/" Class="nav-item" />
             <MudListItem T="string" Text="Inspecciones" Icon="@Icons.Material.Filled.Assignment" Href="/inspecciones" Class="nav-item" />
-            @* Consulta de equipos para los tres roles (SRS §4); crear y editar sigue siendo del Administrador. *@
+            @* Consulta de equipos para todos los roles; crear y editar sigue siendo del Administrador. *@
             <MudListItem T="string" Text="Equipos" Icon="@Icons.Material.Filled.Devices" Href="/equipos" Class="nav-item" />
             <MudListItem T="string" Text="Evidencias" Icon="@Icons.Material.Filled.PhotoLibrary" Href="/evidencias" Class="nav-item" />
-            <MudListItem T="string" Text="Novedades" Icon="@Icons.Material.Filled.ReportProblem" Href="/novedades" Class="nav-item" />
+            @* El Operador no resuelve novedades: las de sus inspecciones las ve en el resultado de cada una. *@
+            @if (!soloOperador)
+            {
+                <MudListItem T="string" Text="Novedades" Icon="@Icons.Material.Filled.ReportProblem" Href="/novedades" Class="nav-item" />
+            }
             <MudListItem T="string" Text="Checklists" Icon="@Icons.Material.Filled.PlaylistAddCheck" Href="/checklists" Class="nav-item" />
-            <MudListItem T="string" Text="Categoría de Equipos" Icon="@Icons.Material.Filled.Category" Href="/categorias-equipo" Class="nav-item" />
-            @* El API de auditoría es solo para Administrador y Auditor (SRS §4). *@
-            @if (isAdmin || isAuditor)
+            @if (!soloOperador)
+            {
+                <MudListItem T="string" Text="Categoría de Equipos" Icon="@Icons.Material.Filled.Category" Href="/categorias-equipo" Class="nav-item" />
+            }
+            @* Reportes y auditoría: solo Administrador y Supervisor, igual que el API. *@
+            @if (isAdmin || isSupervisor)
             {
                 <MudListItem T="string" Text="Auditoría" Icon="@Icons.Material.Filled.History" Href="/auditoria" Class="nav-item" />
                 <MudListItem T="string" Text="Reportes" Icon="@Icons.Material.Filled.Summarize" Href="/reportes" Class="nav-item" />
@@ -168,7 +175,8 @@
 @code {
     private bool drawerOpen = true;
     private bool isAdmin = false;
-    private bool isAuditor = false;
+    private bool isSupervisor = false;
+    private bool soloOperador = false;
     private bool isAuthenticated = false;
 
     protected override async Task OnInitializedAsync()
@@ -177,8 +185,11 @@
         drawerOpen = isAuthenticated;
         if (isAuthenticated)
         {
-            isAdmin = await AuthorizationService.IsAdminAsync();
-            isAuditor = await AuthorizationService.HasRoleAsync("Auditor");
+            var roles = await AuthorizationService.GetUserRolesAsync();
+            isAdmin = roles.Contains(RolesSistema.Administrador);
+            isSupervisor = roles.Contains(RolesSistema.Supervisor);
+            soloOperador = roles.Contains(RolesSistema.Operador) && !isAdmin && !isSupervisor
+                           && !roles.Contains(RolesSistema.Estandar);
         }
     }
 

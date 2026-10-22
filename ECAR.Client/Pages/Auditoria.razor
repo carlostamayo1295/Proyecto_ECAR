@@ -11,8 +11,8 @@
    de la cadena y la exportación los publica BE-1/BE-2 durante la fase (endpoints 1, 2, 3 y 21);
    hasta entonces el API ignora esos filtros y responde 404 a lo demás, y la pantalla lo dice. *@
 
-<RolRouteGuard Roles="@(new[] { "Administrador", "Auditor" })"
-               MensajeNoAutorizado="Solo administradores y auditores pueden consultar la auditoría.">
+<RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Supervisor })"
+               MensajeNoAutorizado="Solo administradores y supervisores pueden consultar la auditoría.">
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader Class="cabecera-auditoria">
@@ -162,9 +162,9 @@
     protected override async Task OnInitializedAsync()
     {
         // La guarda es un componente hijo: no detiene el ciclo de vida de la página. Sin esta
-        // comprobación, un Técnico vería además un "No tiene permiso" del API.
+        // comprobación, un Operador vería además un "No tiene permiso" del API.
         var roles = await AuthorizationService.GetUserRolesAsync();
-        if (!roles.Contains("Administrador") && !roles.Contains("Auditor"))
+        if (!roles.Contains(RolesSistema.Administrador) && !roles.Contains(RolesSistema.Supervisor))
         {
             return;
         }

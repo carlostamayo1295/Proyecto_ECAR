@@ -152,7 +152,7 @@ public class AuditoriaHistorialTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var controller = new InspeccionesController(context, new FakeCurrentUser(tecnico.IdUsuario, "Técnico"),
+        var controller = new InspeccionesController(context, new FakeCurrentUser(tecnico.IdUsuario, "Operador"),
             new InspeccionService(context), new FakeStorage(), NullLogger<InspeccionesController>.Instance, motivo);
         await controller.UpdateInspeccion(inspeccion.IdInspeccion, new UpdateInspeccionDto { Observaciones = "Equipo apagado" });
         context.ChangeTracker.Clear();

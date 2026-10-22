@@ -225,7 +225,7 @@ public class BackendPhaseTwoTests
     private static async Task SeedRespuestaAsync(ECARDbContext context, Checklist checklist)
     {
         var equipo = await SeedEquipoAsync(context);
-        var usuario = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.com", PasswordHash = "hash", Activo = true };
+        var usuario = new Usuario { Nombre = "Operador", Correo = "tecnico@ecar.com", PasswordHash = "hash", Activo = true };
         context.Usuarios.Add(usuario);
         await context.SaveChangesAsync();
 

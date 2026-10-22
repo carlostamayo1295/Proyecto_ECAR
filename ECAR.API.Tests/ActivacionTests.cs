@@ -21,7 +21,7 @@ public class ActivacionTests
     public async Task UsuarioDesactivadoSePuedeReactivar()
     {
         await using var context = CreateContext();
-        var usuario = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.com", Activo = true };
+        var usuario = new Usuario { Nombre = "Operador", Correo = "tecnico@ecar.com", Activo = true };
         context.Usuarios.Add(usuario);
         await context.SaveChangesAsync();
         var controller = Fabrica.Usuarios(context);

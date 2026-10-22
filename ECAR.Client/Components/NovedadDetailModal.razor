@@ -1,6 +1,6 @@
 @* Detalle de una novedad y su resolución firmada. Resolver es firmar, como al cerrar una
    inspección: lo que se hizo, la firma dibujada y la contraseña (ConfirmarIdentidadDialog). Lo
-   puede firmar cualquier Técnico o Administrador, aunque no haya hecho la inspección, y para
+   puede firmar cualquier Estándar o Administrador, aunque no haya hecho la inspección, y para
    orientarse puede abrir la inspección completa (respuestas, fotos y firma; el API lo permite en
    solo lectura). El Administrador puede anular con motivo una novedad registrada por error y
    reenviar su correo.
@@ -242,9 +242,9 @@
     protected override async Task OnInitializedAsync()
     {
         var roles = await AuthorizationService.GetUserRolesAsync();
-        esAdmin = roles.Contains("Administrador");
-        puedeGestionar = esAdmin || roles.Contains("Técnico");
-        puedeVerSello = esAdmin || roles.Contains("Auditor");
+        esAdmin = roles.Contains(RolesSistema.Administrador);
+        puedeGestionar = esAdmin || roles.Contains(RolesSistema.Estandar);
+        puedeVerSello = esAdmin || roles.Contains(RolesSistema.Supervisor);
 
         await CargarAsync();
         resolviendo = Resolver && PuedeResolver;

@@ -5,8 +5,8 @@
 @inject ISnackbar Snackbar
 @inject AuthorizationService AuthorizationService
 
-<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
-                MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden ver el resultado de una inspección.">
+<RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Operador, RolesSistema.Estandar, RolesSistema.Supervisor })"
+                MensajeNoAutorizado="Necesita un rol del sistema para ver el resultado de una inspección.">
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 mb-4">
     @if (_cargando)
     {
@@ -56,7 +56,7 @@
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.body2"><b>Fecha de firma:</b> @resultado.FechaCierre?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
-                    <MudText Typo="Typo.body2"><b>Técnico Responsable:</b> @resultado.NombreUsuario</MudText>
+                    <MudText Typo="Typo.body2"><b>Inspector responsable:</b> @resultado.NombreUsuario</MudText>
                 </MudItem>
             </MudGrid>
 
@@ -157,7 +157,7 @@
 
             <!-- Visualización de la Firma Capturada -->
             <div class="mb-4 text-center">
-                <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del Técnico</b></MudText>
+                <MudText Typo="Typo.subtitle2" Class="mb-2"><b>Firma del inspector</b></MudText>
                 @if (!string.IsNullOrEmpty(resultado.FirmaPngBase64))
                 {
                     <img src="data:image/png;base64,@resultado.FirmaPngBase64" alt="Firma de la inspección" style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; max-width: 300px; background: white;" />
@@ -221,7 +221,7 @@
                 resultado = response.Data;
 
                 var roles = await AuthorizationService.GetUserRolesAsync();
-                _puedeVerHash = roles.Contains("Auditor") || roles.Contains("Administrador");
+                _puedeVerHash = roles.Contains(RolesSistema.Supervisor) || roles.Contains(RolesSistema.Administrador);
 
                 await CargarMiniaturasAsync();
             }

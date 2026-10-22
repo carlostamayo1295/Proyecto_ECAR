@@ -7,16 +7,16 @@
    botones PDF/Excel descargan el mismo archivo, así que nunca pueden discrepar.
 
    Las fechas son obligatorias y el rango máximo es un año (se valida acá antes de llamar al API,
-   además de lo que valide el servidor). Solo Administrador y Auditor, igual que el API. *@
+   además de lo que valide el servidor). Solo Administrador y Supervisor, igual que el API. *@
 
-<RolRouteGuard Roles="@(new[] { "Administrador", "Auditor" })"
-               MensajeNoAutorizado="Solo administradores y auditores pueden consultar los reportes.">
+<RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Supervisor })"
+               MensajeNoAutorizado="Solo administradores y supervisores pueden consultar los reportes.">
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
                 <MudText Typo="Typo.h5">Reportes</MudText>
-                <MudText Typo="Typo.body2">Historial de inspecciones, novedades y cumplimiento (SRS §7)</MudText>
+                <MudText Typo="Typo.body2">Historial de inspecciones y novedades (SRS §7)</MudText>
             </CardHeaderContent>
         </MudCardHeader>
 
@@ -272,76 +272,6 @@
                     }
                 </MudTabPanel>
 
-                @* ---------- Cumplimiento ---------- *@
-                <MudTabPanel Text="Cumplimiento">
-                    <MudGrid Class="mb-2" Spacing="2">
-                        <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Planta" @bind-Value="estadoCumplimiento.Filtro.Planta" Variant="Variant.Outlined" Clearable="true">
-                                @foreach (var planta in Plantas)
-                                {
-                                    <MudSelectItem T="string" Value="@planta">@planta</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Área" @bind-Value="estadoCumplimiento.Filtro.Area" Variant="Variant.Outlined" Clearable="true">
-                                @foreach (var area in Areas)
-                                {
-                                    <MudSelectItem T="string" Value="@area">@area</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="6" sm="3" lg="2">
-                            <MudDatePicker Label="Desde" @bind-Date="estadoCumplimiento.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
-                        </MudItem>
-                        <MudItem xs="6" sm="3" lg="2">
-                            <MudDatePicker Label="Hasta" @bind-Date="estadoCumplimiento.Filtro.Hasta" Variant="Variant.Outlined" Editable="true" />
-                        </MudItem>
-                        @BotonesConsulta(() => ConsultarAsync(estadoCumplimiento, ReporteTipos.Cumplimiento),
-                            f => DescargarAsync(estadoCumplimiento, ReporteTipos.Cumplimiento, f), estadoCumplimiento)
-                    </MudGrid>
-
-                    @if (estadoCumplimiento.Cargando)
-                    {
-                        <MudProgressLinear Indeterminate="true" Class="my-4" />
-                    }
-                    else if (estadoCumplimiento.Filas.Any())
-                    {
-                        @if (estadoCumplimiento.Filas.All(f => f.PorcentajeCumplimiento == null))
-                        {
-                            <MudAlert Severity="Severity.Warning" Class="mb-3">
-                                Ningún equipo de este filtro tiene frecuencia de inspección configurada: el cumplimiento no se puede calcular.
-                                Esto se define por equipo en la ficha técnica.
-                            </MudAlert>
-                        }
-                        <MudGrid>
-                            @foreach (var fila in estadoCumplimiento.Filas)
-                            {
-                                <MudItem xs="12" sm="6">
-                                    <MudPaper Class="pa-3" Outlined="true">
-                                        <div class="d-flex justify-space-between align-center mb-1">
-                                            <MudText Typo="Typo.body2"><b>@fila.Planta</b> · @fila.Area · @fila.Periodo</MudText>
-                                            <MudText Typo="Typo.body2">
-                                                @(fila.PorcentajeCumplimiento.HasValue ? $"{fila.PorcentajeCumplimiento:0}%" : "Sin programar")
-                                            </MudText>
-                                        </div>
-                                        <MudProgressLinear Color="@CumplimientoColor(fila.PorcentajeCumplimiento)"
-                                            Value="@((double)(fila.PorcentajeCumplimiento ?? 0))" Class="my-1" Rounded="true" Size="Size.Large" />
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                            @fila.EquiposInspeccionados de @fila.EquiposProgramados equipo(s) programado(s)
-                                        </MudText>
-                                    </MudPaper>
-                                </MudItem>
-                            }
-                        </MudGrid>
-                        @Paginacion(estadoCumplimiento, p => CambiarPaginaAsync(estadoCumplimiento, ReporteTipos.Cumplimiento, p))
-                    }
-                    else if (estadoCumplimiento.Consultado)
-                    {
-                        <MudAlert Severity="Severity.Info" Class="my-4">No hay datos de cumplimiento con estos filtros</MudAlert>
-                    }
-                </MudTabPanel>
-
                 @* ---------- Inspecciones por Fechas ---------- *@
                 <MudTabPanel Text="Inspecciones por Fechas">
                     <MudGrid Class="mb-2" Spacing="2">
@@ -467,7 +397,6 @@
     private readonly EstadoReporte<HistorialAreaFilaDto> estadoArea = new();
     private readonly EstadoReporte<HistorialTecnicoFilaDto> estadoTecnico = new();
     private readonly EstadoReporte<EquipoNovedadFilaDto> estadoNovedades = new();
-    private readonly EstadoReporte<CumplimientoFilaDto> estadoCumplimiento = new();
 
     // Inspecciones por Fechas no pagina: el servidor devuelve un único objeto con los totales
     // y el desglose por área completo.
@@ -681,13 +610,5 @@
         "media" => Color.Warning,
         "baja" => Color.Info,
         _ => Color.Default
-    };
-
-    private static Color CumplimientoColor(decimal? porcentaje) => porcentaje switch
-    {
-        null => Color.Default,
-        >= 90 => Color.Success,
-        >= 70 => Color.Warning,
-        _ => Color.Error
     };
 }

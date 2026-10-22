@@ -73,7 +73,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         var roles = await AuthorizationService.GetUserRolesAsync();
-        _puedeResolver = roles.Contains("Administrador") || roles.Contains("Técnico");
+        _puedeResolver = roles.Contains(RolesSistema.Administrador) || roles.Contains(RolesSistema.Estandar);
     }
 
     protected override async Task OnParametersSetAsync()

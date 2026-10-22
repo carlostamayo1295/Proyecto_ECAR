@@ -55,7 +55,7 @@
                     <MudCardContent>
                         <MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Large" Color="Color.Secondary" Class="feature-icon" />
                         <MudText Typo="Typo.h5" Class="feature-title">Reportes</MudText>
-                        <MudText Typo="Typo.body2" Class="feature-description">Generación de reportes de cumplimiento y auditoría regulatoria.</MudText>
+                        <MudText Typo="Typo.body2" Class="feature-description">Generación de reportes y auditoría regulatoria.</MudText>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
@@ -107,11 +107,9 @@
                 <MudPaper Class="indicador" Elevation="1">
                     <MudIcon Icon="@Icons.Material.Filled.PendingActions" Color="Color.Warning" />
                     <div>
-                        <MudText Typo="Typo.h4">@tablero.InspeccionesPendientes</MudText>
-                        <MudText Typo="Typo.body2">Inspecciones pendientes del periodo</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            de @tablero.EquiposProgramados equipos programados · @tablero.InspeccionesEnCurso en curso
-                        </MudText>
+                        <MudText Typo="Typo.h4">@tablero.InspeccionesEnCurso</MudText>
+                        <MudText Typo="Typo.body2">Inspecciones en curso</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">iniciadas y todavía sin firmar</MudText>
                     </div>
                 </MudPaper>
             </MudItem>

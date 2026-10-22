@@ -24,16 +24,6 @@ public class DashboardDto
     /// <summary>Inspecciones iniciadas y todavía sin firmar.</summary>
     public int InspeccionesEnCurso { get; set; }
 
-    /// <summary>
-    /// Equipos activos con frecuencia de inspección que aún no tienen una inspección firmada en su
-    /// periodo vigente: el mes en curso (o el trimestre, si son trimestrales). Es la misma regla
-    /// del reporte de cumplimiento, pendiente de confirmar con ECAR.
-    /// </summary>
-    public int InspeccionesPendientes { get; set; }
-
-    /// <summary>Equipos activos con frecuencia de inspección (los que entran en el cumplimiento).</summary>
-    public int EquiposProgramados { get; set; }
-
     /// <summary>Inspecciones firmadas que esperan a que se resuelvan sus novedades.</summary>
     public int InspeccionesConNovedadesPendientes { get; set; }
 

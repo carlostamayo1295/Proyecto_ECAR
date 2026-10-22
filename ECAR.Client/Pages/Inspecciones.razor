@@ -107,7 +107,8 @@
                                     Ver resultado
                                 </MudButton>
                             }
-                            @if (context.TotalNovedades > 0)
+                            @* El Operador no entra a Novedades: las de su inspección las ve en «Ver resultado». *@
+                            @if (context.TotalNovedades > 0 && veNovedades)
                             {
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.ReportProblem" Href="@($"/novedades?inspeccion={context.IdInspeccion}")" Class="action-button">
@@ -160,15 +161,19 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
-    // Administrador y Técnico ejecutan y editan; el Auditor solo consulta.
+    // Administrador, Operador y Estándar ejecutan y editan; el Supervisor solo consulta.
     private bool esAdmin;
     private bool puedeEjecutar;
+
+    // La pantalla Novedades es de Administrador, Estándar y Supervisor (igual que el menú).
+    private bool veNovedades;
 
     protected override async Task OnInitializedAsync()
     {
         var roles = await AuthorizationService.GetUserRolesAsync();
-        esAdmin = roles.Contains("Administrador");
-        puedeEjecutar = esAdmin || roles.Contains("Técnico");
+        esAdmin = roles.Contains(RolesSistema.Administrador);
+        puedeEjecutar = esAdmin || roles.Contains(RolesSistema.Operador) || roles.Contains(RolesSistema.Estandar);
+        veNovedades = esAdmin || roles.Contains(RolesSistema.Estandar) || roles.Contains(RolesSistema.Supervisor);
         await LoadInspeccionesAsync();
     }
 
@@ -245,7 +250,7 @@
 
     private async Task OpenCreateDialog()
     {
-        // El registro manual (POST /api/inspecciones) es solo del Administrador; un Técnico inicia
+        // El registro manual (POST /api/inspecciones) es solo del Administrador; un Operador o un Estándar inicia
         // la inspección eligiendo equipo y checklist, igual que desde el QR.
         if (!esAdmin)
         {

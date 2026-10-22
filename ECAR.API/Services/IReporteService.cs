@@ -3,9 +3,9 @@ using ECAR.Shared.DTOs;
 namespace ECAR.API.Services
 {
     /// <summary>
-    /// Consultas de los reportes del SRS §7 (endpoints 15 a 20). Las cuatro tabulares devuelven
-    /// una consulta ordenada para que el controlador pagine la vista previa o lleve todo el rango
-    /// al archivo; cumplimiento e inspecciones por fechas se calculan en memoria.
+    /// Consultas de los reportes del SRS §7. Las cuatro tabulares devuelven una consulta ordenada
+    /// para que el controlador pagine la vista previa o lleve todo el rango al archivo; inspecciones
+    /// por fechas se calcula en memoria. El de cumplimiento se retiró a pedido de ECAR (21/10/2026).
     /// </summary>
     public interface IReporteService
     {
@@ -13,7 +13,6 @@ namespace ECAR.API.Services
         IQueryable<HistorialAreaFilaDto> HistorialArea(ReporteFiltroDto filtro);
         IQueryable<HistorialTecnicoFilaDto> HistorialTecnico(ReporteFiltroDto filtro);
         IQueryable<EquipoNovedadFilaDto> EquiposNovedades(ReporteFiltroDto filtro);
-        Task<List<CumplimientoFilaDto>> CumplimientoAsync(ReporteFiltroDto filtro);
         Task<InspeccionesPorFechasDto> InspeccionesPorFechasAsync(ReporteFiltroDto filtro);
     }
 }

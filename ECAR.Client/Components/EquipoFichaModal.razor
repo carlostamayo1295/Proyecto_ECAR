@@ -3,8 +3,8 @@
 @inject AuthorizationService AuthorizationService
 
 @* Ficha técnica y consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Es de solo
-   lectura y la pueden abrir Administrador, Técnico y Auditor. El historial sale de
-   GET /api/inspecciones?idEquipo=: el API aplica sus reglas, así que un Técnico ve solo las suyas. *@
+   lectura y la pueden abrir todos los roles. El historial sale de
+   GET /api/inspecciones?idEquipo=: el API aplica sus reglas, así que un Operador o un Estándar ve solo las suyas. *@
 <MudDialog Options="Opciones">
     <TitleContent>
         <MudText Typo="Typo.h6">@Equipo.CodigoInterno · @Equipo.NombreEquipo</MudText>
@@ -152,7 +152,7 @@
     {
         await MudDialog.SetOptionsAsync(Opciones);
         var roles = await AuthorizationService.GetUserRolesAsync();
-        puedeVerAuditoria = roles.Contains("Administrador") || roles.Contains("Auditor");
+        puedeVerAuditoria = roles.Contains(RolesSistema.Administrador) || roles.Contains(RolesSistema.Supervisor);
         await CargarHistorialAsync();
     }
 

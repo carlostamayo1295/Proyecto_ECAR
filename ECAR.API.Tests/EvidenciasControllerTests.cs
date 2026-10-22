@@ -103,7 +103,7 @@ public class EvidenciasControllerTests
         ECARDbContext context,
         Usuario usuario,
         FakeStorage storage,
-        string role = "Técnico",
+        string role = "Operador",
         int tamanoMaximoMb = 5)
     {
         var currentUser = new FakeCurrentUser(usuario.IdUsuario, usuario.Nombre, role);

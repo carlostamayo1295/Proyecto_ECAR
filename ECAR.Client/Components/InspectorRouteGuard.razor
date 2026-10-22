@@ -3,7 +3,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
-@* Protege las pantallas de ejecución de inspecciones: las usan el Técnico y el Administrador.
+@* Protege las pantallas de ejecución de inspecciones: las usan el Operador, el Estándar y el Administrador.
    A diferencia de AdminRouteGuard, si no hay sesión envía al login conservando la URL de
    destino, porque a estas páginas se llega escaneando un QR desde el teléfono. *@
 
@@ -25,11 +25,12 @@
         }
 
         var roles = await AuthorizationService.GetUserRolesAsync();
-        isAuthorized = roles.Contains("Administrador") || roles.Contains("Técnico");
+        isAuthorized = roles.Contains(RolesSistema.Administrador) || roles.Contains(RolesSistema.Operador)
+                       || roles.Contains(RolesSistema.Estandar);
 
         if (!isAuthorized)
         {
-            Snackbar.Add("Acceso no autorizado. Solo técnicos y administradores pueden ejecutar inspecciones.", Severity.Error);
+            Snackbar.Add("Acceso no autorizado. Solo operadores, usuarios estándar y administradores pueden ejecutar inspecciones.", Severity.Error);
             NavigationManager.NavigateTo("/");
         }
 

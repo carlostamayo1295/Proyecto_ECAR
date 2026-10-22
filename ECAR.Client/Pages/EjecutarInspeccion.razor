@@ -9,7 +9,7 @@
    FE-1, FE-2 y FE-3 solo tocan su propio componente: este archivo tiene un único dueño
    para que los tres PR de la semana no choquen sobre el mismo fichero. *@
 
-<TecnicoRouteGuard>
+<InspectorRouteGuard>
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4 pb-8">
 
     @if (cargando)
@@ -88,7 +88,7 @@
     }
 
 </MudContainer>
-</TecnicoRouteGuard>
+</InspectorRouteGuard>
 
 @code {
     [Parameter] public long IdInspeccion { get; set; }
@@ -115,7 +115,7 @@
 
     private async Task CargarAsync()
     {
-        // TecnicoRouteGuard corre en paralelo a esta página y no detiene su ciclo de vida. Sin
+        // InspectorRouteGuard corre en paralelo a esta página y no detiene su ciclo de vida. Sin
         // sesión no se llama al API: la guarda ya está mandando al login, y la petición solo
         // servía para que un "Error al cargar la inspección" se colara durante la redirección.
         if (!await Sesion.TieneSesionVigenteAsync())

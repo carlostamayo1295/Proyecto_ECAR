@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +11,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = RolesSistema.Administrador)]
 public class UsuariosRolController : ControllerBase
 {
     private readonly ECARDbContext _context;

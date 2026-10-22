@@ -39,11 +39,11 @@ public class ReportesFase4Tests
 
     private static readonly DateTime Hoy = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
 
-    private sealed record Datos(ECARDbContext Db, Equipo Balanza, Equipo Bomba, Equipo SinFrecuencia, Usuario Tecnico);
+    private sealed record Datos(ECARDbContext Db, Equipo Balanza, Equipo Bomba, Equipo Varios, Usuario Tecnico);
 
     /// <summary>
-    /// Balanza (Mensual, QC): una conforme hoy y una con novedad hace 3 días, más una en curso.
-    /// Bomba (Mensual, Producción): ninguna inspección. Otro equipo sin frecuencia.
+    /// Balanza (QC): una conforme hoy y una con novedad hace 3 días, más una en curso.
+    /// Bomba (Producción): ninguna inspección. Otro equipo en QC, sin inspecciones.
     /// </summary>
     private static async Task<Datos> SeedAsync()
     {
@@ -53,12 +53,12 @@ public class ReportesFase4Tests
         var produccion = new Ubicacion { Planta = "Planta Principal", Area = "Producción" };
         var antes = DateTime.UtcNow.AddYears(-1);
         var balanza = new Equipo { CodigoInterno = "BAL-1", ActivoFijo = "AF-1", NombreEquipo = "Balanza", Ubicacion = qc,
-            FrecuenciaInspeccion = FrecuenciasInspeccion.Mensual, FechaCreacion = antes, Marca = "Mettler", Modelo = "XS" };
+            FechaCreacion = antes, Marca = "Mettler", Modelo = "XS" };
         var bomba = new Equipo { CodigoInterno = "BOM-1", ActivoFijo = "AF-2", NombreEquipo = "Bomba", Ubicacion = produccion,
-            FrecuenciaInspeccion = FrecuenciasInspeccion.Mensual, FechaCreacion = antes };
-        var sinFrecuencia = new Equipo { CodigoInterno = "VAR-1", ActivoFijo = "AF-3", NombreEquipo = "Varios", Ubicacion = qc, FechaCreacion = antes };
+            FechaCreacion = antes };
+        var varios = new Equipo { CodigoInterno = "VAR-1", ActivoFijo = "AF-3", NombreEquipo = "Varios", Ubicacion = qc, FechaCreacion = antes };
         var checklist = new Checklist { Nombre = "General", Version = "1" };
-        db.AddRange(tecnico, balanza, bomba, sinFrecuencia, checklist);
+        db.AddRange(tecnico, balanza, bomba, varios, checklist);
         await db.SaveChangesAsync();
 
         Inspeccion Nueva(Equipo equipo, int diasAtras, string estado, string? resultado) => new()
@@ -83,7 +83,7 @@ public class ReportesFase4Tests
             FechaResolucion = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
-        return new Datos(db, balanza, bomba, sinFrecuencia, tecnico);
+        return new Datos(db, balanza, bomba, varios, tecnico);
     }
 
     private static ReportesController Controlador(ECARDbContext db) => new(new ReporteService(db), db, new Admin());
@@ -178,31 +178,21 @@ public class ReportesFase4Tests
         var c = Controlador(d.Db);
 
         var totales = Datos_<InspeccionesPorFechasDto>(await c.GetInspeccionesFechas(Mes()));
-        var cumplimiento = Datos_<PagedResultDto<CumplimientoFilaDto>>(await c.GetCumplimiento(
-            new ReporteFiltroDto { Desde = Hoy.AddDays(-Hoy.Day + 1), Hasta = Hoy })).Data;
         var historial = Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await c.GetHistorialEquipo(
             new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipo = d.Bomba.IdEquipo }));
 
         Assert.Equal(3, totales.TotalInspecciones);
         Assert.Equal(1, totales.Satisfactorias);
         Assert.Equal(2, totales.ConNovedad);
-        Assert.Equal(1, Assert.Single(cumplimiento, f => f.Area == "Producción").EquiposInspeccionados);
         Assert.Equal(InspeccionResultados.Pendiente, Assert.Single(historial.Data).Resultado);
     }
 
     [Fact]
-    public async Task Cumplimiento_usa_la_frecuencia_de_cada_equipo()
+    public void El_reporte_de_cumplimiento_ya_no_existe()
     {
-        var d = await SeedAsync();
-
-        var filas = Datos_<PagedResultDto<CumplimientoFilaDto>>(await Controlador(d.Db).GetCumplimiento(
-            new ReporteFiltroDto { Desde = Hoy.AddDays(-Hoy.Day + 1), Hasta = Hoy })).Data;
-
-        // Este mes: la balanza (QC) tiene inspección firmada; la bomba (Producción) no.
-        var qc = Assert.Single(filas, f => f.Area == "Control de Calidad");
-        var produccion = Assert.Single(filas, f => f.Area == "Producción");
-        Assert.Equal((1, 1, 100m), (qc.EquiposProgramados, qc.EquiposInspeccionados, qc.PorcentajeCumplimiento!.Value));
-        Assert.Equal((1, 0, 0m), (produccion.EquiposProgramados, produccion.EquiposInspeccionados, produccion.PorcentajeCumplimiento!.Value));
+        // Se retiró con la frecuencia de inspección (decisión de ECAR del 21/10/2026).
+        Assert.DoesNotContain(typeof(ReportesController).GetMethods(), m => m.Name.Contains("Cumplimiento"));
+        Assert.Null(typeof(Equipo).GetProperty("FrecuenciaInspeccion"));
     }
 
     [Fact]
@@ -232,7 +222,7 @@ public class ReportesFase4Tests
         var d = await SeedAsync();
         var c = Controlador(d.Db);
 
-        Assert.IsType<FileContentResult>(await c.GetCumplimiento(Mes(), ReporteFormatos.Pdf));
+        Assert.IsType<FileContentResult>(await c.GetInspeccionesFechas(Mes(), ReporteFormatos.Pdf));
         Assert.IsType<FileContentResult>(await c.GetInspeccionesFechas(Mes(), ReporteFormatos.Excel));
     }
 
@@ -271,7 +261,7 @@ public class ReportesFase4Tests
     {
         public long IdUsuario => usuario.IdUsuario;
         public string Nombre => usuario.Nombre;
-        public IReadOnlyCollection<string> Roles => ["Técnico"];
-        public bool IsInRole(string role) => role == "Técnico";
+        public IReadOnlyCollection<string> Roles => ["Operador"];
+        public bool IsInRole(string role) => role == "Operador";
     }
 }

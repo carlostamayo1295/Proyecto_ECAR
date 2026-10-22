@@ -34,8 +34,4 @@ public class CreateEquipoDto
     public long? IdCategoria { get; set; }
 
     public long? IdUbicacion { get; set; }
-
-    /// <summary>Una de FrecuenciasInspeccion (reporte de cumplimiento); opcional.</summary>
-    [MaxLength(20, ErrorMessage = "La frecuencia no puede exceder 20 caracteres")]
-    public string? FrecuenciaInspeccion { get; set; }
 }

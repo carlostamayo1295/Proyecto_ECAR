@@ -73,7 +73,7 @@ else
         error = respuesta is { Success: false } ? respuesta.Message : null;
 
         var roles = await AuthorizationService.GetUserRolesAsync();
-        puedeVerHash = roles.Contains("Administrador") || roles.Contains("Auditor");
+        puedeVerHash = roles.Contains(RolesSistema.Administrador) || roles.Contains(RolesSistema.Supervisor);
 
         cargando = false;
     }

@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +11,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class CategoriasEquipoController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -81,7 +82,7 @@ public class CategoriasEquipoController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<CategoriaEquipoDto>>> CreateCategoriaEquipo(CreateCategoriaEquipoDto createDto)
     {
         var existente = await _context.CategoriasEquipo.FirstOrDefaultAsync(c => c.Nombre == createDto.Nombre);
@@ -111,7 +112,7 @@ public class CategoriasEquipoController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<CategoriaEquipoDto>>> UpdateCategoriaEquipo(long id, UpdateCategoriaEquipoDto updateDto)
     {
         var categoria = await _context.CategoriasEquipo.FindAsync(id);
@@ -136,7 +137,7 @@ public class CategoriasEquipoController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteCategoriaEquipo(long id)
     {
         var categoria = await _context.CategoriasEquipo.FindAsync(id);

@@ -1,5 +1,6 @@
 using BCrypt.Net;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -9,8 +10,31 @@ public static class DataSeeder
 {
     public static async Task SeedDataAsync(ECARDbContext context, IConfiguration configuration)
     {
+        // Roles del sistema (RolesSistema, decisión de ECAR del 21/10/2026). En una base anterior,
+        // «Técnico» pasa a «Operador» y «Auditor» a «Supervisor»: se renombra la fila, así sus
+        // usuarios conservan el rol (UsuarioRoles va por Id) y el cambio queda en la auditoría. Si ya
+        // existe el nombre nuevo no se toca nada. Después se siembran los que falten, como «Estándar».
+        var rolesActuales = await context.Roles.ToListAsync();
+        foreach (var (anterior, nuevo) in new[]
+                 {
+                     (RolesSistema.TecnicoAnterior, RolesSistema.Operador),
+                     (RolesSistema.AuditorAnterior, RolesSistema.Supervisor)
+                 })
+        {
+            var rol = rolesActuales.FirstOrDefault(r => string.Equals(r.Nombre, anterior, StringComparison.OrdinalIgnoreCase));
+            if (rol != null && !rolesActuales.Any(r => string.Equals(r.Nombre, nuevo, StringComparison.OrdinalIgnoreCase)))
+            {
+                rol.Nombre = nuevo;
+            }
+        }
+
+        if (context.ChangeTracker.HasChanges())
+        {
+            await context.SaveChangesAsync();
+        }
+
         // Se siembra cada grupo por separado para poder completar sin riesgo una base parcialmente poblada.
-        var requiredRoleNames = new[] { "Administrador", "Técnico", "Auditor" };
+        var requiredRoleNames = RolesSistema.DelSistema;
         var existingRoleNames = await context.Roles.Select(r => r.Nombre).ToListAsync();
         var missingRoles = requiredRoleNames
             .Except(existingRoleNames, StringComparer.OrdinalIgnoreCase)
@@ -40,7 +64,7 @@ public static class DataSeeder
             await context.SaveChangesAsync();
         }
 
-        var adminRol = await context.Roles.SingleAsync(r => r.Nombre == "Administrador");
+        var adminRol = await context.Roles.SingleAsync(r => r.Nombre == RolesSistema.Administrador);
         if (!await context.UsuarioRoles.AnyAsync(ur =>
                 ur.IdUsuario == adminUsuario.IdUsuario && ur.IdRol == adminRol.IdRol))
         {

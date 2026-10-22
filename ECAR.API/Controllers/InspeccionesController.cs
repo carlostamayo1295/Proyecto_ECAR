@@ -15,7 +15,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class InspeccionesController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -56,7 +56,7 @@ public class InspeccionesController : ControllerBase
             .Include(i => i.Checklist)
             .AsQueryable();
 
-        if (EsTecnicoSinPrivilegiosDeLecturaGlobal())
+        if (EsInspectorSinLecturaGlobal())
         {
             var idUsuario = _currentUser.IdUsuario;
             query = query.Where(i => i.IdUsuario == idUsuario);
@@ -79,9 +79,9 @@ public class InspeccionesController : ControllerBase
             query = query.Where(i => i.Estado == estado);
         }
 
-        // Consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Un Técnico sigue
-        // viendo solo las suyas: el filtro de arriba ya se aplicó. Las ajenas con novedades las
-        // abre desde la novedad (AccesoInspeccion); en su listado no aparecen.
+        // Consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Un Operador o un
+        // Estándar sigue viendo solo las suyas: el filtro de arriba ya se aplicó. Las ajenas con
+        // novedades, el Estándar las abre desde la novedad (AccesoInspeccion); en su listado no aparecen.
         if (idEquipo.HasValue)
         {
             query = query.Where(i => i.IdEquipo == idEquipo.Value);
@@ -131,7 +131,7 @@ public class InspeccionesController : ControllerBase
 
     // Punto 2: GET /api/inspecciones/mias?estado=
     [HttpGet("mias")]
-    [Authorize(Roles = "Técnico")]
+    [Authorize(Roles = RolesSistema.Inspectores)]
     public async Task<ActionResult<ApiResponse<List<InspeccionDto>>>> GetMisInspecciones([FromQuery] string? estado)
     {
         var usuarioId = _currentUser.IdUsuario;
@@ -145,11 +145,8 @@ public class InspeccionesController : ControllerBase
     {
         try
         {
-            var usuarioId = _currentUser.IdUsuario;
-            var esAdmin = _currentUser.IsInRole("Administrador");
-            var esAuditor = _currentUser.IsInRole("Auditor");
-
-            var respuestas = await _inspeccionService.ObtenerRespuestasAsync(id, usuarioId, esAdmin, esAuditor);
+            var respuestas = await _inspeccionService.ObtenerRespuestasAsync(id, _currentUser.IdUsuario,
+                AccesoInspeccion.LeeTodas(_currentUser), AccesoInspeccion.VeAjenasConNovedades(_currentUser));
             return Ok(ApiResponse<List<RespuestaInspeccionDto>>.SuccessResponse(respuestas));
         }
         catch (KeyNotFoundException ex)
@@ -188,7 +185,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpPost("iniciar")]
-    [Authorize(Roles = "Administrador,Técnico")]
+    [Authorize(Roles = RolesSistema.Inspeccionan)]
     public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> IniciarInspeccion(
         IniciarInspeccionDto iniciarDto)
     {
@@ -276,7 +273,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> CreateInspeccion(CreateInspeccionDto createDto)
     {
         // Misma regla que iniciar desde el QR: un equipo desactivado no se inspecciona.
@@ -329,7 +326,7 @@ public class InspeccionesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Administrador,Técnico")]
+    [Authorize(Roles = RolesSistema.Inspeccionan)]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> UpdateInspeccion(long id, UpdateInspeccionDto updateDto)
     {
         var inspeccion = await _context.Inspecciones
@@ -382,7 +379,7 @@ public class InspeccionesController : ControllerBase
 
     // Punto 6, 3, 4, 5: Guardar respuestas usando el servicio y devolviendo 409 Conflict si está cerrada
     [HttpPut("{id}/respuestas")]
-    [Authorize(Roles = "Administrador,Técnico")]
+    [Authorize(Roles = RolesSistema.Inspeccionan)]
     public async Task<ActionResult<ApiResponse<InspeccionEjecucionDto>>> GuardarRespuestas(
         long id,
         [FromBody] GuardarRespuestasDto dto)
@@ -390,7 +387,7 @@ public class InspeccionesController : ControllerBase
         try
         {
             var usuarioId = _currentUser.IdUsuario;
-            var esAdmin = _currentUser.IsInRole("Administrador");
+            var esAdmin = _currentUser.IsInRole(RolesSistema.Administrador);
 
             await _inspeccionService.GuardarRespuestasAsync(id, dto, usuarioId, esAdmin);
 
@@ -421,13 +418,13 @@ public class InspeccionesController : ControllerBase
 
     /// <summary>
     /// POST api/inspecciones/{id}/anular (§3.6): sustituye al borrado. Solo una inspección
-    /// EnCurso; la anula el Administrador o el Técnico que la ejecuta, siempre con motivo. Se
+    /// EnCurso; la anula el Administrador o el Operador o Estándar que la ejecuta, siempre con motivo. Se
     /// conservan sus respuestas, evidencias y fotos, y queda inmutable. Estado,
     /// motivo, fecha, usuario y la fila "Anular" de la auditoría se guardan en una transacción.
     /// Orden: 404, 409 (no está en curso), 403, 400 (motivo).
     /// </summary>
     [HttpPost("{id:long}/anular")]
-    [Authorize(Roles = "Administrador,Técnico")]
+    [Authorize(Roles = RolesSistema.Inspeccionan)]
     public async Task<ActionResult<ApiResponse<InspeccionDto>>> AnularInspeccion(long id, MotivoDto motivoDto)
     {
         var inspeccion = await _context.Inspecciones.FirstOrDefaultAsync(i => i.IdInspeccion == id);
@@ -495,7 +492,7 @@ public class InspeccionesController : ControllerBase
     /// "No", se avisa por correo a la mesa de ayuda y pasa sola a Cerrada al resolverse la última.
     /// </summary>
     [HttpPost("{id}/firmar")]
-    [Authorize(Roles = "Administrador,Técnico")]
+    [Authorize(Roles = RolesSistema.Inspeccionan)]
     public async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarInspeccion(
         long id,
         FirmarInspeccionDto firmarDto,
@@ -650,11 +647,11 @@ public class InspeccionesController : ControllerBase
 
     /// <summary>
     /// Endpoint 13 (Parte 11 §11.70): recalcula la huella con el algoritmo con que se firmó y la
-    /// compara con la guardada. Solo Administrador y Auditor (§3.4). Cada verificación queda en la
+    /// compara con la guardada. Solo Administrador y Supervisor (§3.4). Cada verificación queda en la
     /// auditoría.
     /// </summary>
     [HttpGet("{id}/integridad")]
-    [Authorize(Roles = "Administrador,Auditor")]
+    [Authorize(Roles = RolesSistema.Supervisan)]
     public async Task<ActionResult<ApiResponse<IntegridadInspeccionDto>>> VerificarIntegridad(
         long id,
         [FromServices] VerificadorIntegridad verificador)
@@ -934,24 +931,20 @@ public class InspeccionesController : ControllerBase
             .ThenInclude(e => e.UsuarioCargaDetalle)
         .FirstOrDefaultAsync(i => i.IdInspeccion == id);
 
-    private bool EsTecnicoSinPrivilegiosDeLecturaGlobal() =>
-        _currentUser.IsInRole("Técnico")
-        && !_currentUser.IsInRole("Administrador")
-        && !_currentUser.IsInRole("Auditor");
+    /// <summary>Operador o Estándar: su listado son sus inspecciones.</summary>
+    private bool EsInspectorSinLecturaGlobal() => !AccesoInspeccion.LeeTodas(_currentUser);
 
     /// <summary>
-    /// Administrador y Auditor, cualquiera; un Técnico, las suyas y las que tienen novedades, en
-    /// solo lectura, para orientarse al resolverlas (<see cref="AccesoInspeccion"/>).
+    /// Administrador y Supervisor, cualquiera; Operador y Estándar, las suyas, y el Estándar además
+    /// las que tienen novedades, en solo lectura, para orientarse al resolverlas (<see cref="AccesoInspeccion"/>).
     /// </summary>
-    private async Task<bool> PuedeLeerAsync(Inspeccion inspeccion) =>
-        _currentUser.IsInRole("Administrador")
-        || _currentUser.IsInRole("Auditor")
-        || (_currentUser.IsInRole("Técnico")
-            && await _context.TecnicoPuedeLeerAsync(inspeccion.IdInspeccion, inspeccion.IdUsuario, _currentUser.IdUsuario));
+    private Task<bool> PuedeLeerAsync(Inspeccion inspeccion) =>
+        _context.PuedeLeerAsync(_currentUser, inspeccion.IdInspeccion, inspeccion.IdUsuario);
 
     private bool PuedeModificar(Inspeccion inspeccion) =>
-        _currentUser.IsInRole("Administrador")
-        || (_currentUser.IsInRole("Técnico") && inspeccion.IdUsuario == _currentUser.IdUsuario);
+        _currentUser.IsInRole(RolesSistema.Administrador)
+        || ((_currentUser.IsInRole(RolesSistema.Operador) || _currentUser.IsInRole(RolesSistema.Estandar))
+            && inspeccion.IdUsuario == _currentUser.IdUsuario);
 
     private static InspeccionEjecucionDto MapToEjecucionDto(Inspeccion inspeccion)
     {

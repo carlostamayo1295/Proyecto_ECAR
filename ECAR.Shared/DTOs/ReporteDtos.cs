@@ -4,7 +4,8 @@ namespace ECAR.Shared.DTOs;
 /// Reportes de la Fase 4 (SRS §6 y §7; PLAN_FASE4_TAREAS §3.9). Cada reporte es un único
 /// endpoint GET /api/reportes/{tipo}?…&amp;formato=json|pdf|xlsx: la pantalla muestra la vista
 /// previa con json y descarga con pdf o xlsx, así que la vista previa y el archivo no pueden
-/// discrepar.
+/// discrepar. El de cumplimiento se retiró a pedido de ECAR (21/10/2026), junto con la frecuencia
+/// de inspección de los equipos.
 /// </summary>
 public static class ReporteTipos
 {
@@ -12,7 +13,6 @@ public static class ReporteTipos
     public const string HistorialArea = "historial-area";
     public const string HistorialTecnico = "historial-tecnico";
     public const string EquiposNovedades = "equipos-novedades";
-    public const string Cumplimiento = "cumplimiento";
     public const string InspeccionesFechas = "inspecciones-fechas";
 }
 
@@ -93,23 +93,6 @@ public class EquipoNovedadFilaDto
 
     /// <summary>Uno de <see cref="NovedadEstados"/>.</summary>
     public string Estado { get; set; } = string.Empty;
-}
-
-/// <summary>
-/// Reporte "Cumplimiento de Inspecciones" (SRS §7). Los programados salen de
-/// Equipos.FrecuenciaInspeccion, pendiente de confirmar con ECAR.
-/// </summary>
-public class CumplimientoFilaDto
-{
-    /// <summary>Etiqueta del periodo, p. ej. "2026-10" o "Semana 41".</summary>
-    public string Periodo { get; set; } = string.Empty;
-    public string Planta { get; set; } = string.Empty;
-    public string Area { get; set; } = string.Empty;
-    public int EquiposProgramados { get; set; }
-    public int EquiposInspeccionados { get; set; }
-
-    /// <summary>0–100; null si en ese periodo no había ningún equipo programado.</summary>
-    public decimal? PorcentajeCumplimiento { get; set; }
 }
 
 /// <summary>Reporte "Inspecciones por Fechas" (SRS §7): totales del rango y desglose por área.</summary>

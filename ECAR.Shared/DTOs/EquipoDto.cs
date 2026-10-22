@@ -18,7 +18,4 @@ public class EquipoDto
     public string? QRCode { get; set; }
     public bool Activo { get; set; }
     public DateTime FechaCreacion { get; set; }
-
-    /// <summary>Una de FrecuenciasInspeccion; null si no tiene programación.</summary>
-    public string? FrecuenciaInspeccion { get; set; }
 }

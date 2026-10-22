@@ -13,7 +13,7 @@
             </CardHeaderContent>
             <CardHeaderActions>
                 @* Crear, editar, versionar y desactivar son solo del Administrador (el API responde 403 a
-                   los demás); Técnico y Auditor consultan. *@
+                   los demás); Operador, Estándar y Supervisor consultan. *@
                 @if (esAdmin)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">

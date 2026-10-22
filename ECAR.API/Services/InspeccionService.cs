@@ -29,7 +29,7 @@ public class InspeccionService : IInspeccionService
             throw new KeyNotFoundException($"No se encontró la inspección con ID {inspeccionId}");
         }
 
-        // Punto 7: Solo técnico asignado o Admin
+        // Punto 7: solo quien ejecuta la inspección o el Administrador
         if (!esAdmin && inspeccion.IdUsuario != usuarioId)
         {
             throw new UnauthorizedAccessException("No tienes permiso para modificar esta inspección.");
@@ -93,8 +93,8 @@ public class InspeccionService : IInspeccionService
         await _context.SaveChangesAsync();
     }
 
-    // Punto 1 y 7: GET /api/inspecciones/{id}/respuestas con validación de técnico
-    public async Task<List<RespuestaInspeccionDto>> ObtenerRespuestasAsync(long inspeccionId, long usuarioId, bool esAdmin, bool esAuditor)
+    // Punto 1 y 7: GET /api/inspecciones/{id}/respuestas con la regla de lectura de AccesoInspeccion
+    public async Task<List<RespuestaInspeccionDto>> ObtenerRespuestasAsync(long inspeccionId, long usuarioId, bool leeTodas, bool veAjenasConNovedades)
     {
         var inspeccion = await _context.Inspecciones
             .AsNoTracking()
@@ -105,9 +105,9 @@ public class InspeccionService : IInspeccionService
             throw new KeyNotFoundException($"No se encontró la inspección con ID {inspeccionId}");
         }
 
-        // Un Técnico, las de sus inspecciones y las de las que tienen novedades (AccesoInspeccion).
-        if (!esAdmin && !esAuditor
-            && !await _context.TecnicoPuedeLeerAsync(inspeccionId, inspeccion.IdUsuario, usuarioId))
+        // Operador y Estándar, las de sus inspecciones; el Estándar, también las de las que tienen novedades.
+        if (!leeTodas
+            && !await _context.InspectorPuedeLeerAsync(inspeccionId, inspeccion.IdUsuario, usuarioId, veAjenasConNovedades))
         {
             throw new UnauthorizedAccessException("No tienes permiso para consultar las respuestas de esta inspección.");
         }
@@ -172,7 +172,7 @@ public class InspeccionService : IInspeccionService
 
     // Punto 8 y 9: Filtros search, idInspeccion y pageSize máximo 100
     public async Task<PagedResultDto<RespuestaInspeccionDto>> ObtenerRespuestasPaginadasAsync(
-        int pageNumber, int pageSize, string? search, long? idInspeccion, long usuarioId, bool esAdmin, bool esAuditor)
+        int pageNumber, int pageSize, string? search, long? idInspeccion, long usuarioId, bool esAdmin, bool esSupervisor)
     {
         // Punto 9: Limitar a máximo 100
         int size = Math.Clamp(pageSize, 1, 100);
@@ -183,8 +183,8 @@ public class InspeccionService : IInspeccionService
             .Include(r => r.Inspeccion)
             .AsQueryable();
 
-        // Punto 7: Restringir consulta por Técnico
-        if (!esAdmin && !esAuditor)
+        // Punto 7: Operador y Estándar, solo las de sus inspecciones
+        if (!esAdmin && !esSupervisor)
         {
             query = query.Where(r => r.Inspeccion.IdUsuario == usuarioId);
         }

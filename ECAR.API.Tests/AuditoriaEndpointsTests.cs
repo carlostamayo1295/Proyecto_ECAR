@@ -22,8 +22,8 @@ public class AuditoriaEndpointsTests
     {
         public long IdUsuario => 1;
         public string Nombre => "Diana Auditora";
-        public IReadOnlyCollection<string> Roles => ["Auditor"];
-        public bool IsInRole(string role) => role == "Auditor";
+        public IReadOnlyCollection<string> Roles => ["Supervisor"];
+        public bool IsInRole(string role) => role == "Supervisor";
     }
 
     private sealed class Contexto : IContextoAuditoria
@@ -47,7 +47,7 @@ public class AuditoriaEndpointsTests
         equipo.Marca = "Mettler";
         await db.SaveChangesAsync();
         contexto.Motivo = null;
-        db.Roles.Add(new Rol { Nombre = "Auditor" });
+        db.Roles.Add(new Rol { Nombre = "Supervisor" });
         await db.SaveChangesAsync();
         return (db, nombre);
     }

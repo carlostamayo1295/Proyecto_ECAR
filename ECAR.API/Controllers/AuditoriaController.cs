@@ -14,7 +14,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Auditor")]
+[Authorize(Roles = RolesSistema.Supervisan)]
 public class AuditoriaController : ControllerBase
 {
     private readonly ECARDbContext _context;

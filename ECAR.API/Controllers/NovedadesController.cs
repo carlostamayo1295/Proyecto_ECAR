@@ -20,7 +20,7 @@ namespace ECAR.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class NovedadesController : ControllerBase
 {
     public const string MensajeNoPendiente = "La novedad ya está resuelta o anulada y no admite cambios";
@@ -47,9 +47,18 @@ public class NovedadesController : ControllerBase
     }
 
     /// <summary>
+    /// El Operador no resuelve novedades: solo ve las de sus propias inspecciones. Administrador,
+    /// Estándar y Supervisor ven todas (el Estándar resuelve cualquiera, la haya reportado o no).
+    /// </summary>
+    private bool SoloDeSusInspecciones =>
+        !_currentUser.IsInRole(RolesSistema.Administrador)
+        && !_currentUser.IsInRole(RolesSistema.Estandar)
+        && !_currentUser.IsInRole(RolesSistema.Supervisor);
+
+    /// <summary>
     /// GET api/novedades. Filtros opcionales y combinables: estado, criticidad, equipo, inspección
-    /// y días de registro (desde y hasta incluidos, en hora de Colombia). Los tres roles ven todas:
-    /// cualquier Técnico puede resolver una novedad, la haya reportado o no.
+    /// y días de registro (desde y hasta incluidos, en hora de Colombia). El Operador, solo las de
+    /// sus inspecciones (<see cref="SoloDeSusInspecciones"/>).
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResultDto<NovedadDto>>>> GetNovedades(
@@ -71,6 +80,12 @@ public class NovedadesController : ControllerBase
         }
 
         var query = ConDetalle().AsNoTracking();
+
+        if (SoloDeSusInspecciones)
+        {
+            var idUsuario = _currentUser.IdUsuario;
+            query = query.Where(n => n.Inspeccion.IdUsuario == idUsuario);
+        }
 
         if (!string.IsNullOrWhiteSpace(filtro.Estado))
         {
@@ -147,18 +162,23 @@ public class NovedadesController : ControllerBase
             return NotFound(ApiResponse<NovedadDetalleDto>.ErrorResponse("Novedad no encontrada"));
         }
 
+        if (SoloDeSusInspecciones && novedad.Inspeccion.IdUsuario != _currentUser.IdUsuario)
+        {
+            return Forbid();
+        }
+
         return Ok(ApiResponse<NovedadDetalleDto>.SuccessResponse(MapToDetalleDto(novedad)));
     }
 
     /// <summary>
     /// POST api/novedades/{id}/resolver: firma la resolución, como se firma una inspección (Parte 11
-    /// §11.50, §11.70 y §11.200(a)(1)). La firma un Técnico o un Administrador, aunque no haya hecho
+    /// §11.50, §11.70 y §11.200(a)(1)). La firma un Estándar o un Administrador, aunque no haya hecho
     /// la inspección, con su contraseña. Si era la última pendiente de la inspección, esta pasa a
     /// Cerrada con resultado "Conforme" en la misma transacción. Orden: 404, 409, 400 (datos), 400
     /// (contraseña, sin Errors para que el diálogo de firma siga abierto) o 423.
     /// </summary>
     [HttpPost("{id:long}/resolver")]
-    [Authorize(Roles = "Administrador,Técnico")]
+    [Authorize(Roles = RolesSistema.Resuelven)]
     public async Task<ActionResult<ApiResponse<NovedadDto>>> ResolverNovedad(
         long id,
         ResolverNovedadDto resolverDto,
@@ -238,7 +258,7 @@ public class NovedadesController : ControllerBase
     /// (registrada por error). Si era la última pendiente, la inspección se cierra igual que al resolver.
     /// </summary>
     [HttpPost("{id:long}/anular")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<NovedadDto>>> AnularNovedad(long id, MotivoDto motivoDto)
     {
         var novedad = await _context.Novedades
@@ -270,10 +290,10 @@ public class NovedadesController : ControllerBase
 
     /// <summary>
     /// GET api/novedades/{id}/integridad (Parte 11 §11.70): recalcula el sello de la resolución y lo
-    /// compara con el guardado. Solo Administrador y Auditor; cada verificación queda en la auditoría.
+    /// compara con el guardado. Solo Administrador y Supervisor; cada verificación queda en la auditoría.
     /// </summary>
     [HttpGet("{id:long}/integridad")]
-    [Authorize(Roles = "Administrador,Auditor")]
+    [Authorize(Roles = RolesSistema.Supervisan)]
     public async Task<ActionResult<ApiResponse<IntegridadInspeccionDto>>> VerificarIntegridad(
         long id, [FromServices] VerificadorIntegridad verificador)
     {
@@ -309,7 +329,7 @@ public class NovedadesController : ControllerBase
 
     /// <summary>POST api/novedades/{id}/notificar: el Administrador vuelve a poner en cola el correo.</summary>
     [HttpPost("{id:long}/notificar")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> Notificar(long id)
     {
         if (!await _context.Novedades.AnyAsync(n => n.IdNovedad == id))

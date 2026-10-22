@@ -47,9 +47,9 @@ public class NovedadesSqlServerTests(BaseCompartida compartida) : IClassFixture<
     private sealed class Usuario1(long id) : ICurrentUser
     {
         public long IdUsuario => id;
-        public string Nombre => "Técnico";
-        public IReadOnlyCollection<string> Roles => ["Técnico"];
-        public bool IsInRole(string role) => role == "Técnico";
+        public string Nombre => "Operador";
+        public IReadOnlyCollection<string> Roles => ["Operador"];
+        public bool IsInRole(string role) => role == "Operador";
     }
 
     private sealed record Datos(long IdInspeccion, long IdUsuario, List<(long IdPregunta, long IdRespuesta)> Respuestas);

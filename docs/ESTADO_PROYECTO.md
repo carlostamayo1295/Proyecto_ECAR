@@ -156,7 +156,7 @@ cliente ya no tiene datos simulados.
 | Guarda | Deja pasar | Si no hay sesión |
 |---|---|---|
 | `AdminRouteGuard` | Administrador | Envía al inicio |
-| `TecnicoRouteGuard` | Administrador y Técnico | Envía a `/login?returnUrl=…` y vuelve al destino |
+| `InspectorRouteGuard` (antes `TecnicoRouteGuard`) | Administrador, Operador y Estándar | Envía a `/login?returnUrl=…` y vuelve al destino |
 | `RolRouteGuard` *(nuevo, 02/10)* | Los roles que se le pasen | Igual que la anterior |
 
 La segunda y la tercera son necesarias porque a la ejecución de inspecciones se llega

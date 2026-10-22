@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -10,13 +11,10 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = RolesSistema.Administrador)]
 public class RolesController : ControllerBase
 {
-    private static readonly HashSet<string> SystemRoles = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Administrador", "Técnico", "Auditor"
-    };
+    private static readonly HashSet<string> SystemRoles = new(RolesSistema.DelSistema, StringComparer.OrdinalIgnoreCase);
 
     private readonly ECARDbContext _context;
 

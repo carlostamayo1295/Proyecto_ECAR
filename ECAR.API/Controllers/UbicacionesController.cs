@@ -1,5 +1,6 @@
 using ECAR.Infrastructure.Data;
 using ECAR.Infrastructure.Entities;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +11,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class UbicacionesController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -68,7 +69,7 @@ public class UbicacionesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<UbicacionDto>>> CreateUbicacion(CreateUbicacionDto dto)
     {
         var planta = dto.Planta.Trim();
@@ -92,7 +93,7 @@ public class UbicacionesController : ControllerBase
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<UbicacionDto>>> UpdateUbicacion(long id, UpdateUbicacionDto dto)
     {
         var ubicacion = await _context.Ubicaciones.FindAsync(id);
@@ -116,7 +117,7 @@ public class UbicacionesController : ControllerBase
     }
 
     [HttpDelete("{id:long}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteUbicacion(long id)
     {
         var ubicacion = await _context.Ubicaciones.FindAsync(id);

@@ -9,10 +9,11 @@
 
 @* Novedades: una por cada respuesta "No" de una inspección firmada. Las crea el servidor al firmar
    y se resuelven con firma electrónica (lo que se hizo, la firma dibujada y la contraseña); las
-   resuelve un Técnico o un Administrador, aunque no haya hecho la inspección. /novedades/{id} es el
+   resuelve un Estándar o un Administrador, aunque no haya hecho la inspección. El Operador no entra: las de sus
+   inspecciones las ve en el resultado de cada una. /novedades/{id} es el
    enlace del correo a la mesa de ayuda: abre el detalle de esa novedad. /hallazgos se conserva
    para los enlaces anteriores. *@
-<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })">
+<RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Estandar, RolesSistema.Supervisor })">
     <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
         <MudCard>
             <MudCardHeader>
@@ -182,13 +183,13 @@
     protected override async Task OnInitializedAsync()
     {
         var roles = await AuthorizationService.GetUserRolesAsync();
-        if (!roles.Any(r => r is "Administrador" or "Técnico" or "Auditor"))
+        if (!roles.Any(r => r is RolesSistema.Administrador or RolesSistema.Estandar or RolesSistema.Supervisor))
         {
             // RolRouteGuard redirige; sin el rol no se pide nada al API.
             return;
         }
 
-        puedeResolver = roles.Contains("Administrador") || roles.Contains("Técnico");
+        puedeResolver = roles.Contains(RolesSistema.Administrador) || roles.Contains(RolesSistema.Estandar);
 
         // De una inspección se ven todas sus novedades, no solo las pendientes.
         if (IdInspeccion.HasValue)

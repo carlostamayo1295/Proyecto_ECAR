@@ -1,25 +1,40 @@
 using ECAR.Infrastructure.Data;
+using ECAR.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECAR.API.Services;
 
 /// <summary>
-/// Qué inspecciones puede consultar un Técnico (decisión de ECAR del 20/10/2026): las suyas y, en
-/// solo lectura, las que tienen novedades. Cualquier Técnico puede resolver una novedad, y para
-/// orientarse necesita ver la inspección completa de la que sale: respuestas, fotos, firma y
-/// registro PDF. Una inspección solo tiene novedades después de firmada, así que la que está en
-/// curso sigue siendo solo de quien la ejecuta; modificar tampoco cambia (el inspector o el
-/// Administrador). El Administrador y el Auditor consultan cualquiera. Inspecciones, respuestas y
-/// evidencias preguntan aquí para que la regla viva en un solo sitio.
+/// Qué inspecciones puede consultar cada rol (<see cref="RolesSistema"/>). El Administrador y el
+/// Supervisor, todas. El Operador y el Estándar, las suyas; el Estándar además, en solo lectura, las
+/// que tienen novedades: las resuelve aunque no las haya hecho, y para orientarse necesita ver la
+/// inspección completa (respuestas, fotos, firma y registro PDF; decisión de ECAR del 20/10/2026).
+/// Una inspección solo tiene novedades después de firmada, así que la que está en curso sigue
+/// siendo solo de quien la ejecuta; modificar tampoco cambia (el inspector o el Administrador).
+/// Inspecciones, respuestas y evidencias preguntan aquí para que la regla viva en un solo sitio.
 /// </summary>
 public static class AccesoInspeccion
 {
+    /// <summary>Administrador o Supervisor: consultan cualquier inspección.</summary>
+    public static bool LeeTodas(ICurrentUser usuario) =>
+        usuario.IsInRole(RolesSistema.Administrador) || usuario.IsInRole(RolesSistema.Supervisor);
+
+    /// <summary>El Estándar ve también las inspecciones ajenas que tienen novedades.</summary>
+    public static bool VeAjenasConNovedades(ICurrentUser usuario) => usuario.IsInRole(RolesSistema.Estandar);
+
+    /// <summary>Si <paramref name="usuario"/> puede leer la inspección, ejecutada por <paramref name="idInspector"/>.</summary>
+    public static async Task<bool> PuedeLeerAsync(
+        this ECARDbContext context, ICurrentUser usuario, long idInspeccion, long idInspector) =>
+        LeeTodas(usuario)
+        || ((usuario.IsInRole(RolesSistema.Operador) || usuario.IsInRole(RolesSistema.Estandar))
+            && await context.InspectorPuedeLeerAsync(idInspeccion, idInspector, usuario.IdUsuario, VeAjenasConNovedades(usuario)));
+
     /// <summary>
-    /// Si el Técnico <paramref name="idUsuario"/> puede leer la inspección
-    /// <paramref name="idInspeccion"/>, ejecutada por <paramref name="idInspector"/>.
+    /// Regla de un Operador o un Estándar: la suya o, si <paramref name="veAjenasConNovedades"/>, una
+    /// ajena que tenga novedades.
     /// </summary>
-    public static async Task<bool> TecnicoPuedeLeerAsync(
-        this ECARDbContext context, long idInspeccion, long idInspector, long idUsuario) =>
+    public static async Task<bool> InspectorPuedeLeerAsync(
+        this ECARDbContext context, long idInspeccion, long idInspector, long idUsuario, bool veAjenasConNovedades) =>
         idInspector == idUsuario
-        || await context.Novedades.AnyAsync(novedad => novedad.IdInspeccion == idInspeccion);
+        || (veAjenasConNovedades && await context.Novedades.AnyAsync(novedad => novedad.IdInspeccion == idInspeccion));
 }

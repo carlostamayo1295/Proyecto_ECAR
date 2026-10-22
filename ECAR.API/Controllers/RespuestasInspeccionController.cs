@@ -1,4 +1,5 @@
 ﻿using ECAR.API.Services;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +9,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class RespuestasInspeccionController : ControllerBase
 {
     private readonly IInspeccionService _inspeccionService;
@@ -32,11 +33,11 @@ public class RespuestasInspeccionController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var usuarioId = _currentUser.IdUsuario;
-        var esAdmin = _currentUser.IsInRole("Administrador");
-        var esAuditor = _currentUser.IsInRole("Auditor");
+        var esAdmin = _currentUser.IsInRole(RolesSistema.Administrador);
+        var esSupervisor = _currentUser.IsInRole(RolesSistema.Supervisor);
 
         var pagedResult = await _inspeccionService.ObtenerRespuestasPaginadasAsync(
-            page, pageSize, search, idInspeccion, usuarioId, esAdmin, esAuditor);
+            page, pageSize, search, idInspeccion, usuarioId, esAdmin, esSupervisor);
 
         return Ok(ApiResponse<PagedResultDto<RespuestaInspeccionDto>>.SuccessResponse(pagedResult));
     }

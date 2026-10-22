@@ -5,12 +5,12 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-@* Inventario de equipos. El SRS (§4) da "consulta de equipos" al Auditor y el Técnico necesita la
+@* Inventario de equipos. El SRS (§4) da "consulta de equipos" al Supervisor y el Operador necesita la
    ficha para inspeccionar, así que la pantalla es de lectura para los tres roles; crear, editar,
    generar QR y desactivar siguen siendo solo del Administrador (regla 8), en el API y aquí.
    /admin/equipos se conserva para no romper enlaces guardados. *@
-<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico", "Auditor" })"
-               MensajeNoAutorizado="Solo administradores, técnicos y auditores pueden consultar los equipos.">
+<RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Operador, RolesSistema.Estandar, RolesSistema.Supervisor })"
+               MensajeNoAutorizado="Necesita un rol del sistema para consultar los equipos.">
     <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>

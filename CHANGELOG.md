@@ -7,6 +7,20 @@ horaria de Colombia.
 
 ### Cambiado (rama `Prueba_nuevo_novedades`, 19/10/2026)
 
+- **Roles nuevos** (decisión de ECAR, 21/10/2026; constantes en `ECAR.Shared/RolesSistema.cs`):
+  - **Operador** (antes Técnico): ejecuta sus inspecciones y consulta tablero, equipos, evidencias y checklists.
+    No resuelve novedades: solo ve las de sus inspecciones, en el resultado de cada una. Sin reportes ni auditoría.
+  - **Estándar** (nuevo): inspecciones y resolución de novedades, con la lectura de la inspección completa de otro
+    que tenga novedades. Sin reportes ni auditoría.
+  - **Supervisor** (antes Auditor): solo consulta, incluidos reportes, auditoría e integridad.
+  - **Administrador**: sin cambios.
+  - Al arrancar, el API renombra en la base «Técnico» → «Operador» y «Auditor» → «Supervisor» (la fila del rol;
+    los usuarios lo conservan y queda en la auditoría) y crea «Estándar». Quien tenía sesión abierta debe volver a
+    entrar. Los antiguos técnicos que resuelven novedades necesitan el rol Estándar.
+- **Sin frecuencia de inspección ni cumplimiento** (decisión de ECAR, 21/10/2026): la migración
+  `QuitarFrecuenciaInspeccion` borra la columna de `Equipos`; el formulario del equipo ya no la pide, el tablero
+  cambia «Inspecciones pendientes del periodo» por «Inspecciones en curso» y se retira el reporte de cumplimiento.
+
 - **Los hallazgos pasan a ser novedades.** La tabla `Novedades` reemplaza a `Hallazgos` (la migración
   `NovedadesReemplazanHallazgos` borra `Hallazgos` sin pasar sus datos: la base es de prueba). El API pasa de
   `api/hallazgos` a `api/novedades` y la pantalla, de `/hallazgos` a `/novedades` (la ruta anterior sigue abriendo la nueva).
@@ -15,9 +29,9 @@ horaria de Colombia.
   anularse) la última, pasa sola a **Cerrada** con resultado **Conforme**. El reporte «Inspecciones por fechas»
   la sigue contando entre las «con novedad», porque la tuvo.
 - Una novedad se **resuelve con firma**, como una inspección: lo que se hizo (10 a 2000 caracteres), la firma
-  dibujada y la contraseña. La resuelve cualquier Técnico o Administrador, aunque no haya hecho la inspección.
+  dibujada y la contraseña. La resuelve un Estándar o el Administrador, aunque no haya hecho la inspección.
   Solo el Administrador la anula, con motivo. No hay alta manual, edición, responsable ni reapertura.
-- **Quien resuelve ve la inspección completa** (decisión de ECAR, 20/10/2026): un Técnico consulta, en solo
+- **Quien resuelve ve la inspección completa** (decisión de ECAR, 20/10/2026): un Estándar consulta, en solo
   lectura, las inspecciones de otros que tienen novedades (respuestas, fotos, firma y registro PDF), desde el
   detalle de la novedad («Ver la inspección completa»). Las que están en curso o no tuvieron novedades siguen
   siendo solo de quien las ejecuta, y su listado de inspecciones sigue mostrando solo las suyas.
@@ -26,7 +40,7 @@ horaria de Colombia.
   puede reenviarlo. Sin `Correo:Usuario` y `Correo:Password` (user-secrets) el mensaje se guarda como `.eml` en
   `Correo:CarpetaSalida` y no sale.
 - Sello de la inspección `HMACSHA256-v2` (sin el resultado); las firmadas con `HMACSHA256-v1` se siguen verificando.
-- Tablero: novedades pendientes y resueltas; reportes y cumplimiento cuentan como firmadas las que tienen novedades pendientes.
+- Tablero: novedades pendientes y resueltas; los reportes cuentan como firmadas las que tienen novedades pendientes.
 - Inspecciones, su detalle y la ficha del equipo: columnas separadas de evidencias, novedades totales y novedades pendientes.
 - **Pantallas responsive** (20/10/2026): entre 600 y 1550 px las tablas no cabían junto al menú y los botones
   quedaban fuera de la vista a la derecha.

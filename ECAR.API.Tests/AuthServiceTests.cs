@@ -114,7 +114,7 @@ public class AuthServiceTests
     public async Task LoginAsync_ConUsuarioAD_DevuelveTokenValido()
     {
         await using var context = CreateContext();
-        await SeedUsuarioAsync(context, activo: true, "Técnico");
+        await SeedUsuarioAsync(context, activo: true, "Operador");
 
         var service = CreateAuthService(context);
 
@@ -181,7 +181,7 @@ public class AuthServiceTests
     public async Task LoginAsync_IncluyeTodosLosRolesDelUsuarioEnLaRespuestaYEnElToken()
     {
         await using var context = CreateContext();
-        await SeedUsuarioAsync(context, activo: true, "Administrador", "Auditor");
+        await SeedUsuarioAsync(context, activo: true, "Administrador", "Supervisor");
 
         var service = CreateAuthService(context);
 
@@ -192,12 +192,12 @@ public class AuthServiceTests
         });
 
         Assert.NotNull(result);
-        Assert.Equal(new[] { "Administrador", "Auditor" }, result!.Roles.OrderBy(r => r).ToArray());
+        Assert.Equal(new[] { "Administrador", "Supervisor" }, result!.Roles.OrderBy(r => r).ToArray());
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(result.Token);
         var roleClaims = jwt.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).OrderBy(r => r).ToArray();
 
-        Assert.Equal(new[] { "Administrador", "Auditor" }, roleClaims);
+        Assert.Equal(new[] { "Administrador", "Supervisor" }, roleClaims);
     }
 
     [Fact]

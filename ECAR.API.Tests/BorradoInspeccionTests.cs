@@ -21,7 +21,7 @@ public class BorradoInspeccionTests
     private sealed class FakeCurrentUser(long idUsuario, params string[] roles) : ICurrentUser
     {
         public long IdUsuario => idUsuario;
-        public string Nombre => "Técnico";
+        public string Nombre => "Operador";
         public IReadOnlyCollection<string> Roles => roles;
         public bool IsInRole(string role) => roles.Contains(role, StringComparer.OrdinalIgnoreCase);
     }
@@ -57,7 +57,7 @@ public class BorradoInspeccionTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-        var tecnico = new Usuario { Nombre = "Técnico", Correo = "tecnico@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
+        var tecnico = new Usuario { Nombre = "Operador", Correo = "tecnico@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
         var equipo = new Equipo
         {
             CodigoInterno = "EQ-001",
@@ -106,7 +106,7 @@ public class BorradoInspeccionTests
     }
 
     private static InspeccionesController Controlador(Escenario escenario, IEvidenciaStorage storage) =>
-        Fabrica.Inspecciones(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Técnico"), storage);
+        Fabrica.Inspecciones(escenario.Context, new FakeCurrentUser(escenario.Tecnico.IdUsuario, "Operador"), storage);
 
     private static readonly MotivoDto Motivo = new() { Motivo = "Se abrió sobre el equipo equivocado" };
 

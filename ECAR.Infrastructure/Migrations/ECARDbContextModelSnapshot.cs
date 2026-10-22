@@ -223,11 +223,6 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("FechaCreacion");
 
-                    b.Property<string>("FrecuenciaInspeccion")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasColumnName("FrecuenciaInspeccion");
-
                     b.Property<long?>("IdCategoria")
                         .HasColumnType("bigint")
                         .HasColumnName("IdCategoria");

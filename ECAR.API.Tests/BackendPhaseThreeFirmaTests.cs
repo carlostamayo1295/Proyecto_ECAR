@@ -149,7 +149,7 @@ public class BackendPhaseThreeFirmaTests
     private static InspeccionesController ControladorDe(
         Escenario escenario, Usuario usuario, params string[] roles) =>
         Fabrica.Inspecciones(escenario.Context, new FakeCurrentUser(
-            usuario.IdUsuario, usuario.Nombre, roles.Length == 0 ? ["Técnico"] : roles),
+            usuario.IdUsuario, usuario.Nombre, roles.Length == 0 ? ["Operador"] : roles),
             new FakeEvidenciaStorage());
 
     private static EvidenciasController ControladorEvidenciasDe(
@@ -529,7 +529,7 @@ public class BackendPhaseThreeFirmaTests
             Respuesta = "Si"
         });
         var currentUser = new FakeCurrentUser(
-            escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico");
+            escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Operador");
         await ControladorDe(escenario, escenario.Tecnico)
             .FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
             {
@@ -574,7 +574,7 @@ public class BackendPhaseThreeFirmaTests
         context.Evidencias.Add(evidencia);
         await context.SaveChangesAsync();
         var currentUser = new FakeCurrentUser(
-            escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Técnico");
+            escenario.Tecnico.IdUsuario, escenario.Tecnico.Nombre, "Operador");
         context.ChangeTracker.Clear();
         await ControladorDe(escenario, escenario.Tecnico)
             .FirmarConPassword(context, inspeccion.IdInspeccion, new FirmarInspeccionDto
@@ -612,7 +612,7 @@ public class BackendPhaseThreeFirmaTests
                 FirmaPngBase64 = FirmaPngValida
             });
         context.ChangeTracker.Clear();
-        var auditor = ControladorDe(escenario, escenario.OtroTecnico, "Auditor");
+        var auditor = ControladorDe(escenario, escenario.OtroTecnico, "Supervisor");
 
         var action = await auditor.GetResultado(inspeccion.IdInspeccion);
 

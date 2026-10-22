@@ -86,7 +86,7 @@ public class ConsultaHistoricaEquipoTests
     {
         var escenario = await SeedAsync();
 
-        var historial = await HistorialAsync(escenario, new FakeCurrentUser(999, "Auditor"), escenario.Balanza.IdEquipo);
+        var historial = await HistorialAsync(escenario, new FakeCurrentUser(999, "Supervisor"), escenario.Balanza.IdEquipo);
 
         Assert.Equal(2, historial.Count);
         Assert.All(historial, i => Assert.Equal(escenario.Balanza.IdEquipo, i.IdEquipo));
@@ -98,7 +98,7 @@ public class ConsultaHistoricaEquipoTests
         var escenario = await SeedAsync();
 
         var historial = await HistorialAsync(escenario,
-            new FakeCurrentUser(escenario.TecnicoB.IdUsuario, "Técnico"), escenario.Balanza.IdEquipo);
+            new FakeCurrentUser(escenario.TecnicoB.IdUsuario, "Operador"), escenario.Balanza.IdEquipo);
 
         var inspeccion = Assert.Single(historial);
         Assert.Equal(escenario.TecnicoB.IdUsuario, inspeccion.IdUsuario);

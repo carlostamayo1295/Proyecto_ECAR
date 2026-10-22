@@ -44,7 +44,7 @@ public class IntegracionFase4Tests
     private static async Task<(Usuario Tecnico, Inspeccion Inspeccion)> InspeccionFirmadaAsync(ECARDbContext db)
     {
         var tecnico = new Usuario { Nombre = "Ana", Correo = "ana@ecar.test", PasswordHash = FirmaPruebas.PasswordHash, Activo = true };
-        tecnico.UsuarioRoles.Add(new UsuarioRol { Rol = new Rol { Nombre = "Técnico" } });
+        tecnico.UsuarioRoles.Add(new UsuarioRol { Rol = new Rol { Nombre = "Operador" } });
         var equipo = new Equipo { CodigoInterno = "E-1", ActivoFijo = "AF-1", NombreEquipo = "Balanza" };
         var checklist = new Checklist { Nombre = "Diario", Version = "1" };
         db.AddRange(tecnico, equipo, checklist);
@@ -97,7 +97,7 @@ public class IntegracionFase4Tests
         await using var db = Base();
 
         var resultado = await new AuthController(FirmaPruebas.CrearAuthService(db))
-            .Logout(db, new Usuario1(7, "Técnico"), porInactividad: true);
+            .Logout(db, new Usuario1(7, "Operador"), porInactividad: true);
 
         Assert.IsType<OkObjectResult>(resultado.Result);
         var evento = await db.Auditoria.SingleAsync();
@@ -110,7 +110,7 @@ public class IntegracionFase4Tests
     {
         var metodo = typeof(InspeccionesController).GetMethod(nameof(InspeccionesController.VerificarIntegridad))!;
 
-        Assert.Equal("Administrador,Auditor", metodo.GetCustomAttribute<AuthorizeAttribute>()?.Roles);
+        Assert.Equal("Administrador,Supervisor", metodo.GetCustomAttribute<AuthorizeAttribute>()?.Roles);
     }
 
     [Fact]

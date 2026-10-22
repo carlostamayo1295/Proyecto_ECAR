@@ -14,7 +14,7 @@ namespace ECAR.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Técnico,Auditor")]
+[Authorize(Roles = RolesSistema.Todos)]
 public class EquiposController : ControllerBase
 {
     private readonly ECARDbContext _context;
@@ -125,7 +125,7 @@ public class EquiposController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<EquipoDto>>> CreateEquipo(CreateEquipoDto createDto)
     {
         var codigoInterno = createDto.CodigoInterno.Trim();
@@ -151,12 +151,6 @@ public class EquiposController : ControllerBase
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse("La categoría seleccionada no existe"));
         }
 
-        if (!string.IsNullOrWhiteSpace(createDto.FrecuenciaInspeccion) &&
-            !FrecuenciasInspeccion.EsValida(createDto.FrecuenciaInspeccion.Trim()))
-        {
-            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(MensajeFrecuencia));
-        }
-
         if (!Criticidades.EsValida(createDto.Criticidad))
         {
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(Criticidades.Mensaje));
@@ -180,7 +174,6 @@ public class EquiposController : ControllerBase
             Criticidad = NormalizeOptional(createDto.Criticidad),
             IdCategoria = createDto.IdCategoria,
             IdUbicacion = createDto.IdUbicacion,
-            FrecuenciaInspeccion = NormalizeOptional(createDto.FrecuenciaInspeccion),
             Activo = true,
             FechaCreacion = DateTime.UtcNow
         };
@@ -196,7 +189,7 @@ public class EquiposController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<EquipoDto>>> UpdateEquipo(long id, UpdateEquipoDto updateDto)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -210,12 +203,6 @@ public class EquiposController : ControllerBase
         if (errorMotivo != null)
         {
             return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(errorMotivo));
-        }
-
-        if (!string.IsNullOrWhiteSpace(updateDto.FrecuenciaInspeccion) &&
-            !FrecuenciasInspeccion.EsValida(updateDto.FrecuenciaInspeccion.Trim()))
-        {
-            return BadRequest(ApiResponse<EquipoDto>.ErrorResponse(MensajeFrecuencia));
         }
 
         if (!Criticidades.EsValida(updateDto.Criticidad))
@@ -272,9 +259,6 @@ public class EquiposController : ControllerBase
         if (updateDto.Criticidad != null)
             equipo.Criticidad = NormalizeOptional(updateDto.Criticidad);
 
-        if (updateDto.FrecuenciaInspeccion != null)
-            equipo.FrecuenciaInspeccion = NormalizeOptional(updateDto.FrecuenciaInspeccion);
-
         if (updateDto.IdCategoria.HasValue)
         {
             if (updateDto.IdCategoria.Value == 0)
@@ -319,7 +303,7 @@ public class EquiposController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteEquipo(long id, [FromQuery] string? motivo = null)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -346,7 +330,7 @@ public class EquiposController : ControllerBase
 
     /// <summary>Reactiva un equipo desactivado. Contraparte explícita del borrado lógico.</summary>
     [HttpPut("{id}/activar")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<bool>>> ActivarEquipo(long id, [FromQuery] string? motivo = null)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -397,7 +381,7 @@ public class EquiposController : ControllerBase
     // El token es opaco y no expone el id del equipo; se guarda en Equipos.QRCode.
 
     [HttpPost("{id:long}/qr")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<EquipoQrDto>>> GenerateQr(long id)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -419,7 +403,7 @@ public class EquiposController : ControllerBase
     }
 
     [HttpPut("{id:long}/qr/regenerar")]
-    [Authorize(Roles = "Administrador")]
+    [Authorize(Roles = RolesSistema.Administrador)]
     public async Task<ActionResult<ApiResponse<EquipoQrDto>>> RegenerateQr(long id)
     {
         var equipo = await _context.Equipos.FindAsync(id);
@@ -551,11 +535,8 @@ public class EquiposController : ControllerBase
         UbicacionNombre = e.Ubicacion != null ? e.Ubicacion.Planta + " - " + e.Ubicacion.Area : null,
         QRCode = e.QRCode,
         Activo = e.Activo,
-        FechaCreacion = e.FechaCreacion,
-        FrecuenciaInspeccion = e.FrecuenciaInspeccion
+        FechaCreacion = e.FechaCreacion
     };
-
-    private const string MensajeFrecuencia = "La frecuencia debe ser Diaria, Semanal, Mensual o Trimestral";
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

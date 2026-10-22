@@ -145,27 +145,27 @@ public class InspeccionesAnulacionTests
             pregunta, inspeccion, evidencia);
     }
 
-    private static InspeccionesController Como(Escenario e, Usuario usuario, string rol = "Técnico") =>
+    private static InspeccionesController Como(Escenario e, Usuario usuario, string rol = "Operador") =>
         new(e.Context, new FakeCurrentUser(usuario.IdUsuario, rol), new InspeccionService(e.Context), e.Storage,
             NullLogger<InspeccionesController>.Instance, e.Motivo);
 
     private static EvidenciasController EvidenciasComo(Escenario e, Usuario usuario)
     {
-        var controller = new EvidenciasController(e.Context, new FakeCurrentUser(usuario.IdUsuario, "Técnico"), e.Storage,
+        var controller = new EvidenciasController(e.Context, new FakeCurrentUser(usuario.IdUsuario, "Operador"), e.Storage,
             Options.Create(new EvidenciasOptions { RutaBase = "EvidenciasPruebas", TamanoMaximoMB = 5, TiposPermitidos = "image/jpeg,image/png" }),
             e.Motivo);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Técnico")], "Pruebas"))
+                User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Operador")], "Pruebas"))
             }
         };
         return controller;
     }
 
     private static Task<ActionResult<ApiResponse<InspeccionDto>>> AnularAsync(Escenario e, Usuario usuario,
-        string motivo = MotivoValido, string rol = "Técnico") =>
+        string motivo = MotivoValido, string rol = "Operador") =>
         Como(e, usuario, rol).AnularInspeccion(e.Inspeccion.IdInspeccion, new MotivoDto { Motivo = motivo });
 
     private static Task<Inspeccion> GuardadaAsync(Escenario e) =>

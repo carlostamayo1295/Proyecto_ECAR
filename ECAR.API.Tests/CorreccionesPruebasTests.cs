@@ -46,13 +46,13 @@ public class CorreccionesPruebasTests
     {
         var db = new ECARDbContext(new DbContextOptionsBuilder<ECARDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options, new Contexto());
         var tecnico = new Usuario { Nombre = "Ana", Correo = "ana@ecar.test", PasswordHash = "x", Activo = true };
-        tecnico.UsuarioRoles.Add(new UsuarioRol { Rol = new Rol { Nombre = "Técnico" } });
+        tecnico.UsuarioRoles.Add(new UsuarioRol { Rol = new Rol { Nombre = "Operador" } });
         var ubicacion = new Ubicacion { Planta = "Planta 1", Area = "Pesaje" };
         var equipo = new Equipo
         {
             CodigoInterno = "EQ-1", ActivoFijo = "AF-1", NombreEquipo = "Balanza", Marca = "Mettler", Modelo = "XS205",
             SerialFabricante = "SN-77", Criticidad = Criticidades.Alta, Activo = true, Ubicacion = ubicacion,
-            QRCode = new string('a', 32), FrecuenciaInspeccion = FrecuenciasInspeccion.Mensual
+            QRCode = new string('a', 32)
         };
         var checklist = new Checklist
         {
@@ -90,7 +90,7 @@ public class CorreccionesPruebasTests
     private static EquiposController Equipos(Escenario e, bool conSesion)
     {
         var controlador = new EquiposController(e.Db, new ConfigurationBuilder().Build(), new MotivoCambio());
-        var identidad = conSesion ? new ClaimsIdentity([new Claim(ClaimTypes.Role, "Técnico")], "Pruebas") : new ClaimsIdentity();
+        var identidad = conSesion ? new ClaimsIdentity([new Claim(ClaimTypes.Role, "Operador")], "Pruebas") : new ClaimsIdentity();
         controlador.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identidad) } };
         return controlador;
     }
@@ -134,7 +134,7 @@ public class CorreccionesPruebasTests
     public async Task No_se_inspecciona_con_un_checklist_sin_preguntas()
     {
         var e = await SeedAsync();
-        var tecnico = Fabrica.Inspecciones(e.Db, new Usuario1(e.Tecnico.IdUsuario, "Técnico"), new AlmacenVacio());
+        var tecnico = Fabrica.Inspecciones(e.Db, new Usuario1(e.Tecnico.IdUsuario, "Operador"), new AlmacenVacio());
         var admin = Fabrica.Inspecciones(e.Db, new Usuario1(e.Tecnico.IdUsuario, "Administrador"), new AlmacenVacio());
 
         var iniciar = await tecnico.IniciarInspeccion(new IniciarInspeccionDto { IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Vacio.IdChecklist });
@@ -211,7 +211,7 @@ public class CorreccionesPruebasTests
             IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist, IdUsuario = e.Tecnico.IdUsuario,
             FechaInspeccion = DateTime.UtcNow, Estado = InspeccionEstados.EnCurso
         });
-        e.Db.Equipos.Add(new Equipo { CodigoInterno = "EQ-9", ActivoFijo = "AF-9", NombreEquipo = "Sin frecuencia", Activo = true });
+        e.Db.Equipos.Add(new Equipo { CodigoInterno = "EQ-9", ActivoFijo = "AF-9", NombreEquipo = "Sin criticidad", Activo = true });
         await e.Db.SaveChangesAsync();
 
         var resultado = await new DashboardController(e.Db).GetDashboard();
@@ -226,8 +226,6 @@ public class CorreccionesPruebasTests
         Assert.Equal(1, t.InspeccionesRealizadasMes);
         Assert.Equal(1, t.InspeccionesConNovedadesPendientes);
         Assert.Equal(1, t.InspeccionesEnCurso);
-        Assert.Equal(1, t.EquiposProgramados);
-        Assert.Equal(0, t.InspeccionesPendientes); // el equipo mensual ya tiene su inspección firmada del mes
         Assert.Equal(1, t.NovedadesPendientes);
         Assert.Equal(0, t.NovedadesResueltas);
     }

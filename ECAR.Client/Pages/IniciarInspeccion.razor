@@ -18,8 +18,8 @@
    No usa EmptyLayout aunque ConsultaQr sí: EmptyLayout no monta MudSnackbarProvider ni
    MudPopoverProvider, y el aviso de "no autorizado" de la guarda no se vería. *@
 
-<RolRouteGuard Roles="@(new[] { "Administrador", "Técnico" })"
-               MensajeNoAutorizado="Solo técnicos y administradores pueden iniciar inspecciones.">
+<RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Operador, RolesSistema.Estandar })"
+               MensajeNoAutorizado="Solo operadores, usuarios estándar y administradores pueden iniciar inspecciones.">
 <div class="d-flex justify-center align-center" style="min-height: 80vh;">
     <MudCard Elevation="2" Class="pa-6 text-center" Style="max-width: 480px; width: 100%;">
         @if (_seleccionando)
