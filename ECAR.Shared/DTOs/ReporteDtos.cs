@@ -39,6 +39,17 @@ public class ReporteFiltroDto
     public string? Criticidad { get; set; }
 }
 
+/// <summary>
+/// Resultado de GET /api/reportes/usuarios (B-04): lo justo para el filtro «Usuario» de los reportes.
+/// Sin contraseña, roles, usuario de Active Directory ni datos de la cuenta.
+/// </summary>
+public class UsuarioBusquedaDto
+{
+    public long IdUsuario { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public string Correo { get; set; } = string.Empty;
+}
+
 /// <summary>Reporte "Historial por Equipo" (SRS §7).</summary>
 public class HistorialEquipoFilaDto
 {
