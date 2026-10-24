@@ -31,15 +31,29 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<DashboardDto>>> GetDashboard()
+    public async Task<ActionResult<ApiResponse<DashboardDto>>> GetDashboard(
+        [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null,
+        [FromQuery] string? planta = null)
     {
         var ahora = DateTime.UtcNow;
         var hoy = HoraColombia.DesdeUtc(ahora).Date;
         var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
-        var (inicioMesUtc, _) = HoraColombia.RangoUtc(inicioMes, null);
+        var desdeAplicado = desde?.Date ?? inicioMes;
+        var hastaAplicado = hasta?.Date ?? hoy;
+        var error = ValidarRango(desdeAplicado, hastaAplicado);
+        if (error != null)
+            return BadRequest(ApiResponse<DashboardDto>.ErrorResponse(error));
 
-        var equipos = await _context.Equipos.AsNoTracking()
-            .Where(e => e.Activo)
+        planta = string.IsNullOrWhiteSpace(planta) ? null : planta.Trim();
+        var (inicioUtc, finUtc) = HoraColombia.RangoUtc(desdeAplicado, hastaAplicado);
+        var inicio = inicioUtc!.Value;
+        var fin = finUtc!.Value;
+
+        var equiposQuery = _context.Equipos.AsNoTracking().Where(e => e.Activo);
+        if (planta != null)
+            equiposQuery = equiposQuery.Where(e => e.Ubicacion != null && e.Ubicacion.Planta == planta);
+
+        var equipos = await equiposQuery
             .Select(e => new
             {
                 e.IdEquipo,
@@ -63,35 +77,157 @@ public class DashboardController : ControllerBase
             .ThenBy(c => c.Etiqueta)
             .ToList();
 
-        var estadosInspeccion = await _context.Inspecciones.AsNoTracking()
+        var inspeccionesQuery = _context.Inspecciones.AsNoTracking()
+            .Where(i => i.FechaInspeccion >= inicio && i.FechaInspeccion < fin);
+        if (planta != null)
+            inspeccionesQuery = inspeccionesQuery.Where(i =>
+                i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == planta);
+
+        var estadosInspeccion = await inspeccionesQuery
             .GroupBy(i => i.Estado)
             .Select(g => new { Estado = g.Key, Cantidad = g.Count() })
             .ToDictionaryAsync(g => g.Estado, g => g.Cantidad);
-        var firmadasMes = await _context.Inspecciones.AsNoTracking()
-            .CountAsync(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes)
-                             && i.FechaInspeccion >= inicioMesUtc!.Value);
 
-        var estadosNovedad = await _context.Novedades.AsNoTracking()
-            .GroupBy(n => n.Estado)
-            .Select(g => new { Estado = g.Key, Cantidad = g.Count() })
-            .ToDictionaryAsync(g => g.Estado, g => g.Cantidad);
+        var firmadasTotalesQuery = _context.Inspecciones.AsNoTracking()
+            .Where(i => i.Estado == InspeccionEstados.Cerrada ||
+                        i.Estado == InspeccionEstados.NovedadesPendientes);
+        if (planta != null)
+            firmadasTotalesQuery = firmadasTotalesQuery.Where(i =>
+                i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == planta);
+        var firmadasTotales = await firmadasTotalesQuery.CountAsync();
+
+        var novedadesQuery = _context.Novedades.AsNoTracking();
+        if (planta != null)
+            novedadesQuery = novedadesQuery.Where(n =>
+                n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Planta == planta);
+
+        var novedadesPendientes = await novedadesQuery.CountAsync(n =>
+            n.Estado == NovedadEstados.Pendiente &&
+            n.FechaRegistro >= inicio && n.FechaRegistro < fin);
+        var novedadesResueltas = await novedadesQuery.CountAsync(n =>
+            n.Estado == NovedadEstados.Resuelta && n.FechaResolucion.HasValue &&
+            n.FechaResolucion.Value >= inicio && n.FechaResolucion.Value < fin);
         var conPendientes = estadosInspeccion.GetValueOrDefault(InspeccionEstados.NovedadesPendientes);
+        var firmadas = estadosInspeccion.GetValueOrDefault(InspeccionEstados.Cerrada) + conPendientes;
 
         var dto = new DashboardDto
         {
+            Filtros = new DashboardFiltroAplicadoDto
+            {
+                Desde = desdeAplicado,
+                Hasta = hastaAplicado,
+                Planta = planta
+            },
             TotalEquipos = equipos.Count,
             EquiposPorCriticidad = criticidades,
             EquiposPorArea = areas,
-            InspeccionesRealizadas = estadosInspeccion.GetValueOrDefault(InspeccionEstados.Cerrada) + conPendientes,
-            InspeccionesRealizadasMes = firmadasMes,
+            InspeccionesRealizadas = firmadasTotales,
+            // Se conserva el campo para no romper el frontend existente; desde Fase 5 representa
+            // las inspecciones realizadas en el periodo aplicado, no necesariamente un mes.
+            InspeccionesRealizadasMes = firmadas,
             InspeccionesEnCurso = estadosInspeccion.GetValueOrDefault(InspeccionEstados.EnCurso),
             InspeccionesConNovedadesPendientes = conPendientes,
-            NovedadesPendientes = estadosNovedad.GetValueOrDefault(NovedadEstados.Pendiente),
-            NovedadesResueltas = estadosNovedad.GetValueOrDefault(NovedadEstados.Resuelta),
-            Periodo = inicioMes.ToString("MMMM 'de' yyyy", CultureInfo.GetCultureInfo("es-CO")),
+            NovedadesPendientes = novedadesPendientes,
+            NovedadesResueltas = novedadesResueltas,
+            Periodo = TextoPeriodo(desdeAplicado, hastaAplicado),
             GeneradoEn = ahora
         };
 
         return Ok(ApiResponse<DashboardDto>.SuccessResponse(dto));
+    }
+
+    /// <summary>
+    /// Tendencia de las últimas semanas, incluida la actual. Cada semana empieza el lunes a las
+    /// 00:00 y termina el domingo en hora de Colombia; las fechas UTC usan un rango [inicio, fin).
+    /// </summary>
+    [HttpGet("tendencia")]
+    public async Task<ActionResult<ApiResponse<DashboardTendenciaDto>>> GetTendencia(
+        [FromQuery] int semanas = 8, [FromQuery] string? planta = null)
+    {
+        if (semanas is < 1 or > 52)
+        {
+            return BadRequest(ApiResponse<DashboardTendenciaDto>.ErrorResponse(
+                "La cantidad de semanas debe estar entre 1 y 52"));
+        }
+
+        planta = string.IsNullOrWhiteSpace(planta) ? null : planta.Trim();
+        var hoy = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
+        var lunesActual = hoy.AddDays(-(((int)hoy.DayOfWeek + 6) % 7));
+        var desdeLocal = lunesActual.AddDays(-7 * (semanas - 1));
+        var hastaLocal = lunesActual.AddDays(6);
+        var (inicioUtc, finUtc) = HoraColombia.RangoUtc(desdeLocal, hastaLocal);
+        var inicio = inicioUtc!.Value;
+        var fin = finUtc!.Value;
+
+        var inspeccionesQuery = _context.Inspecciones.AsNoTracking()
+            .Where(i => i.FechaCierre.HasValue && i.FechaCierre.Value >= inicio && i.FechaCierre.Value < fin &&
+                        (i.Estado == InspeccionEstados.Cerrada ||
+                         i.Estado == InspeccionEstados.NovedadesPendientes));
+        var novedadesQuery = _context.Novedades.AsNoTracking()
+            .Where(n => n.FechaRegistro >= inicio && n.FechaRegistro < fin ||
+                        n.FechaResolucion.HasValue && n.FechaResolucion.Value >= inicio && n.FechaResolucion.Value < fin);
+
+        if (planta != null)
+        {
+            inspeccionesQuery = inspeccionesQuery.Where(i =>
+                i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == planta);
+            novedadesQuery = novedadesQuery.Where(n =>
+                n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Planta == planta);
+        }
+
+        var cierres = await inspeccionesQuery.Select(i => i.FechaCierre!.Value).ToListAsync();
+        var novedades = await novedadesQuery
+            .Select(n => new { n.FechaRegistro, n.FechaResolucion })
+            .ToListAsync();
+
+        var datos = Enumerable.Range(0, semanas)
+            .Select(indice =>
+            {
+                var lunes = desdeLocal.AddDays(indice * 7);
+                var siguienteLunes = lunes.AddDays(7);
+                return new DashboardSemanaDto
+                {
+                    Desde = lunes,
+                    Hasta = siguienteLunes.AddDays(-1),
+                    InspeccionesFirmadas = cierres.Count(f => EstaEnSemana(f, lunes, siguienteLunes)),
+                    NovedadesRegistradas = novedades.Count(n => EstaEnSemana(n.FechaRegistro, lunes, siguienteLunes)),
+                    NovedadesResueltas = novedades.Count(n => n.FechaResolucion.HasValue &&
+                        EstaEnSemana(n.FechaResolucion.Value, lunes, siguienteLunes))
+                };
+            })
+            .ToList();
+
+        return Ok(ApiResponse<DashboardTendenciaDto>.SuccessResponse(new DashboardTendenciaDto
+        {
+            Semanas = semanas,
+            Desde = desdeLocal,
+            Hasta = hastaLocal,
+            Planta = planta,
+            Datos = datos
+        }));
+    }
+
+    private static string? ValidarRango(DateTime desde, DateTime hasta)
+    {
+        if (desde > hasta)
+            return "La fecha «Desde» no puede ser posterior a «Hasta»";
+        if (hasta > desde.AddYears(1))
+            return "El rango no puede superar un año";
+        return null;
+    }
+
+    private static string TextoPeriodo(DateTime desde, DateTime hasta)
+    {
+        var cultura = CultureInfo.GetCultureInfo("es-CO");
+        if (desde.Year == hasta.Year && desde.Month == hasta.Month)
+            return desde.ToString("MMMM 'de' yyyy", cultura);
+
+        return $"{desde:dd/MM/yyyy} al {hasta:dd/MM/yyyy}";
+    }
+
+    private static bool EstaEnSemana(DateTime utc, DateTime lunes, DateTime siguienteLunes)
+    {
+        var local = HoraColombia.DesdeUtc(utc);
+        return local >= lunes && local < siguienteLunes;
     }
 }
