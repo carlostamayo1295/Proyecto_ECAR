@@ -89,6 +89,13 @@ horaria de Colombia.
   mayúsculas, minúsculas ni espacios externos, y piden usar «Nueva versión». El nombre se guarda sin espacios externos.
   Reenviar el mismo nombre al editar no se valida, y «Nueva versión» no cambia. Activar una versión
   (`PUT /api/checklists/{id}/activar` o `Activo = true` en el PUT) sigue comparando el nombre exacto.
+- **Pruebas de integración de la Fase 5 con SQL Server** (B-08, ECAR-223, 24/10/2026), en `ECAR.IntegrationTests`:
+  filtros del tablero (`DashboardSqlServerTests`: planta, periodo con los bordes del día en hora de Colombia,
+  validaciones y valores por defecto), tendencia semanal (`DashboardTendenciaSqlServerTests`: semanas de lunes a
+  domingo en Colombia, semanas vacías, planta y límites de 1 a 52) y nombres repetidos de checklists
+  (`ChecklistNombresSqlServerTests`). Los datos del tablero se siembran con `DatosTablero`, una planta por prueba.
+  La suite de integración corre ahora **en serie** y con 120 s por comando: en paralelo, cada clase creaba y migraba su
+  base a la vez, y migrar una base entera en un solo comando pasaba de los 30 s por defecto; fallaba al azar.
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.
 - Revisión de integración backend con estado de ECAR-209 a ECAR-216.
 
