@@ -3,6 +3,18 @@
 Los cambios relevantes de ECAR se documentan aquí desde la Fase 4. Las fechas usan la zona
 horaria de Colombia.
 
+## [Sin publicar] — Fase 5
+
+### Agregado (rama `fase5/tablero-pdf-alejandro`, 24/10/2026)
+
+- **B-03 · Tablero en PDF** (ECAR-224): `GET /api/dashboard/pdf` genera el tablero en A4 vertical con
+  MigraDoc (`Services/Documentos/TableroPdf.cs`): indicadores, equipos por criticidad y por área, y el pie
+  común de `ExportadorTabla.Documento` con los filtros. Cada PDF queda en la auditoría como `Exportacion`
+  (`Reporte = "tablero"`). Pruebas en `DashboardPdfTests`.
+- **Filtros del tablero** (contrato de B-01, que aún no estaba en ninguna rama): `DashboardFiltroDto`
+  (`Desde`, `Hasta`, `Planta`, `Area`, `Criticidad`) en `GET /api/dashboard` y en el PDF, con un solo
+  cálculo para los dos. Sin filtros el tablero es el de siempre. Al integrar B-01 hay que conciliar este DTO.
+
 ## [Sin publicar] — Fase 4
 
 ### Cambiado (rama `Prueba_nuevo_novedades`, 19/10/2026)

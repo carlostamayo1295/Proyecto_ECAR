@@ -39,6 +39,23 @@ public class DashboardDto
     public DateTime GeneradoEn { get; set; }
 }
 
+/// <summary>
+/// Filtros del tablero (B-01), los mismos para la pantalla y para el PDF (B-03). Sin filtros el
+/// tablero es el de siempre. Planta, área y criticidad acotan los equipos y, por el equipo, sus
+/// inspecciones y novedades; las fechas son días de Colombia (incluidos los dos extremos) y acotan
+/// las inspecciones por su fecha y las novedades por la de registro, no el inventario ni el mes.
+/// </summary>
+public class DashboardFiltroDto
+{
+    public DateTime? Desde { get; set; }
+    public DateTime? Hasta { get; set; }
+    public string? Planta { get; set; }
+    public string? Area { get; set; }
+
+    /// <summary>Alta, Media o Baja.</summary>
+    public string? Criticidad { get; set; }
+}
+
 public class ConteoDto
 {
     public string Etiqueta { get; set; } = string.Empty;

@@ -214,7 +214,7 @@ public class CorreccionesPruebasTests
         e.Db.Equipos.Add(new Equipo { CodigoInterno = "EQ-9", ActivoFijo = "AF-9", NombreEquipo = "Sin criticidad", Activo = true });
         await e.Db.SaveChangesAsync();
 
-        var resultado = await new DashboardController(e.Db).GetDashboard();
+        var resultado = await new DashboardController(e.Db, new Usuario1(e.Tecnico.IdUsuario, "Operador")).GetDashboard();
 
         var t = Assert.IsType<ApiResponse<DashboardDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
         Assert.Equal(2, t.TotalEquipos);
