@@ -6,8 +6,8 @@ namespace ECAR.API.Services.Documentos;
 
 /// <summary>
 /// El tablero de la portada en A4 vertical (B-03): los indicadores, los equipos por criticidad y
-/// por área, con los filtros aplicados y el pie común de §3.9. Sale del mismo DashboardDto que la
-/// pantalla, así que los números no pueden discrepar.
+/// por área, con los filtros de B-01 (periodo y planta) y el pie común de §3.9. Sale del mismo
+/// DashboardDto que la pantalla, así que los números no pueden discrepar.
 /// </summary>
 public static class TableroPdf
 {
@@ -26,20 +26,22 @@ public static class TableroPdf
         var encabezado = seccion.AddParagraph();
         encabezado.AddFormattedText("Filtros: ", TextFormat.Bold);
         encabezado.AddText(filtros);
-        var mes = seccion.AddParagraph();
-        mes.AddFormattedText("Mes en curso: ", TextFormat.Bold);
-        mes.AddText(tablero.Periodo);
+        var periodo = seccion.AddParagraph();
+        periodo.AddFormattedText("Periodo: ", TextFormat.Bold);
+        periodo.AddText(tablero.Periodo);
 
+        // Las etiquetas dicen qué cuenta cada número con los filtros de B-01: el inventario y el total
+        // de inspecciones no dependen del periodo; el resto, sí.
         Subtitulo(seccion, "Indicadores");
         Tabla(seccion, "Indicador", "Valor",
         [
             new() { Etiqueta = "Equipos activos", Cantidad = tablero.TotalEquipos },
-            new() { Etiqueta = "Inspecciones realizadas", Cantidad = tablero.InspeccionesRealizadas },
-            new() { Etiqueta = $"Inspecciones realizadas en {tablero.Periodo}", Cantidad = tablero.InspeccionesRealizadasMes },
-            new() { Etiqueta = "Inspecciones en curso", Cantidad = tablero.InspeccionesEnCurso },
-            new() { Etiqueta = "Inspecciones con novedades pendientes", Cantidad = tablero.InspeccionesConNovedadesPendientes },
-            new() { Etiqueta = "Novedades pendientes", Cantidad = tablero.NovedadesPendientes },
-            new() { Etiqueta = "Novedades resueltas", Cantidad = tablero.NovedadesResueltas }
+            new() { Etiqueta = "Inspecciones realizadas desde el inicio", Cantidad = tablero.InspeccionesRealizadas },
+            new() { Etiqueta = "Inspecciones realizadas en el periodo", Cantidad = tablero.InspeccionesRealizadasMes },
+            new() { Etiqueta = "Inspecciones en curso (iniciadas en el periodo)", Cantidad = tablero.InspeccionesEnCurso },
+            new() { Etiqueta = "Inspecciones del periodo con novedades pendientes", Cantidad = tablero.InspeccionesConNovedadesPendientes },
+            new() { Etiqueta = "Novedades pendientes (registradas en el periodo)", Cantidad = tablero.NovedadesPendientes },
+            new() { Etiqueta = "Novedades resueltas en el periodo", Cantidad = tablero.NovedadesResueltas }
         ], "Sin indicadores.");
 
         Subtitulo(seccion, "Equipos por criticidad");

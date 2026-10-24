@@ -15,8 +15,9 @@ using Xunit;
 namespace ECAR.API.Tests;
 
 /// <summary>
-/// B-03 (ECAR-224): el tablero en PDF A4 con los filtros de B-01, su contenido y su registro en la
-/// auditoría como Exportacion. Los filtros acotan igual la pantalla y el PDF.
+/// B-03 (ECAR-224): el tablero en PDF A4 con los filtros de B-01 (desde, hasta y planta), su
+/// contenido y su registro en la auditoría como Exportacion. Los filtros en sí los prueba
+/// CorreccionesPruebasTests (B-01).
 /// </summary>
 public class DashboardPdfTests
 {
@@ -29,10 +30,11 @@ public class DashboardPdfTests
     }
 
     private static readonly DateTime Hoy = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
+    private static readonly DateTime InicioMes = new(Hoy.Year, Hoy.Month, 1);
 
     /// <summary>
-    /// Balanza (Planta 1 - Pesaje, Alta): una cerrada hoy y una en curso. Bomba (Planta 2 -
-    /// Producción, Baja): una firmada hace 40 días con una novedad pendiente.
+    /// Balanza (Planta 1 - Pesaje): una cerrada hoy y una en curso. Bomba (Planta 2 - Producción):
+    /// una firmada hace 40 días, fuera del mes en curso, con una novedad pendiente.
     /// </summary>
     private static async Task<ECARDbContext> SeedAsync()
     {
@@ -65,23 +67,22 @@ public class DashboardPdfTests
         return db;
     }
 
-    private static DashboardController Controlador(ECARDbContext db) => new(db, new Supervisor());
-
-    private static async Task<DashboardDto> TableroAsync(ECARDbContext db, DashboardFiltroDto? filtro = null)
+    private static async Task<DashboardDto> TableroAsync(ECARDbContext db, DateTime? desde = null, DateTime? hasta = null,
+        string? planta = null)
     {
-        var resultado = await Controlador(db).GetDashboard(filtro);
+        var resultado = await new DashboardController(db).GetDashboard(desde, hasta, planta);
         return Assert.IsType<ApiResponse<DashboardDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
     }
 
     [Fact]
-    public async Task El_PDF_sale_en_A4_vertical_no_vacio_y_con_el_titulo_del_tablero()
+    public async Task Sin_filtros_el_PDF_es_del_mes_en_curso_en_A4_vertical_y_no_esta_vacio()
     {
         var db = await SeedAsync();
 
-        var pdf = Assert.IsType<FileContentResult>(await Controlador(db).GetDashboardPdf(new DashboardFiltroDto { Planta = "Planta 1" }));
+        var pdf = Assert.IsType<FileContentResult>(await new DashboardController(db).GetDashboardPdf(new Supervisor()));
 
         Assert.Equal(ExportadorTabla.TipoPdf, pdf.ContentType);
-        Assert.Equal($"ECAR_tablero_{Hoy:yyyyMMdd}.pdf", pdf.FileDownloadName);
+        Assert.Equal($"ECAR_tablero_{InicioMes:yyyyMMdd}_{Hoy:yyyyMMdd}.pdf", pdf.FileDownloadName);
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdf.FileContents, 0, 4));
         Assert.True(pdf.FileContents.Length > 1000);
         using var documento = PdfReader.Open(new MemoryStream(pdf.FileContents), PdfDocumentOpenMode.Import);
@@ -92,21 +93,43 @@ public class DashboardPdfTests
     }
 
     [Fact]
-    public async Task El_PDF_lleva_los_indicadores_las_areas_y_los_filtros_en_el_pie()
+    public async Task El_PDF_lleva_los_indicadores_el_periodo_las_areas_y_los_filtros_en_el_pie()
     {
         var db = await SeedAsync();
         var tablero = await TableroAsync(db);
+        var filtros = DashboardController.TextoFiltros(tablero.Filtros);
 
-        var ddl = DdlWriter.WriteToString(TableroPdf.Crear(tablero, "planta Planta 1", "Sara Supervisora", DateTime.UtcNow));
+        var ddl = DdlWriter.WriteToString(TableroPdf.Crear(tablero, filtros, "Sara Supervisora", DateTime.UtcNow));
 
+        Assert.Equal($"desde {InicioMes:dd/MM/yyyy}, hasta {Hoy:dd/MM/yyyy}, todas las plantas", filtros);
         Assert.Contains("Tablero de indicadores", ddl);
+        Assert.Contains(tablero.Periodo, ddl);
         Assert.Contains("Equipos activos", ddl);
-        Assert.Contains("Inspecciones con novedades pendientes", ddl);
-        Assert.Contains("Novedades pendientes", ddl);
+        Assert.Contains("Inspecciones realizadas en el periodo", ddl);
+        Assert.Contains("Novedades resueltas en el periodo", ddl);
         Assert.Contains("Planta 1 - Pesaje", ddl);
         Assert.Contains("Planta 2 - Producci", ddl);
-        Assert.Contains("Filtros: planta Planta 1", ddl);
+        Assert.Contains("Filtros: " + filtros, ddl);
         Assert.Contains("Generado por Sara Supervisora", ddl);
+    }
+
+    [Fact]
+    public async Task El_PDF_usa_la_planta_del_filtro_igual_que_la_pantalla()
+    {
+        var db = await SeedAsync();
+        var desde = Hoy.AddDays(-60);
+        var tablero = await TableroAsync(db, desde, Hoy, " Planta 2 ");
+
+        var ddl = DdlWriter.WriteToString(TableroPdf.Crear(tablero, DashboardController.TextoFiltros(tablero.Filtros),
+            "Sara Supervisora", DateTime.UtcNow));
+        var pdf = Assert.IsType<FileContentResult>(await new DashboardController(db).GetDashboardPdf(new Supervisor(), desde, Hoy, " Planta 2 "));
+
+        Assert.Equal(1, tablero.TotalEquipos);
+        Assert.Equal(1, tablero.NovedadesPendientes);
+        Assert.Contains("planta Planta 2", ddl);
+        Assert.Contains("Planta 2 - Producci", ddl);
+        Assert.DoesNotContain("Planta 1 - Pesaje", ddl);
+        Assert.Equal($"ECAR_tablero_{desde:yyyyMMdd}_{Hoy:yyyyMMdd}.pdf", pdf.FileDownloadName);
     }
 
     [Fact]
@@ -114,66 +137,23 @@ public class DashboardPdfTests
     {
         var db = await SeedAsync();
 
-        await Controlador(db).GetDashboardPdf(new DashboardFiltroDto { Criticidad = Criticidades.Alta });
+        await new DashboardController(db).GetDashboardPdf(new Supervisor(), planta: "Planta 1");
 
         var evento = Assert.Single(await db.Auditoria.Where(a => a.Accion == AuditoriaAcciones.Exportacion).ToListAsync());
         Assert.Equal(AuditoriaTablas.Sistema, evento.Tabla);
         Assert.Equal(7, evento.RegistroId);
         Assert.Contains("\"tablero\"", evento.ValorNuevo);
-        Assert.Contains("criticidad Alta", evento.ValorNuevo);
+        Assert.Contains("planta Planta 1", evento.ValorNuevo);
     }
 
     [Fact]
-    public async Task Sin_filtros_el_tablero_cuenta_todo()
-    {
-        var t = await TableroAsync(await SeedAsync());
-
-        Assert.Equal(2, t.TotalEquipos);
-        Assert.Equal(2, t.InspeccionesRealizadas);
-        Assert.Equal(1, t.InspeccionesEnCurso);
-        Assert.Equal(1, t.InspeccionesConNovedadesPendientes);
-        Assert.Equal(1, t.NovedadesPendientes);
-    }
-
-    [Fact]
-    public async Task Planta_area_y_criticidad_acotan_equipos_inspecciones_y_novedades()
+    public async Task Un_rango_invalido_da_400_y_no_deja_auditoria()
     {
         var db = await SeedAsync();
+        var c = new DashboardController(db);
 
-        var pesaje = await TableroAsync(db, new DashboardFiltroDto { Planta = "Planta 1", Area = "Pesaje" });
-        var baja = await TableroAsync(db, new DashboardFiltroDto { Criticidad = Criticidades.Baja });
-
-        Assert.Equal(1, pesaje.TotalEquipos);
-        Assert.Equal(1, pesaje.InspeccionesRealizadas);
-        Assert.Equal(1, pesaje.InspeccionesEnCurso);
-        Assert.Equal(0, pesaje.NovedadesPendientes);
-        Assert.Equal("Planta 1 - Pesaje", Assert.Single(pesaje.EquiposPorArea).Etiqueta);
-        Assert.Equal(1, baja.TotalEquipos);
-        Assert.Equal(1, baja.InspeccionesConNovedadesPendientes);
-        Assert.Equal(1, baja.NovedadesPendientes);
-        Assert.Equal(0, baja.InspeccionesEnCurso);
-    }
-
-    [Fact]
-    public async Task Las_fechas_acotan_inspecciones_y_novedades_pero_no_el_inventario()
-    {
-        var t = await TableroAsync(await SeedAsync(), new DashboardFiltroDto { Desde = Hoy.AddDays(-7), Hasta = Hoy });
-
-        Assert.Equal(2, t.TotalEquipos);
-        Assert.Equal(1, t.InspeccionesRealizadas);
-        Assert.Equal(0, t.InspeccionesConNovedadesPendientes);
-        Assert.Equal(0, t.NovedadesPendientes);
-    }
-
-    [Fact]
-    public async Task Filtros_invalidos_dan_400_y_no_dejan_auditoria()
-    {
-        var db = await SeedAsync();
-        var c = Controlador(db);
-
-        Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new DashboardFiltroDto { Desde = Hoy, Hasta = Hoy.AddDays(-1) }));
-        Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new DashboardFiltroDto { Criticidad = "Urgente" }));
-        Assert.IsType<BadRequestObjectResult>((await c.GetDashboard(new DashboardFiltroDto { Criticidad = "Urgente" })).Result);
+        Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new Supervisor(), Hoy, Hoy.AddDays(-1)));
+        Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new Supervisor(), Hoy.AddYears(-2), Hoy));
         Assert.False(await db.Auditoria.AnyAsync(a => a.Accion == AuditoriaAcciones.Exportacion));
     }
 }

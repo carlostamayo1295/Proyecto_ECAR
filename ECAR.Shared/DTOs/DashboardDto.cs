@@ -6,6 +6,9 @@ namespace ECAR.Shared.DTOs;
 /// </summary>
 public class DashboardDto
 {
+    /// <summary>Periodo y planta que el servidor aplicó realmente a los indicadores.</summary>
+    public DashboardFiltroAplicadoDto Filtros { get; set; } = new();
+
     /// <summary>Equipos activos.</summary>
     public int TotalEquipos { get; set; }
 
@@ -18,7 +21,10 @@ public class DashboardDto
     /// <summary>Inspecciones firmadas desde el inicio, tengan o no novedades pendientes.</summary>
     public int InspeccionesRealizadas { get; set; }
 
-    /// <summary>Inspecciones firmadas en el mes en curso.</summary>
+    /// <summary>
+    /// Inspecciones firmadas en el periodo aplicado. El nombre se conserva por compatibilidad con
+    /// el cliente anterior a los filtros de la Fase 5.
+    /// </summary>
     public int InspeccionesRealizadasMes { get; set; }
 
     /// <summary>Inspecciones iniciadas y todavía sin firmar.</summary>
@@ -33,31 +39,44 @@ public class DashboardDto
     /// <summary>Novedades resueltas con firma ("hallazgos cerrados" del SRS §6).</summary>
     public int NovedadesResueltas { get; set; }
 
-    /// <summary>"octubre de 2026": el mes al que se refieren los indicadores del periodo.</summary>
+    /// <summary>Descripción legible del periodo aplicado.</summary>
     public string Periodo { get; set; } = string.Empty;
 
     public DateTime GeneradoEn { get; set; }
-}
-
-/// <summary>
-/// Filtros del tablero (B-01), los mismos para la pantalla y para el PDF (B-03). Sin filtros el
-/// tablero es el de siempre. Planta, área y criticidad acotan los equipos y, por el equipo, sus
-/// inspecciones y novedades; las fechas son días de Colombia (incluidos los dos extremos) y acotan
-/// las inspecciones por su fecha y las novedades por la de registro, no el inventario ni el mes.
-/// </summary>
-public class DashboardFiltroDto
-{
-    public DateTime? Desde { get; set; }
-    public DateTime? Hasta { get; set; }
-    public string? Planta { get; set; }
-    public string? Area { get; set; }
-
-    /// <summary>Alta, Media o Baja.</summary>
-    public string? Criticidad { get; set; }
 }
 
 public class ConteoDto
 {
     public string Etiqueta { get; set; } = string.Empty;
     public int Cantidad { get; set; }
+}
+
+/// <summary>
+/// Filtros efectivos del tablero. Las fechas son días de Colombia e incluyen ambos extremos.
+/// </summary>
+public class DashboardFiltroAplicadoDto
+{
+    public DateTime Desde { get; set; }
+    public DateTime Hasta { get; set; }
+    public string? Planta { get; set; }
+}
+
+/// <summary>Tendencia del tablero y filtros efectivos usados para calcularla.</summary>
+public class DashboardTendenciaDto
+{
+    public int Semanas { get; set; }
+    public DateTime Desde { get; set; }
+    public DateTime Hasta { get; set; }
+    public string? Planta { get; set; }
+    public List<DashboardSemanaDto> Datos { get; set; } = new();
+}
+
+/// <summary>Conteos de una semana colombiana, desde el lunes hasta el domingo.</summary>
+public class DashboardSemanaDto
+{
+    public DateTime Desde { get; set; }
+    public DateTime Hasta { get; set; }
+    public int InspeccionesFirmadas { get; set; }
+    public int NovedadesRegistradas { get; set; }
+    public int NovedadesResueltas { get; set; }
 }
