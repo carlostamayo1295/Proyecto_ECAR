@@ -177,7 +177,9 @@
     private int currentPage = 1;
     private const int PageSize = 10;
     private int totalPages = 1;
-    private bool isLoading;
+    // true hasta la primera respuesta: con false, el primer render mostraba «No hay … para mostrar»
+    // antes de que llegaran los datos (Fase 5, F-02).
+    private bool isLoading = true;
     private bool puedeResolver;
 
     protected override async Task OnInitializedAsync()
@@ -186,6 +188,7 @@
         if (!roles.Any(r => r is RolesSistema.Administrador or RolesSistema.Estandar or RolesSistema.Supervisor))
         {
             // RolRouteGuard redirige; sin el rol no se pide nada al API.
+            isLoading = false;
             return;
         }
 
