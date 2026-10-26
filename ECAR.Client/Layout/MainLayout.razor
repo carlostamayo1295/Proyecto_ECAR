@@ -12,7 +12,10 @@
     <MudPopoverProvider />
     <MudSnackbarProvider />
     <VigilanteSesion />
-    
+
+    @* En el login no hay barra ni menú: su tarjeta ya lleva el logo (Fase 5, F-05). *@
+    @if (!EsLogin)
+    {
     <MudAppBar Elevation="3" Class="app-bar">
         @if (isAuthenticated)
         {
@@ -31,13 +34,14 @@
             </MudButton>
         }
     </MudAppBar>
+    }
 
     @* Sin sesión no hay menú: el login y la consulta del QR no deben mostrar el resto del sistema.
        El cajón se monta siempre (así abre como antes en escritorio) y solo se cierra sin sesión.
        MudNavLink resalta la página en la que se está; «Administración» es un grupo que se despliega,
        no una opción que parezca seleccionada (Fase 5, F-04). *@
     <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Class="sidebar">
-        @if (isAuthenticated)
+        @if (isAuthenticated && !EsLogin)
         {
         <MudNavMenu Class="menu-lateral">
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
@@ -77,7 +81,7 @@
         }
     </MudDrawer>
 
-    <MudMainContent Class="main-content">
+    <MudMainContent Class="@(EsLogin ? "main-content sin-barra" : "main-content")">
         <MudContainer MaxWidth="MaxWidth.Large" Class="content">
             @Body
         </MudContainer>
@@ -104,6 +108,11 @@
 .main-content {
     background-color: #F4F5F7;
     min-height: 100vh;
+}
+
+/* Sin barra (login) el contenido no necesita el espacio que MudBlazor reserva arriba para ella. */
+.main-content.sin-barra {
+    padding-top: 0 !important;
 }
 
 .content {
@@ -178,6 +187,11 @@
 @code {
     private bool drawerOpen = true;
     private bool administracionAbierta = true;
+
+    // El layout se vuelve a pintar en cada navegación (cambia Body), así que basta con leer la ruta aquí.
+    private bool EsLogin =>
+        NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0]
+            .Equals("login", StringComparison.OrdinalIgnoreCase);
     private bool isAdmin = false;
     private bool isSupervisor = false;
     private bool soloOperador = false;
