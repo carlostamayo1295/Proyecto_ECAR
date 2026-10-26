@@ -3,6 +3,25 @@
 Los cambios relevantes de ECAR se documentan aquí desde la Fase 4. Las fechas usan la zona
 horaria de Colombia.
 
+## [Sin publicar] — Fase 5
+
+### Corregido (rama `fase5/base-front-juanalberto`, 26/10/2026; tareas de FE-0 del cronograma)
+
+- **F-01 Tema.** `theme.css` pintaba de azul todo `.mud-button-root`. Por eso los botones de ícono, los interruptores y
+  los adornos de los campos salían como círculos azules, los `Outlined` y `Text` quedaban ilegibles y un botón
+  deshabilitado parecía activo.
+  - Ahora solo los botones con relleno son azules, con texto blanco.
+  - `Color.Error` se ve rojo y `Color.Warning` naranja.
+  - Los deshabilitados se ven grises.
+  - El primario de MudBlazor es el azul de ECAR (antes el morado por defecto).
+- **F-02 Carga.** Las 13 listas mostraban «No hay … para mostrar» antes de que llegaran los datos. Ahora empiezan
+  cargando.
+- **F-03 Auditoría.** Cerrar la alerta de «Verificar integridad» lanzaba `NullReferenceException` y salía la barra
+  roja de error.
+- **F-04 Menú lateral.** Se resalta la página actual, «Administración» es un grupo desplegable y el cajón ya no tiene
+  barra de desplazamiento horizontal (`MudNavMenu` en lugar de `MudList`).
+- **F-05 Login.** Se muestra sin la barra azul ni el menú, y cabe en la pantalla sin desplazarse.
+
 ## [Sin publicar] — Fase 4
 
 ### Cambiado (rama `Prueba_nuevo_novedades`, 19/10/2026)
