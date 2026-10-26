@@ -7,7 +7,7 @@
 @using MudBlazor
 
 <MudLayout>
-    <MudThemeProvider />
+    <MudThemeProvider Theme="temaEcar" />
     <MudDialogProvider />
     <MudPopoverProvider />
     <MudSnackbarProvider />
@@ -115,6 +115,11 @@
     padding-top: 0 !important;
 }
 
+/* El login mide la altura de la pantalla: con el relleno del contenedor sobraban 64 px y se desplazaba. */
+.main-content.sin-barra .content {
+    padding: 0;
+}
+
 .content {
     padding: 2rem;
 }
@@ -185,6 +190,19 @@
 </style>
 
 @code {
+    // El primario de MudBlazor es el azul de ECAR: con el morado por defecto salían en morado los campos
+    // enfocados, los interruptores activos y los botones Outlined y Text (Fase 5, F-01).
+    private static readonly MudTheme temaEcar = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#397FDE",
+            PrimaryDarken = "#2A5FB8",
+            PrimaryLighten = "#6BA0E6",
+            AppbarBackground = "#397FDE"
+        }
+    };
+
     private bool drawerOpen = true;
     private bool administracionAbierta = true;
 
