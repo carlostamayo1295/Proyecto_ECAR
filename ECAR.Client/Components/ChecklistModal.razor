@@ -42,7 +42,7 @@
                                     Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
                                     Immediate="true" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
-                            <MudItem xs="6" sm="3">
+                            <MudItem xs="12" sm="3">
                                 <MudSelect T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
                                     Variant="Variant.Outlined" Required="true" RequiredError="Requerido" Disabled="@tieneRespuestasRegistradas">
                                     @foreach (var tipo in TiposRespuesta.Todos)
@@ -51,11 +51,14 @@
                                     }
                                 </MudSelect>
                             </MudItem>
-                            <MudItem xs="4" sm="3" Class="d-flex align-center">
-                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria" Color="Color.Primary" Disabled="@tieneRespuestasRegistradas" />
-                            </MudItem>
-                            <MudItem xs="2" sm="1" Class="d-flex align-center justify-end">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemovePregunta(index)" Disabled="@tieneRespuestasRegistradas" />
+                            @* F-10: el interruptor y la papelera comparten columna, uno a cada extremo; en el
+                               teléfono bajan de línea debajo de la pregunta y nunca se superponen. *@
+                            <MudItem xs="12" sm="4" Class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria"
+                                    Color="Color.Primary" Disabled="@tieneRespuestasRegistradas" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                    aria-label="Quitar pregunta" title="Quitar pregunta"
+                                    OnClick="() => RemovePregunta(index)" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
                         </MudGrid>
                     </MudPaper>
@@ -66,8 +69,10 @@
                 <MudAlert Severity="Severity.Info" Class="mb-3">Este checklist no tiene preguntas todavía</MudAlert>
             }
 
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPregunta" Disabled="@tieneRespuestasRegistradas">
-                Agregar Pregunta
+            @* F-10: Filled para que se lea; Outlined dejaba el texto lila sobre el fondo azul de theme.css. *@
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="AddPregunta" Disabled="@tieneRespuestasRegistradas">
+                Agregar pregunta
             </MudButton>
         </MudForm>
     </DialogContent>
