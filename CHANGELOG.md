@@ -22,6 +22,19 @@ horaria de Colombia.
   barra de desplazamiento horizontal (`MudNavMenu` en lugar de `MudList`).
 - **F-05 Login.** Se muestra sin la barra azul ni el menú, y cabe en la pantalla sin desplazarse.
 
+### Agregado (rama `fase5/servicios-front-juanalberto`, 27/10/2026; F-06 de FE-0)
+
+- **`HttpClientService` para lo nuevo del backend**. Ningún método devuelve `null`.
+  - `GetDashboardAsync(desde, hasta, planta)` (B-01): la llamada sin argumentos sigue igual.
+  - `GetTendenciaTableroAsync(semanas, planta)` (B-02).
+  - `DescargarTableroPdfAsync(desde, hasta, planta)` (B-03).
+  - `BuscarUsuariosReportesAsync(texto)` (B-04).
+  - `CreateChecklistAsync` y `UpdateChecklistAsync` pasan al estilo de la Fase 4, con el 409 de B-05 en `Message`.
+- **`ApiResponse.CodigoHttp`**: solo en el cliente (`[JsonIgnore]`, no viaja en el JSON). Lo llena `LectorRespuestaApi` con
+  el código HTTP de la respuesta, para reconocer la cuenta bloqueada (423) sin leer el texto del mensaje (F-36).
+- Revisión de la integración (F-08): las 14 pantallas del menú a 1366, 1024, 768 y 375 px sin desbordes ni botones
+  ocultos, y los colores de F-11 y la fila del checklist de F-10 comprobados en pantalla.
+
 ### Corregido (ramas `fase5/checklist-erica` y `fase5/colores-erica`, 25 y 26/10/2026; tareas de FE-1)
 
 - **F-10 Checklist:** «Agregar pregunta» se lee y la fila de la pregunta ya no se superpone a 375 px.
