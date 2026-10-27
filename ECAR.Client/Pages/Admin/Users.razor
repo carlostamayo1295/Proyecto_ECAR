@@ -94,8 +94,8 @@
                                 </MudButton>
                                 @if (EstaBloqueado(context))
                                 {
-                                    <MudButton Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
-                                        StartIcon="@Icons.Material.Filled.LockOpen" OnClick="() => DesbloquearUsuario(context)" Class="action-button">
+                                    <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                                               StartIcon="@Icons.Material.Filled.LockOpen" OnClick="() => DesbloquearUsuario(context)" Class="action-button">
                                         Desbloquear
                                     </MudButton>
                                 }
@@ -252,7 +252,7 @@
     {
         var motivo = await MotivoDialog.PedirAsync(DialogService, "Desbloquear cuenta",
             $"La cuenta de '{usuario.Nombre}' volverá a poder iniciar sesión.",
-            "Desbloquear", Color.Info);
+            "Desbloquear", Color.Warning);
         if (motivo is null)
         {
             return;
