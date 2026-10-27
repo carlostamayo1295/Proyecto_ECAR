@@ -107,6 +107,23 @@ horaria de Colombia.
 
 ### Añadido
 
+- **Búsqueda de usuarios para reportes** (B-04, ECAR-221, 24/10/2026): `GET /api/reportes/usuarios?texto=`, para el
+  Administrador y el Supervisor (Operador y Estándar reciben 403). Busca en el nombre y el correo, incluye a los
+  inactivos y devuelve como máximo 20, solo con id, nombre y correo (sin contraseña ni roles). El filtro «Usuario» de
+  la pantalla de reportes sigue llamando a `api/usuarios`, que es solo del Administrador: **el cliente debe pasar a
+  `api/reportes/usuarios`** para que el Supervisor pueda usarlo.
+- **Sin nombres repetidos en checklists activos** (B-05, ECAR-222, 24/10/2026): `POST /api/checklists` y el cambio de
+  nombre en `PUT /api/checklists/{id}` responden 409 si ya hay otro checklist activo con ese nombre, sin distinguir
+  mayúsculas, minúsculas ni espacios externos, y piden usar «Nueva versión». El nombre se guarda sin espacios externos.
+  Reenviar el mismo nombre al editar no se valida, y «Nueva versión» no cambia. Activar una versión
+  (`PUT /api/checklists/{id}/activar` o `Activo = true` en el PUT) sigue comparando el nombre exacto.
+- **Pruebas de integración de la Fase 5 con SQL Server** (B-08, ECAR-223, 24/10/2026), en `ECAR.IntegrationTests`:
+  filtros del tablero (`DashboardSqlServerTests`: planta, periodo con los bordes del día en hora de Colombia,
+  validaciones y valores por defecto), tendencia semanal (`DashboardTendenciaSqlServerTests`: semanas de lunes a
+  domingo en Colombia, semanas vacías, planta y límites de 1 a 52) y nombres repetidos de checklists
+  (`ChecklistNombresSqlServerTests`). Los datos del tablero se siembran con `DatosTablero`, una planta por prueba.
+  La suite de integración corre ahora **en serie** y con 120 s por comando: en paralelo, cada clase creaba y migraba su
+  base a la vez, y migrar una base entera en un solo comando pasaba de los 30 s por defecto; fallaba al azar.
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.
 - Revisión de integración backend con estado de ECAR-209 a ECAR-216.
 
