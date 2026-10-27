@@ -22,6 +22,14 @@ horaria de Colombia.
   barra de desplazamiento horizontal (`MudNavMenu` en lugar de `MudList`).
 - **F-05 Login.** Se muestra sin la barra azul ni el menú, y cabe en la pantalla sin desplazarse.
 
+### Corregido (ramas `fase5/checklist-erica` y `fase5/colores-erica`, 25 y 26/10/2026; tareas de FE-1)
+
+- **F-10 Checklist:** «Agregar pregunta» se lee y la fila de la pregunta ya no se superpone a 375 px.
+- **F-11 Colores por tipo de acción** (sobre F-01):
+  - «Desbloquear», en la lista y en su diálogo, y «Regenerar» del QR, en naranja.
+  - «Activar» en azul y sin papelera en Checklists, Equipos y Usuarios.
+  - `ConfirmDialog` con clase propia: «Confirmar» rojo y «Cancelar» azul en cualquier pantalla.
+
 ### Agregado (rama `fase5/tablero-pdf-alejandro`, 24/10/2026)
 
 - **B-03 · Tablero en PDF** (ECAR-224): `GET /api/dashboard/pdf` genera el tablero en A4 vertical con
@@ -30,6 +38,39 @@ horaria de Colombia.
   `planta`; por defecto el mes en curso, un año como máximo) y el mismo cálculo que `GET /api/dashboard`,
   así que la pantalla y el PDF no pueden discrepar. Cada PDF queda en la auditoría como `Exportacion`
   (`Reporte = "tablero"`). Pruebas en `DashboardPdfTests`. Incluye la rama `feature/carlos-tamayo` (B-01).
+
+### Agregado (rama `feature/carlos-tamayo`, 23/10/2026; entró con las de Alejandro y Juan David)
+
+- **B-01 · Tablero con filtros**: `GET /api/dashboard?desde=&hasta=&planta=`. Sin filtros, el mes en curso; el rango
+  no puede superar un año. La respuesta trae en `Filtros` los que se aplicaron.
+- **B-02 · Tendencia**: `GET /api/dashboard/tendencia?semanas=8&planta=`, de 1 a 52 semanas que empiezan el lunes
+  (hora de Colombia); por semana, inspecciones firmadas y novedades registradas y resueltas.
+
+### Agregado (rama `feature/juan-david-lopez-t-ECAR-221-222`, 24/10/2026)
+
+- **Búsqueda de usuarios para reportes** (B-04, ECAR-221, 24/10/2026): `GET /api/reportes/usuarios?texto=`, para el
+  Administrador y el Supervisor (Operador y Estándar reciben 403). Busca en el nombre y el correo, incluye a los
+  inactivos y devuelve como máximo 20, solo con id, nombre y correo (sin contraseña ni roles). El filtro «Usuario» de
+  la pantalla de reportes sigue llamando a `api/usuarios`, que es solo del Administrador: **el cliente debe pasar a
+  `api/reportes/usuarios`** para que el Supervisor pueda usarlo.
+- **Sin nombres repetidos en checklists activos** (B-05, ECAR-222, 24/10/2026): `POST /api/checklists` y el cambio de
+  nombre en `PUT /api/checklists/{id}` responden 409 si ya hay otro checklist activo con ese nombre, sin distinguir
+  mayúsculas, minúsculas ni espacios externos, y piden usar «Nueva versión». El nombre se guarda sin espacios externos.
+  Reenviar el mismo nombre al editar no se valida, y «Nueva versión» no cambia. Activar una versión
+  (`PUT /api/checklists/{id}/activar` o `Activo = true` en el PUT) sigue comparando el nombre exacto.
+- **Pruebas de integración de la Fase 5 con SQL Server** (B-08, ECAR-223, 24/10/2026), en `ECAR.IntegrationTests`:
+  filtros del tablero (`DashboardSqlServerTests`: planta, periodo con los bordes del día en hora de Colombia,
+  validaciones y valores por defecto), tendencia semanal (`DashboardTendenciaSqlServerTests`: semanas de lunes a
+  domingo en Colombia, semanas vacías, planta y límites de 1 a 52) y nombres repetidos de checklists
+  (`ChecklistNombresSqlServerTests`). Los datos del tablero se siembran con `DatosTablero`, una planta por prueba.
+  La suite de integración corre ahora **en serie** y con 120 s por comando: en paralelo, cada clase creaba y migraba su
+  base a la vez, y migrar una base entera en un solo comando pasaba de los 30 s por defecto; fallaba al azar.
+
+### Integrado en `develop` (27/10/2026)
+
+- `fase5/base-front-juanalberto`, `fase5/colores-erica`, `fase5/checklist-erica`, `fase5/tablero-pdf-alejandro`
+  (incluye `feature/carlos-tamayo`) y `feature/juan-david-lopez-t-ECAR-221-222`. Compila con 0 avisos; 311 pruebas del
+  API y 44 contra SQL Server superadas.
 
 ## [Sin publicar] — Fase 4
 
@@ -107,23 +148,6 @@ horaria de Colombia.
 
 ### Añadido
 
-- **Búsqueda de usuarios para reportes** (B-04, ECAR-221, 24/10/2026): `GET /api/reportes/usuarios?texto=`, para el
-  Administrador y el Supervisor (Operador y Estándar reciben 403). Busca en el nombre y el correo, incluye a los
-  inactivos y devuelve como máximo 20, solo con id, nombre y correo (sin contraseña ni roles). El filtro «Usuario» de
-  la pantalla de reportes sigue llamando a `api/usuarios`, que es solo del Administrador: **el cliente debe pasar a
-  `api/reportes/usuarios`** para que el Supervisor pueda usarlo.
-- **Sin nombres repetidos en checklists activos** (B-05, ECAR-222, 24/10/2026): `POST /api/checklists` y el cambio de
-  nombre en `PUT /api/checklists/{id}` responden 409 si ya hay otro checklist activo con ese nombre, sin distinguir
-  mayúsculas, minúsculas ni espacios externos, y piden usar «Nueva versión». El nombre se guarda sin espacios externos.
-  Reenviar el mismo nombre al editar no se valida, y «Nueva versión» no cambia. Activar una versión
-  (`PUT /api/checklists/{id}/activar` o `Activo = true` en el PUT) sigue comparando el nombre exacto.
-- **Pruebas de integración de la Fase 5 con SQL Server** (B-08, ECAR-223, 24/10/2026), en `ECAR.IntegrationTests`:
-  filtros del tablero (`DashboardSqlServerTests`: planta, periodo con los bordes del día en hora de Colombia,
-  validaciones y valores por defecto), tendencia semanal (`DashboardTendenciaSqlServerTests`: semanas de lunes a
-  domingo en Colombia, semanas vacías, planta y límites de 1 a 52) y nombres repetidos de checklists
-  (`ChecklistNombresSqlServerTests`). Los datos del tablero se siembran con `DatosTablero`, una planta por prueba.
-  La suite de integración corre ahora **en serie** y con 120 s por comando: en paralelo, cada clase creaba y migraba su
-  base a la vez, y migrar una base entera en un solo comando pasaba de los 30 s por defecto; fallaba al azar.
 - Matriz de trazabilidad entre el SRS, CFR 21 Parte 11, código y pruebas.
 - Revisión de integración backend con estado de ECAR-209 a ECAR-216.
 
