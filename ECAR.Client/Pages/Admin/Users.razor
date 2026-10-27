@@ -127,7 +127,9 @@
     private int currentPage = 1;
     private int pageSize = 10;
     private int totalPages = 1;
-    private bool isLoading = false;
+    // true hasta la primera respuesta: con false, el primer render mostraba «No hay … para mostrar»
+    // antes de que llegaran los datos (Fase 5, F-02).
+    private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,6 +137,7 @@
         // comprobación, otro rol dispararía peticiones que el API rechaza con 403 (guía §3.5).
         if (!await AuthorizationService.IsAdminAsync())
         {
+            isLoading = false;
             return;
         }
 

@@ -9,6 +9,11 @@
     --success: #28A745;
     --warning: #FFC107;
     --error: #DC3545;
+    /* Botones de acciones destructivas y de cuidado: oscuros para que el texto blanco se lea (contraste ≥ 4,5). */
+    --boton-peligro: #C62828;
+    --boton-peligro-oscuro: #A31F1F;
+    --boton-cuidado: #B35400;
+    --boton-cuidado-oscuro: #8C4100;
     --background: #F4F5F7;
     --surface: #FFFFFF;
     --text-primary: #16438C;
@@ -28,12 +33,41 @@ body {
     background-color: var(--primary) !important;
 }
 
-.mud-button-root {
+/* Botones (Fase 5, F-01). Solo se pintan los botones con relleno: azules, salvo Color.Error en rojo
+   (eliminar, desactivar, anular, retirar) y Color.Warning en naranja (restablecer, continuar). Antes
+   se pintaba todo .mud-button-root, y con él los botones de ícono, los interruptores y los adornos de
+   los campos (ojo, calendario, X), que salían como círculos azules grandes; y los Outlined y Text
+   quedaban con su texto sobre azul, ilegibles. */
+.mud-button-filled {
     background-color: var(--primary) !important;
+    color: #FFFFFF !important;
 }
 
-.mud-button-root:hover {
+.mud-button-filled:hover {
     background-color: var(--primary-dark) !important;
+}
+
+.mud-button-filled.mud-button-filled-error {
+    background-color: var(--boton-peligro) !important;
+}
+
+.mud-button-filled.mud-button-filled-error:hover {
+    background-color: var(--boton-peligro-oscuro) !important;
+}
+
+.mud-button-filled.mud-button-filled-warning {
+    background-color: var(--boton-cuidado) !important;
+}
+
+.mud-button-filled.mud-button-filled-warning:hover {
+    background-color: var(--boton-cuidado-oscuro) !important;
+}
+
+/* Un botón deshabilitado se ve deshabilitado; con el azul de arriba parecía activo. */
+.mud-button-filled:disabled,
+.mud-button-filled.mud-disabled {
+    background-color: var(--mud-palette-action-disabled-background) !important;
+    color: var(--mud-palette-action-disabled) !important;
 }
 
 .mud-primary-text {
