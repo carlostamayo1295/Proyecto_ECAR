@@ -22,6 +22,15 @@ horaria de Colombia.
   barra de desplazamiento horizontal (`MudNavMenu` en lugar de `MudList`).
 - **F-05 Login.** Se muestra sin la barra azul ni el menú, y cabe en la pantalla sin desplazarse.
 
+### Agregado (rama `fase5/tablero-pdf-alejandro`, 24/10/2026)
+
+- **B-03 · Tablero en PDF** (ECAR-224): `GET /api/dashboard/pdf` genera el tablero en A4 vertical con
+  MigraDoc (`Services/Documentos/TableroPdf.cs`): periodo, indicadores, equipos por criticidad y por área, y
+  el pie común de `ExportadorTabla.Documento` con los filtros. Usa los filtros de B-01 (`desde`, `hasta`,
+  `planta`; por defecto el mes en curso, un año como máximo) y el mismo cálculo que `GET /api/dashboard`,
+  así que la pantalla y el PDF no pueden discrepar. Cada PDF queda en la auditoría como `Exportacion`
+  (`Reporte = "tablero"`). Pruebas en `DashboardPdfTests`. Incluye la rama `feature/carlos-tamayo` (B-01).
+
 ## [Sin publicar] — Fase 4
 
 ### Cambiado (rama `Prueba_nuevo_novedades`, 19/10/2026)
