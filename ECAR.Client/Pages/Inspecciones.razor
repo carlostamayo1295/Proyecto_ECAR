@@ -93,7 +93,7 @@
                             }
                         </MudTd>
                         <MudTd DataLabel="Acciones" Class="col-acciones">
-                            @if (context.Estado == InspeccionEstados.EnCurso && puedeEjecutar)
+                            @if (PuedeContinuar(context))
                             {
                                 <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Continuar(context)" Class="action-button">
@@ -159,6 +159,7 @@
     // Administrador, Operador y Estándar ejecutan; el Supervisor solo consulta. Anular es del Administrador.
     private bool esAdmin;
     private bool puedeEjecutar;
+    private long? idUsuario;
 
     // La pantalla Novedades es de Administrador, Estándar y Supervisor (igual que el menú).
     private bool veNovedades;
@@ -169,8 +170,15 @@
         esAdmin = roles.Contains(RolesSistema.Administrador);
         puedeEjecutar = esAdmin || roles.Contains(RolesSistema.Operador) || roles.Contains(RolesSistema.Estandar);
         veNovedades = esAdmin || roles.Contains(RolesSistema.Estandar) || roles.Contains(RolesSistema.Supervisor);
+        idUsuario = long.TryParse(await AuthorizationService.GetUserIdAsync(), out var id) ? id : null;
         await LoadInspeccionesAsync();
     }
+
+    // El Estándar ve las inspecciones de todos, pero continúa solo las suyas: como en el API, una en
+    // curso la modifican quien la ejecuta o el Administrador.
+    private bool PuedeContinuar(InspeccionDto inspeccion) =>
+        inspeccion.Estado == InspeccionEstados.EnCurso
+        && (esAdmin || (puedeEjecutar && inspeccion.IdUsuario == idUsuario));
 
     private async Task LoadInspeccionesAsync()
     {

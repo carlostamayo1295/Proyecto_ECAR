@@ -39,13 +39,11 @@ public class EvidenciasController : ControllerBase
     }
 
     /// <summary>
-    /// Las fotos de cualquier inspección, las haya subido quien las haya subido, las ven el
-    /// Administrador, el Supervisor y el Estándar (28/10/2026; antes el Estándar veía solo las de sus
-    /// inspecciones y las de las ajenas con novedades). El Operador, solo las de sus inspecciones.
-    /// Verlas no es retirarlas (<see cref="RetirarEvidencia"/>).
+    /// Las fotos de cualquier inspección, las haya subido quien las haya subido, las ven quienes leen
+    /// todas las inspecciones: el Administrador, el Supervisor y el Estándar (AccesoInspeccion). El
+    /// Operador, solo las de sus inspecciones. Verlas no es retirarlas (<see cref="RetirarEvidencia"/>).
     /// </summary>
-    private bool VeTodas =>
-        User.IsInRole(RolesSistema.Administrador) || User.IsInRole(RolesSistema.Supervisor) || User.IsInRole(RolesSistema.Estandar);
+    private bool VeTodas => AccesoInspeccion.LeeTodas(_currentUser);
 
     /// <summary>
     /// Las fotos retiradas (§3.6) solo las ven el Administrador y el Supervisor, marcadas; para el

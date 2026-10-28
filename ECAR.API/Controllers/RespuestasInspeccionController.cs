@@ -32,12 +32,8 @@ public class RespuestasInspeccionController : ControllerBase
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var usuarioId = _currentUser.IdUsuario;
-        var esAdmin = _currentUser.IsInRole(RolesSistema.Administrador);
-        var esSupervisor = _currentUser.IsInRole(RolesSistema.Supervisor);
-
         var pagedResult = await _inspeccionService.ObtenerRespuestasPaginadasAsync(
-            page, pageSize, search, idInspeccion, usuarioId, esAdmin, esSupervisor);
+            page, pageSize, search, idInspeccion, _currentUser.IdUsuario, AccesoInspeccion.LeeTodas(_currentUser));
 
         return Ok(ApiResponse<PagedResultDto<RespuestaInspeccionDto>>.SuccessResponse(pagedResult));
     }

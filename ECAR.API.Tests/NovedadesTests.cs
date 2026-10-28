@@ -635,29 +635,46 @@ public class NovedadesTests
     }
 
     [Fact]
-    public async Task Sin_novedades_la_inspeccion_sigue_siendo_solo_de_quien_la_ejecuta()
+    public async Task El_Estandar_consulta_todas_las_inspecciones_pero_solo_modifica_las_suyas()
     {
         var e = await SeedAsync();
+        // Las dos son de Ana y ninguna tiene novedades: una firmada y conforme, y otra en curso.
         var (conforme, _) = await FirmadaConFotoAsync(e, Si(e.Limpieza), Si(e.Nivel));
         var enCurso = await EnCursoAsync(e, No(e.Limpieza, "Aún sin firmar"));
-        // Ni siquiera un Estándar, que sí ve las ajenas con novedades. Sus fotos, en cambio, el
-        // Estándar las ve todas (El_Estandar_ve_todas_las_evidencias_y_el_Operador_solo_las_de_sus_inspecciones).
-        var otro = Inspecciones(e, e.OtroTecnico, RolesSistema.Estandar);
+        var estandar = Inspecciones(e, e.OtroTecnico, RolesSistema.Estandar);
+        RespuestasInspeccionController Respuestas(string rol) => new(new InspeccionService(e.Db), new Usuario1(e.OtroTecnico.IdUsuario, rol));
 
-        Assert.IsType<ForbidResult>((await otro.GetResultado(conforme.IdInspeccion)).Result);
-        Assert.IsType<ForbidResult>((await otro.GetInspeccion(conforme.IdInspeccion)).Result);
-        Assert.IsType<ForbidResult>((await otro.GetRespuestas(conforme.IdInspeccion)).Result);
-        Assert.IsType<ForbidResult>(await otro.ObtenerRegistroPdf(conforme.IdInspeccion));
+        // Luis, Estándar, las consulta aunque no las hizo, como el Administrador y el Supervisor.
+        Assert.IsType<OkObjectResult>((await estandar.GetResultado(conforme.IdInspeccion)).Result);
+        Assert.IsType<OkObjectResult>((await estandar.GetInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<OkObjectResult>((await estandar.GetRespuestas(conforme.IdInspeccion)).Result);
+        Assert.IsType<FileContentResult>(await estandar.ObtenerRegistroPdf(conforme.IdInspeccion));
+        Assert.IsType<OkObjectResult>((await estandar.GetEjecucion(enCurso.IdInspeccion)).Result);
+        var listado = Respuesta<PagedResultDto<InspeccionDto>>(await estandar.GetInspecciones()).Data!;
+        Assert.Equal([conforme.IdInspeccion, enCurso.IdInspeccion], listado.Data.Select(i => i.IdInspeccion).Order());
+        Assert.Equal(2, Respuesta<PagedResultDto<InspeccionDto>>(
+            await estandar.GetInspecciones(idEquipo: e.Equipo.IdEquipo)).Data!.TotalCount);
+        var respuestas = Respuesta<PagedResultDto<RespuestaInspeccionDto>>(await Respuestas(RolesSistema.Estandar).GetRespuestas()).Data!;
+        Assert.Equal([conforme.IdInspeccion, enCurso.IdInspeccion], respuestas.Data.Select(r => r.IdInspeccion).Distinct().Order());
 
-        // Un «No» todavía sin firmar no es novedad: la inspección en curso es de quien la ejecuta.
-        Assert.IsType<ForbidResult>((await otro.GetEjecucion(enCurso.IdInspeccion)).Result);
+        // Consultar no es modificar: la que está en curso la siguen modificando Ana o el
+        // Administrador, y firmarla, solo Ana.
+        Assert.IsType<ForbidResult>((await estandar.UpdateInspeccion(enCurso.IdInspeccion,
+            new UpdateInspeccionDto { Observaciones = "Cambio" })).Result);
+        Assert.IsType<ForbidResult>((await estandar.GuardarRespuestas(enCurso.IdInspeccion, new GuardarRespuestasDto
+        {
+            Respuestas = [new RespuestaEjecucionDto { IdPregunta = e.Limpieza.IdPregunta, Respuesta = "Si" }]
+        })).Result);
+        Assert.IsType<ForbidResult>((await estandar.FirmarConPassword(e.Db, enCurso.IdInspeccion,
+            new FirmarInspeccionDto { FirmaPngBase64 = FirmaPng }, new Almacen())).Result);
 
-        // El listado de un Estándar sigue siendo el de sus inspecciones.
-        var listado = Respuesta<PagedResultDto<InspeccionDto>>(await otro.GetInspecciones()).Data!;
-        Assert.Equal(0, listado.TotalCount);
-
-        // El Supervisor, en cambio, consulta cualquiera.
-        Assert.IsType<OkObjectResult>((await Inspecciones(e, e.Admin, "Supervisor").GetResultado(conforme.IdInspeccion)).Result);
+        // El Operador, en cambio, solo las suyas: Luis como Operador no ve ni abre las de Ana.
+        var operador = Inspecciones(e, e.OtroTecnico, RolesSistema.Operador);
+        Assert.Equal(0, Respuesta<PagedResultDto<InspeccionDto>>(await operador.GetInspecciones()).Data!.TotalCount);
+        Assert.IsType<ForbidResult>((await operador.GetInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await operador.GetEjecucion(enCurso.IdInspeccion)).Result);
+        Assert.Equal(0, Respuesta<PagedResultDto<RespuestaInspeccionDto>>(
+            await Respuestas(RolesSistema.Operador).GetRespuestas()).Data!.TotalCount);
     }
 
     [Fact]

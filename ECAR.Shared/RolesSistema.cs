@@ -8,9 +8,9 @@ namespace ECAR.Shared;
 /// <item><b>Administrador</b>: todos los permisos.</item>
 /// <item><b>Operador</b> (antes Técnico): ejecuta sus inspecciones y consulta equipos y checklists; de
 /// las novedades solo ve las de sus inspecciones, sin resolverlas. Sin reportes ni auditoría.</item>
-/// <item><b>Estándar</b>: ejecuta inspecciones y resuelve novedades; ve todas las novedades y todas
-/// las evidencias, las haya creado quien las haya creado, y para resolver consulta, en solo lectura,
-/// la inspección completa de otro. Sin reportes ni auditoría.</item>
+/// <item><b>Estándar</b>: ejecuta inspecciones y resuelve novedades; consulta, en solo lectura, todas
+/// las inspecciones, novedades y evidencias, las haya creado quien las haya creado, y solo modifica
+/// las suyas. Sin reportes ni auditoría.</item>
 /// <item><b>Supervisor</b> (antes Auditor): consulta todo, incluidos reportes, auditoría e
 /// integridad, y no modifica nada.</item>
 /// </list>
@@ -34,7 +34,7 @@ public static class RolesSistema
     /// <summary>Ejecutan inspecciones: iniciar, responder, subir fotos, firmar y anular la suya.</summary>
     public const string Inspeccionan = Administrador + "," + Operador + "," + Estandar;
 
-    /// <summary>Inspectores sin lectura global (sus inspecciones; el Estándar, también las ajenas con novedades).</summary>
+    /// <summary>Tienen «Mis inspecciones» (GET api/inspecciones/mias): el Operador y el Estándar.</summary>
     public const string Inspectores = Operador + "," + Estandar;
 
     /// <summary>Resuelven novedades con firma.</summary>

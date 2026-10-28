@@ -3,6 +3,7 @@
 @inject SesionService Sesion
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject AuthorizationService AuthorizationService
 
 @* Esqueleto de la ejecución de inspección (FE-0).
    Carga el estado completo una sola vez y lo reparte a los tres componentes de paso.
@@ -151,9 +152,22 @@
             return;
         }
 
+        // El Estándar ve las inspecciones de todos, pero una ajena en curso no la continúa: como en
+        // el API, la modifican quien la ejecuta o el Administrador.
+        if (!await PuedeContinuarAsync(inspeccion))
+        {
+            Snackbar.Add("Solo quien ejecuta la inspección o el Administrador pueden continuarla", Severity.Warning);
+            NavigationManager.NavigateTo("/inspecciones", replace: true);
+            return;
+        }
+
         RefrescarContadores();
         cargando = false;
     }
+
+    private async Task<bool> PuedeContinuarAsync(InspeccionEjecucionDto ejecucion) =>
+        await AuthorizationService.IsAdminAsync()
+        || (long.TryParse(await AuthorizationService.GetUserIdAsync(), out var idUsuario) && ejecucion.IdUsuario == idUsuario);
 
     /// <summary>
     /// Recalcula los contadores sobre la copia en memoria para no volver a pedir la inspección

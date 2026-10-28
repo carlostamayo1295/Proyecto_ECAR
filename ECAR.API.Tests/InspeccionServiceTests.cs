@@ -181,7 +181,7 @@ public class InspeccionServiceTests
 
         // Act (Punto 7: un Operador, idUsuario=1, no debe ver respuestas de idUsuario=2)
         var result = await service.ObtenerRespuestasPaginadasAsync(
-            pageNumber: 1, pageSize: 10, search: null, idInspeccion: null, usuarioId: 1, esAdmin: false, esSupervisor: false);
+            pageNumber: 1, pageSize: 10, search: null, idInspeccion: null, usuarioId: 1, leeTodas: false);
 
         // Assert
         Assert.Single(result.Data);
@@ -197,7 +197,7 @@ public class InspeccionServiceTests
 
         // Act (Punto 9: Limita pageSize a máximo 100)
         var result = await service.ObtenerRespuestasPaginadasAsync(
-            pageNumber: 1, pageSize: 500, search: null, idInspeccion: null, usuarioId: 1, esAdmin: true, esSupervisor: false);
+            pageNumber: 1, pageSize: 500, search: null, idInspeccion: null, usuarioId: 1, leeTodas: true);
 
         // Assert
         Assert.Equal(100, result.PageSize);

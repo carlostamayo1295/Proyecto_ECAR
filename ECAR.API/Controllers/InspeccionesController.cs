@@ -79,9 +79,8 @@ public class InspeccionesController : ControllerBase
             query = query.Where(i => i.Estado == estado);
         }
 
-        // Consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Un Operador o un
-        // Estándar sigue viendo solo las suyas: el filtro de arriba ya se aplicó. Las ajenas con
-        // novedades, el Estándar las abre desde la novedad (AccesoInspeccion); en su listado no aparecen.
+        // Consulta histórica de un equipo (SRS §2 y §6, Gestión de Equipos). Un Operador sigue
+        // viendo solo las suyas: el filtro de arriba ya se aplicó.
         if (idEquipo.HasValue)
         {
             query = query.Where(i => i.IdEquipo == idEquipo.Value);
@@ -146,7 +145,7 @@ public class InspeccionesController : ControllerBase
         try
         {
             var respuestas = await _inspeccionService.ObtenerRespuestasAsync(id, _currentUser.IdUsuario,
-                AccesoInspeccion.LeeTodas(_currentUser), AccesoInspeccion.VeAjenasConNovedades(_currentUser));
+                AccesoInspeccion.LeeTodas(_currentUser));
             return Ok(ApiResponse<List<RespuestaInspeccionDto>>.SuccessResponse(respuestas));
         }
         catch (KeyNotFoundException ex)
@@ -176,7 +175,7 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<InspeccionDto>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!await PuedeLeerAsync(inspeccion))
+        if (!PuedeLeer(inspeccion))
         {
             return Forbid();
         }
@@ -263,7 +262,7 @@ public class InspeccionesController : ControllerBase
                 "Inspección no encontrada"));
         }
 
-        if (!await PuedeLeerAsync(inspeccion))
+        if (!PuedeLeer(inspeccion))
         {
             return Forbid();
         }
@@ -618,7 +617,7 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!await PuedeLeerAsync(inspeccion))
+        if (!PuedeLeer(inspeccion))
         {
             return Forbid();
         }
@@ -700,7 +699,7 @@ public class InspeccionesController : ControllerBase
             return NotFound(ApiResponse<InspeccionResultadoDto>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!await PuedeLeerAsync(inspeccion))
+        if (!PuedeLeer(inspeccion))
         {
             return Forbid();
         }
@@ -938,15 +937,14 @@ public class InspeccionesController : ControllerBase
             .ThenInclude(e => e.UsuarioCargaDetalle)
         .FirstOrDefaultAsync(i => i.IdInspeccion == id);
 
-    /// <summary>Operador o Estándar: su listado son sus inspecciones.</summary>
+    /// <summary>El Operador: su listado son sus inspecciones.</summary>
     private bool EsInspectorSinLecturaGlobal() => !AccesoInspeccion.LeeTodas(_currentUser);
 
     /// <summary>
-    /// Administrador y Supervisor, cualquiera; Operador y Estándar, las suyas, y el Estándar además
-    /// las que tienen novedades, en solo lectura, para orientarse al resolverlas (<see cref="AccesoInspeccion"/>).
+    /// Administrador, Supervisor y Estándar, cualquiera, en solo lectura; el Operador, las suyas
+    /// (<see cref="AccesoInspeccion"/>).
     /// </summary>
-    private Task<bool> PuedeLeerAsync(Inspeccion inspeccion) =>
-        _context.PuedeLeerAsync(_currentUser, inspeccion.IdInspeccion, inspeccion.IdUsuario);
+    private bool PuedeLeer(Inspeccion inspeccion) => AccesoInspeccion.PuedeLeer(_currentUser, inspeccion.IdUsuario);
 
     private bool PuedeModificar(Inspeccion inspeccion) =>
         _currentUser.IsInRole(RolesSistema.Administrador)
