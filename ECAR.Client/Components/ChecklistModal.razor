@@ -198,11 +198,62 @@
                 Snackbar.Add("Checklist creado exitosamente", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }
+            else if (result?.CodigoHttp == 409)
+            {
+                // F-12: ya existe un checklist activo con ese nombre (B-05). Se ofrece su «Nueva versión».
+                await OfrecerNuevaVersionAsync(result.Message);
+            }
             else
             {
                 Snackbar.Add(result?.Message ?? "Error al crear checklist", Severity.Error);
             }
         }
+    }
+
+    /// <summary>
+    /// F-12: el nombre ya lo tiene un checklist activo. Muestra el mensaje del API y ofrece
+    /// crear una nueva versión de ese checklist en lugar de uno repetido.
+    /// </summary>
+    private async Task OfrecerNuevaVersionAsync(string mensajeApi)
+    {
+        var existente = await BuscarActivoConNombreAsync(nombre);
+        if (existente == null)
+        {
+            // No se encontró (por ejemplo, otro usuario lo desactivó): solo se muestra el mensaje.
+            Snackbar.Add(mensajeApi, Severity.Warning);
+            return;
+        }
+
+        var parametros = new DialogParameters
+        {
+            ["Message"] = $"{mensajeApi}. ¿Quiere crear una nueva versión de «{existente.Nombre}» " +
+                          $"(versión {existente.Version})? Se copiarán sus preguntas actuales; " +
+                          "las que escribió aquí no se guardan."
+        };
+        var confirmacion = await DialogService.ShowAsync<ConfirmDialog>("Ya existe un checklist con ese nombre", parametros);
+        var respuesta = await confirmacion.Result;
+        if (respuesta is null || respuesta.Canceled)
+        {
+            return; // Sigue en el formulario para cambiar el nombre.
+        }
+
+        var dialogo = await DialogService.ShowAsync<NuevaVersionChecklistDialog>("Nueva Versión",
+            new DialogParameters { ["Checklist"] = existente });
+        var resultado = await dialogo.Result;
+        if (resultado is not null && !resultado.Canceled)
+        {
+            // La versión nueva ya se creó: se cierra el formulario y la lista se recarga.
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    /// <summary>El checklist activo con el mismo nombre, sin distinguir mayúsculas ni espacios (como B-05).</summary>
+    private async Task<ChecklistDto?> BuscarActivoConNombreAsync(string nombreBuscado)
+    {
+        var buscado = nombreBuscado.Trim();
+        var respuesta = await HttpClientService.GetChecklistsAsync(1, 100, buscado);
+        return respuesta?.Data?.Data?.FirstOrDefault(c =>
+            c.Activo && string.Equals(c.Nombre.Trim(), buscado, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task Cancel()
