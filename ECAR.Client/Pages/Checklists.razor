@@ -78,7 +78,7 @@
                                 </MudButton>
                                 <MudButton Size="Size.Small" Variant="Variant.Filled"
                                            Color="@(context.Activo ? Color.Error : Color.Primary)"
-                                           StartIcon="@(context.Activo ? Icons.Material.Filled.Delete : Icons.Material.Filled.CheckCircle)"
+                                           StartIcon="@(context.Activo ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
                                            OnClick="() => DeleteChecklist(context)" Class="action-button">
                                     @(context.Activo ? "Desactivar" : "Activar")
                                 </MudButton>
