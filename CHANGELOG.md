@@ -5,6 +5,19 @@ horaria de Colombia.
 
 ## [Sin publicar] — Fase 5
 
+### Corregido (rama `feature/fase5-cierre-backend`, 28/10/2026; B-06, B-07 y B-09)
+
+- **B-06 · Validaciones de contraseña (ECAR-225):** se retiró de los DTO de usuarios la regla antigua de
+  6 caracteres. La creación, el cambio y el restablecimiento usan una sola política de 10 caracteres con letras
+  y números. Los rechazos distinguen contraseña requerida, actual incorrecta, longitud, combinación y
+  reutilización, siempre con mensajes en español.
+- **B-07 · Cuenta bloqueada al firmar (ECAR-226):** `POST /api/inspecciones/{id}/firmar` y
+  `POST /api/novedades/{id}/resolver` devuelven 423 si la cuenta ya estaba bloqueada o si el bloqueo se activa
+  en ese mismo intento. La operación no modifica ni cierra el registro. El cliente reconoce el contrato por
+  `ApiResponse.CodigoHttp` y no por el texto del mensaje.
+- **B-09 · Regresión (ECAR-227):** la suite cubre bloqueo, caducidad, contraseña temporal, cambio obligatorio y
+  reautenticación al firmar inspecciones y resolver novedades.
+
 ### Corregido (rama `fase5/base-front-juanalberto`, 26/10/2026; tareas de FE-0 del cronograma)
 
 - **F-01 Tema.** `theme.css` pintaba de azul todo `.mud-button-root`. Por eso los botones de ícono, los interruptores y
@@ -79,7 +92,7 @@ horaria de Colombia.
   La suite de integración corre ahora **en serie** y con 120 s por comando: en paralelo, cada clase creaba y migraba su
   base a la vez, y migrar una base entera en un solo comando pasaba de los 30 s por defecto; fallaba al azar.
 
-### Integrado en `develop` (27/10/2026)
+### Integrado en `fase5/integracion-parcial` (27/10/2026; pendiente de `develop`)
 
 - `fase5/base-front-juanalberto`, `fase5/colores-erica`, `fase5/checklist-erica`, `fase5/tablero-pdf-alejandro`
   (incluye `feature/carlos-tamayo`) y `feature/juan-david-lopez-t-ECAR-221-222`. Compila con 0 avisos; 311 pruebas del

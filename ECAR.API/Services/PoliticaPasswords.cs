@@ -19,7 +19,12 @@ public class PoliticaPasswords(IOptions<SeguridadOptions> opciones)
     public List<string> Validar(string? password)
     {
         var errores = new List<string>();
-        password ??= string.Empty;
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            errores.Add("La contraseña es requerida");
+            return errores;
+        }
 
         if (password.Length < Opciones.LongitudMinimaPassword)
         {
