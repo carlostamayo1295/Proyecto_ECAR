@@ -8,19 +8,21 @@
     </TitleContent>
     <DialogContent>
         <MudForm @ref="form">
-            <MudSelect T="long" Label="Usuario" @bind-Value="idUsuario" Variant="Variant.Outlined"
+            <MudSelect T="long?" Label="Usuario" @bind-Value="idUsuario" Variant="Variant.Outlined"
+                       Placeholder="Seleccione un usuario"
                 Required="true" RequiredError="Debe seleccionar un usuario" Class="mb-3">
                 @foreach (var u in usuarios)
                 {
-                    <MudSelectItem T="long" Value="@u.Id">@u.Nombre</MudSelectItem>
+                    <MudSelectItem T="long?" Value="@((long?)u.Id)">@u.Nombre</MudSelectItem>
                 }
             </MudSelect>
 
-            <MudSelect T="long" Label="Rol" @bind-Value="idRol" Variant="Variant.Outlined"
+            <MudSelect T="long?" Label="Rol" @bind-Value="idRol" Variant="Variant.Outlined"
+                       Placeholder="Seleccione un rol"
                 Required="true" RequiredError="Debe seleccionar un rol" Class="mb-3">
                 @foreach (var r in roles)
                 {
-                    <MudSelectItem T="long" Value="@r.Id">@r.Nombre</MudSelectItem>
+                    <MudSelectItem T="long?" Value="@((long?)r.Id)">@r.Nombre</MudSelectItem>
                 }
             </MudSelect>
         </MudForm>
@@ -46,8 +48,8 @@
 
     private bool IsEditMode => Asignacion != null;
 
-    private long idUsuario;
-    private long idRol;
+    private long? idUsuario;
+    private long? idRol;
 
     private List<LookupDto> usuarios = new();
     private List<LookupDto> roles = new();
@@ -75,7 +77,7 @@
             }
         }
 
-        if (idUsuario <= 0 || idRol <= 0)
+        if (idUsuario is not > 0 || idRol is not > 0)
         {
             Snackbar.Add("Debe seleccionar un usuario y un rol", Severity.Warning);
             return;
@@ -85,7 +87,7 @@
         {
             if (IsEditMode && Asignacion != null)
             {
-                var updateDto = new UpdateUsuarioRolDto { IdUsuario = idUsuario, IdRol = idRol };
+                var updateDto = new UpdateUsuarioRolDto { IdUsuario = idUsuario.Value, IdRol = idRol.Value };
                 var result = await HttpClientService.UpdateUsuarioRolAsync(Asignacion.Id, updateDto);
 
                 if (result != null && result.Success)
@@ -100,7 +102,7 @@
             }
             else
             {
-                var createDto = new CreateUsuarioRolDto { IdUsuario = idUsuario, IdRol = idRol };
+                var createDto = new CreateUsuarioRolDto { IdUsuario = idUsuario.Value, IdRol = idRol.Value };
                 var result = await HttpClientService.CreateUsuarioRolAsync(createDto);
 
                 if (result != null && result.Success)
