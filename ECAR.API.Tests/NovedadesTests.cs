@@ -638,19 +638,16 @@ public class NovedadesTests
     public async Task Sin_novedades_la_inspeccion_sigue_siendo_solo_de_quien_la_ejecuta()
     {
         var e = await SeedAsync();
-        var (conforme, foto) = await FirmadaConFotoAsync(e, Si(e.Limpieza), Si(e.Nivel));
+        var (conforme, _) = await FirmadaConFotoAsync(e, Si(e.Limpieza), Si(e.Nivel));
         var enCurso = await EnCursoAsync(e, No(e.Limpieza, "Aún sin firmar"));
-        // Ni siquiera un Estándar, que sí ve las ajenas con novedades.
+        // Ni siquiera un Estándar, que sí ve las ajenas con novedades. Sus fotos, en cambio, el
+        // Estándar las ve todas (El_Estandar_ve_todas_las_evidencias_y_el_Operador_solo_las_de_sus_inspecciones).
         var otro = Inspecciones(e, e.OtroTecnico, RolesSistema.Estandar);
-        var fotos = Evidencias(e, e.OtroTecnico, RolesSistema.Estandar);
 
         Assert.IsType<ForbidResult>((await otro.GetResultado(conforme.IdInspeccion)).Result);
         Assert.IsType<ForbidResult>((await otro.GetInspeccion(conforme.IdInspeccion)).Result);
         Assert.IsType<ForbidResult>((await otro.GetRespuestas(conforme.IdInspeccion)).Result);
         Assert.IsType<ForbidResult>(await otro.ObtenerRegistroPdf(conforme.IdInspeccion));
-        Assert.IsType<ForbidResult>((await fotos.GetEvidenciasInspeccion(conforme.IdInspeccion)).Result);
-        Assert.IsType<ForbidResult>((await fotos.GetEvidencia(foto.IdEvidencia)).Result);
-        Assert.IsType<ForbidResult>(await fotos.GetArchivo(foto.IdEvidencia));
 
         // Un «No» todavía sin firmar no es novedad: la inspección en curso es de quien la ejecuta.
         Assert.IsType<ForbidResult>((await otro.GetEjecucion(enCurso.IdInspeccion)).Result);
@@ -686,6 +683,67 @@ public class NovedadesTests
         Assert.Equal(2, Respuesta<PagedResultDto<NovedadDto>>(
             await delInspector.GetNovedades(new NovedadFiltroDto { IdInspeccion = propia.IdInspeccion })).Data!.TotalCount);
         Assert.IsType<OkObjectResult>((await delInspector.GetNovedad(unaNovedad.IdNovedad)).Result);
+    }
+
+    [Fact]
+    public async Task El_Estandar_ve_todas_las_novedades_aunque_no_haya_hecho_la_inspeccion()
+    {
+        var e = await SeedAsync();
+        var (_, novedades) = await FirmadaConDosNovedadesAsync(e);
+        // La inspección es de Ana; Luis, Estándar, no la hizo.
+        var estandar = Novedades(e, e.OtroTecnico, RolesSistema.Estandar);
+
+        var listado = Respuesta<PagedResultDto<NovedadDto>>(await estandar.GetNovedades(new NovedadFiltroDto())).Data!;
+
+        Assert.Equal(novedades.Select(n => n.IdNovedad).Order(), listado.Data.Select(n => n.IdNovedad).Order());
+        Assert.All(listado.Data, n => Assert.Equal(e.Inspector.IdUsuario, n.IdUsuarioRegistro));
+        Assert.IsType<OkObjectResult>((await estandar.GetNovedad(novedades[0].IdNovedad)).Result);
+    }
+
+    [Fact]
+    public async Task El_Estandar_ve_todas_las_evidencias_y_el_Operador_solo_las_de_sus_inspecciones()
+    {
+        var e = await SeedAsync();
+        // Fotos de Ana: una de una inspección firmada sin novedades y dos de una en curso, una retirada.
+        var (conforme, firmada) = await FirmadaConFotoAsync(e, Si(e.Limpieza), Si(e.Nivel));
+        var enCurso = await EnCursoAsync(e, Si(e.Limpieza));
+        var deEnCurso = new Evidencia
+        {
+            IdInspeccion = enCurso.IdInspeccion, Archivo = "g.png", NombreOriginal = "g.png", TipoContenido = "image/png",
+            TamanoBytes = 68, IdUsuarioCarga = e.Inspector.IdUsuario
+        };
+        var retirada = new Evidencia
+        {
+            IdInspeccion = enCurso.IdInspeccion, Archivo = "h.png", NombreOriginal = "h.png", TipoContenido = "image/png",
+            TamanoBytes = 68, IdUsuarioCarga = e.Inspector.IdUsuario, Retirada = true
+        };
+        e.Db.Evidencias.AddRange(deEnCurso, retirada);
+        await e.Db.SaveChangesAsync();
+        e.Db.ChangeTracker.Clear();
+
+        // Luis, Estándar, las ve aunque no las subió ni hizo las inspecciones; las retiradas, no.
+        var estandar = Evidencias(e, e.OtroTecnico, RolesSistema.Estandar);
+        var listado = Respuesta<PagedResultDto<EvidenciaDto>>(await estandar.GetEvidencias(null)).Data!;
+        Assert.Equal([firmada.IdEvidencia, deEnCurso.IdEvidencia], listado.Data.Select(f => f.IdEvidencia).Order());
+        Assert.All(listado.Data, f => Assert.Equal(e.Inspector.IdUsuario, f.IdUsuarioInspeccion));
+        Assert.IsType<OkObjectResult>((await estandar.GetEvidenciasInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<OkObjectResult>((await estandar.GetEvidencia(deEnCurso.IdEvidencia)).Result);
+        Assert.IsType<FileStreamResult>(await estandar.GetArchivo(firmada.IdEvidencia));
+        Assert.IsType<FileStreamResult>(await estandar.GetArchivo(deEnCurso.IdEvidencia));
+        Assert.IsType<NotFoundObjectResult>((await estandar.GetEvidencia(retirada.IdEvidencia)).Result);
+
+        // Verlas no es retirarlas: eso sigue siendo de quien la subió o hace la inspección, o del Administrador.
+        Assert.IsType<ForbidResult>((await estandar.RetirarEvidencia(deEnCurso.IdEvidencia,
+            new MotivoDto { Motivo = "Foto desenfocada, se repite" })).Result);
+
+        // Luis como Operador no ve ninguna ni las abre; Ana, que las subió, ve las suyas.
+        var operador = Evidencias(e, e.OtroTecnico, RolesSistema.Operador);
+        Assert.Equal(0, Respuesta<PagedResultDto<EvidenciaDto>>(await operador.GetEvidencias(null)).Data!.TotalCount);
+        Assert.IsType<ForbidResult>((await operador.GetEvidenciasInspeccion(conforme.IdInspeccion)).Result);
+        Assert.IsType<ForbidResult>((await operador.GetEvidencia(firmada.IdEvidencia)).Result);
+        Assert.IsType<ForbidResult>(await operador.GetArchivo(firmada.IdEvidencia));
+        Assert.Equal(2, Respuesta<PagedResultDto<EvidenciaDto>>(
+            await Evidencias(e, e.Inspector, RolesSistema.Operador).GetEvidencias(null)).Data!.TotalCount);
     }
 
     // ------------------------------------------------------------------ modelo y permisos

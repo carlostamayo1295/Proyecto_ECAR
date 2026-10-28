@@ -76,6 +76,14 @@ horaria de Colombia.
   de inspección queda solo para el registro manual del Administrador. `PUT /api/inspecciones/{id}` sigue en el API.
 - **Anular una inspección es solo del Administrador** (22/10/2026), en la pantalla y en el API
   (`POST /api/inspecciones/{id}/anular`); antes también la anulaba su inspector.
+- **El Estándar ve todas las evidencias** (28/10/2026), como el Administrador y el Supervisor: las haya subido quien
+  las haya subido y sea de quien sea la inspección (listado, detalle y archivo de `api/evidencias`, y
+  `api/inspecciones/{id}/evidencias`). Las novedades ya las veía todas. El Operador sigue viendo solo las fotos y las
+  novedades de sus inspecciones, y las fotos retiradas siguen siendo solo del Administrador y el Supervisor. La
+  inspección ajena sin novedades tampoco cambia: el Estándar no la abre.
+- Ver no es retirar: en la pantalla Evidencias, «Retirar» sale solo a quien el API se lo permite (el Administrador,
+  quien subió la foto o quien ejecuta la inspección, y solo mientras está en curso). Antes salía a todos, también al
+  Supervisor y en las inspecciones anuladas, y el API lo rechazaba. Para eso `EvidenciaDto` trae `IdUsuarioInspeccion`.
 
 ### Añadido
 

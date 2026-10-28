@@ -913,6 +913,7 @@ public class InspeccionesController : ControllerBase
                     FechaCarga = evidencia.FechaCarga,
                     IdUsuarioCarga = evidencia.IdUsuarioCarga,
                     UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre,
+                    IdUsuarioInspeccion = inspeccion.IdUsuario,
                     EstadoInspeccion = inspeccion.Estado
                 })
                 .ToList(),
@@ -1021,6 +1022,7 @@ public class InspeccionesController : ControllerBase
                     FechaCarga = evidencia.FechaCarga,
                     IdUsuarioCarga = evidencia.IdUsuarioCarga,
                     UsuarioCarga = evidencia.UsuarioCargaDetalle.Nombre,
+                    IdUsuarioInspeccion = inspeccion.IdUsuario,
                     EstadoInspeccion = inspeccion.Estado
                 })
                 .ToList()

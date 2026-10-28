@@ -2,7 +2,10 @@
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthorizationService AuthorizationService
 
+@* El API decide qué fotos llegan: el Administrador, el Supervisor y el Estándar ven las de todas las
+   inspecciones, y el Operador, las de las suyas. Retirar tiene sus propias reglas (PuedeRetirar). *@
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudCard>
         <MudCardHeader>
@@ -66,7 +69,7 @@
                                                 Color="Color.Default" Text="Retirada" title="@MotivoRetiro(evidencia)" />
                                         }
                                     </MudCardContent>
-                                    @if (!evidencia.Retirada && !EsDeInspeccionCerrada(evidencia))
+                                    @if (PuedeRetirar(evidencia))
                                     {
                                         <MudCardActions>
                                             <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
@@ -127,12 +130,18 @@
                                 {
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Text="Inspección cerrada" />
                                 }
-                                else
+                                else if (PuedeRetirar(context))
                                 {
                                     <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
                                         StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="() => RetirarEvidencia(context)" Class="action-button">
                                         Retirar
                                     </MudButton>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                        Color="@FormatoEstados.ColorInspeccion(context.EstadoInspeccion)"
+                                        Text="@InspeccionEstados.Texto(context.EstadoInspeccion)" />
                                 }
                             </MudTd>
                         </RowTemplate>
@@ -161,11 +170,20 @@
     private int totalPages = 1;
     private bool isLoading = false;
 
+    private bool esAdmin;
+    private bool ejecutaInspecciones;
+    private long? idUsuario;
+
     /// <summary>Caché de miniaturas ya descargadas, por IdEvidencia, para no repetir la llamada al API en cada render.</summary>
     private readonly Dictionary<long, string?> miniaturas = new();
 
     protected override async Task OnInitializedAsync()
     {
+        var roles = await AuthorizationService.GetUserRolesAsync();
+        esAdmin = roles.Contains(RolesSistema.Administrador);
+        ejecutaInspecciones = roles.Contains(RolesSistema.Operador) || roles.Contains(RolesSistema.Estandar);
+        idUsuario = long.TryParse(await AuthorizationService.GetUserIdAsync(), out var id) ? id : null;
+
         await LoadEvidenciasAsync();
     }
 
@@ -218,6 +236,14 @@
     // responde 409; la pantalla no ofrece lo que el servidor va a rechazar.
     private static bool EsDeInspeccionCerrada(EvidenciaDto evidencia) =>
         InspeccionEstados.EstaFirmada(evidencia.EstadoInspeccion);
+
+    // Las mismas reglas que el API: solo en una inspección en curso, y el Administrador o quien subió
+    // la foto o ejecuta la inspección. El Estándar ve las fotos de otros, pero no las retira, y el
+    // Supervisor solo consulta.
+    private bool PuedeRetirar(EvidenciaDto evidencia) =>
+        !evidencia.Retirada && evidencia.EstadoInspeccion == InspeccionEstados.EnCurso
+        && (esAdmin || (ejecutaInspecciones
+            && (evidencia.IdUsuarioCarga == idUsuario || evidencia.IdUsuarioInspeccion == idUsuario)));
 
     private static string FormatearTamano(long bytes)
     {

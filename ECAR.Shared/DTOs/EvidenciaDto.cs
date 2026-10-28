@@ -18,6 +18,12 @@ public class EvidenciaDto
     public string UsuarioCarga { get; set; } = string.Empty;
 
     /// <summary>
+    /// Quien ejecuta la inspección. La foto la retiran él, quien la subió o el Administrador; el
+    /// Estándar ve las de todos, pero solo retira las suyas.
+    /// </summary>
+    public long IdUsuarioInspeccion { get; set; }
+
+    /// <summary>
     /// Estado de la inspección a la que pertenece esta evidencia ("EnCurso" o "Cerrada").
     /// </summary>
     public string EstadoInspeccion { get; set; } = string.Empty;

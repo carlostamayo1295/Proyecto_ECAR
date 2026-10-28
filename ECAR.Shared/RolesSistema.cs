@@ -8,8 +8,9 @@ namespace ECAR.Shared;
 /// <item><b>Administrador</b>: todos los permisos.</item>
 /// <item><b>Operador</b> (antes Técnico): ejecuta sus inspecciones y consulta equipos y checklists; de
 /// las novedades solo ve las de sus inspecciones, sin resolverlas. Sin reportes ni auditoría.</item>
-/// <item><b>Estándar</b>: ejecuta inspecciones y resuelve novedades; para resolver consulta, en solo
-/// lectura, la inspección completa de otro. Sin reportes ni auditoría.</item>
+/// <item><b>Estándar</b>: ejecuta inspecciones y resuelve novedades; ve todas las novedades y todas
+/// las evidencias, las haya creado quien las haya creado, y para resolver consulta, en solo lectura,
+/// la inspección completa de otro. Sin reportes ni auditoría.</item>
 /// <item><b>Supervisor</b> (antes Auditor): consulta todo, incluidos reportes, auditoría e
 /// integridad, y no modifica nada.</item>
 /// </list>

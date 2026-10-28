@@ -11,7 +11,8 @@ namespace ECAR.API.Services;
 /// inspección completa (respuestas, fotos, firma y registro PDF; decisión de ECAR del 20/10/2026).
 /// Una inspección solo tiene novedades después de firmada, así que la que está en curso sigue
 /// siendo solo de quien la ejecuta; modificar tampoco cambia (el inspector o el Administrador).
-/// Inspecciones, respuestas y evidencias preguntan aquí para que la regla viva en un solo sitio.
+/// Inspecciones y respuestas preguntan aquí para que la regla viva en un solo sitio. Las fotos van
+/// aparte (EvidenciasController): el Estándar las ve todas, sea de quien sea la inspección.
 /// </summary>
 public static class AccesoInspeccion
 {

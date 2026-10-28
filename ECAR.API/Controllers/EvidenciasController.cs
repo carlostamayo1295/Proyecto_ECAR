@@ -38,18 +38,20 @@ public class EvidenciasController : ControllerBase
         _motivoCambio = motivoCambio;
     }
 
-    /// <summary>Administrador y Supervisor ven las fotos de cualquier inspección (AccesoInspeccion).</summary>
-    private bool LeeTodas => User.IsInRole(RolesSistema.Administrador) || User.IsInRole(RolesSistema.Supervisor);
+    /// <summary>
+    /// Las fotos de cualquier inspección, las haya subido quien las haya subido, las ven el
+    /// Administrador, el Supervisor y el Estándar (28/10/2026; antes el Estándar veía solo las de sus
+    /// inspecciones y las de las ajenas con novedades). El Operador, solo las de sus inspecciones.
+    /// Verlas no es retirarlas (<see cref="RetirarEvidencia"/>).
+    /// </summary>
+    private bool VeTodas =>
+        User.IsInRole(RolesSistema.Administrador) || User.IsInRole(RolesSistema.Supervisor) || User.IsInRole(RolesSistema.Estandar);
 
     /// <summary>
     /// Las fotos retiradas (§3.6) solo las ven el Administrador y el Supervisor, marcadas; para el
     /// Operador, el Estándar y en la ejecución desaparecen, aunque se conservan.
     /// </summary>
-    private bool VeRetiradas => LeeTodas;
-
-    /// <summary>Operador o Estándar: la inspección es suya o, para el Estándar, una ajena con novedades.</summary>
-    private Task<bool> InspectorPuedeLeerAsync(long idInspeccion, long idInspector) =>
-        _context.InspectorPuedeLeerAsync(idInspeccion, idInspector, _currentUser.IdUsuario, User.IsInRole(RolesSistema.Estandar));
+    private bool VeRetiradas => User.IsInRole(RolesSistema.Administrador) || User.IsInRole(RolesSistema.Supervisor);
 
     // GET: api/evidencias O api/inspecciones/{idInspeccion}/evidencias
     [HttpGet]
@@ -78,8 +80,8 @@ public class EvidenciasController : ControllerBase
             query = query.Where(e => e.IdInspeccion == idInspeccion.Value);
         }
 
-        // Operador y Estándar: las suyas (las de inspecciones ajenas se abren desde cada inspección)
-        if (!LeeTodas)
+        // El Operador, las de sus inspecciones
+        if (!VeTodas)
         {
             query = query.Where(e => e.IdUsuarioCarga == _currentUser.IdUsuario || e.Inspeccion.IdUsuario == _currentUser.IdUsuario);
         }
@@ -109,6 +111,7 @@ public class EvidenciasController : ControllerBase
                 FechaCarga = e.FechaCarga,
                 IdUsuarioCarga = e.IdUsuarioCarga,
                 UsuarioCarga = e.UsuarioCargaDetalle.Nombre,
+                IdUsuarioInspeccion = e.Inspeccion.IdUsuario,
                 EstadoInspeccion = e.Inspeccion.Estado ?? string.Empty,
                 Retirada = e.Retirada,
                 FechaRetiro = e.FechaRetiro,
@@ -133,8 +136,8 @@ public class EvidenciasController : ControllerBase
     /// Evidencias de una inspección (endpoint 8 del contrato, PLAN_FASE3_TAREAS §3.2): una lista,
     /// no una página. Antes esta ruta compartía acción con el listado paginado y devolvía
     /// PagedResultDto, y el cliente, que deserializa List&lt;EvidenciaDto&gt;, recibía null.
-    /// Un Operador ve las de sus inspecciones; un Estándar, también las de las que tienen novedades,
-    /// para orientarse al resolverlas (AccesoInspeccion), como en GET {id}/archivo.
+    /// Un Operador ve las de sus inspecciones; el Estándar, como el Administrador y el Supervisor, las
+    /// de cualquiera (<see cref="VeTodas"/>), como en GET {id}/archivo.
     /// </summary>
     [HttpGet("/api/inspecciones/{idInspeccion:long}/evidencias")]
     public async Task<ActionResult<ApiResponse<List<EvidenciaDto>>>> GetEvidenciasInspeccion(long idInspeccion)
@@ -148,7 +151,7 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<List<EvidenciaDto>>.ErrorResponse("Inspección no encontrada"));
         }
 
-        if (!LeeTodas && !await InspectorPuedeLeerAsync(idInspeccion, inspeccion.IdUsuario))
+        if (!VeTodas && inspeccion.IdUsuario != _currentUser.IdUsuario)
         {
             return Forbid();
         }
@@ -168,6 +171,7 @@ public class EvidenciasController : ControllerBase
                 FechaCarga = e.FechaCarga,
                 IdUsuarioCarga = e.IdUsuarioCarga,
                 UsuarioCarga = e.UsuarioCargaDetalle.Nombre,
+                IdUsuarioInspeccion = e.Inspeccion.IdUsuario,
                 EstadoInspeccion = e.Inspeccion.Estado ?? string.Empty
             })
             .ToListAsync();
@@ -190,8 +194,8 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<EvidenciaDto>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        if (!LeeTodas && evidencia.IdUsuarioCarga != _currentUser.IdUsuario
-            && !await InspectorPuedeLeerAsync(evidencia.IdInspeccion, evidencia.Inspeccion.IdUsuario))
+        if (!VeTodas && evidencia.IdUsuarioCarga != _currentUser.IdUsuario
+            && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
         {
             return Forbid();
         }
@@ -218,7 +222,7 @@ public class EvidenciasController : ControllerBase
             return NotFound(ApiResponse<bool>.ErrorResponse("Evidencia no encontrada"));
         }
 
-        if (!LeeTodas && !await InspectorPuedeLeerAsync(evidencia.IdInspeccion, evidencia.Inspeccion.IdUsuario))
+        if (!VeTodas && evidencia.Inspeccion.IdUsuario != _currentUser.IdUsuario)
         {
             return Forbid();
         }
@@ -341,6 +345,7 @@ public class EvidenciasController : ControllerBase
             FechaCarga = evidencia.FechaCarga,
             IdUsuarioCarga = evidencia.IdUsuarioCarga,
             UsuarioCarga = _currentUser.Nombre,
+            IdUsuarioInspeccion = inspeccion.IdUsuario,
             EstadoInspeccion = inspeccion.Estado ?? string.Empty
         };
 
@@ -412,6 +417,7 @@ public class EvidenciasController : ControllerBase
         FechaCarga = evidencia.FechaCarga,
         IdUsuarioCarga = evidencia.IdUsuarioCarga,
         UsuarioCarga = evidencia.UsuarioCargaDetalle?.Nombre ?? string.Empty,
+        IdUsuarioInspeccion = evidencia.Inspeccion?.IdUsuario ?? 0,
         EstadoInspeccion = evidencia.Inspeccion?.Estado ?? string.Empty,
         Retirada = evidencia.Retirada,
         FechaRetiro = evidencia.FechaRetiro,
