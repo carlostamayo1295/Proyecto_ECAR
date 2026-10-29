@@ -75,7 +75,7 @@ public class NovedadesSqlServerTests(BaseCompartida compartida) : IClassFixture<
             IdUsuario = usuario.IdUsuario,
             IdChecklist = checklist.IdChecklist,
             FechaInspeccion = DateTime.UtcNow,
-            Respuestas = preguntas.Select(p => new RespuestaInspeccion { IdPregunta = p.IdPregunta, Respuesta = "No", Observacion = "Falla" }).ToList()
+            Respuestas = preguntas.Select(p => new RespuestaInspeccion { IdPregunta = p.IdPregunta, Respuesta = "No", Observacion = "Falla", PresentaNovedad = true }).ToList()
         };
         db.Inspecciones.Add(inspeccion);
         await db.SaveChangesAsync();

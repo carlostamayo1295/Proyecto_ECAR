@@ -12,6 +12,12 @@ public class DashboardDto
     /// <summary>Equipos activos.</summary>
     public int TotalEquipos { get; set; }
 
+    /// <summary>
+    /// Equipos activos con al menos una inspección firmada en el periodo (30/10/2026): la parte de los equipos
+    /// que cambia con el periodo; el total, la criticidad y el área son el inventario actual.
+    /// </summary>
+    public int EquiposInspeccionados { get; set; }
+
     /// <summary>Equipos activos por criticidad (Alta, Media, Baja y "Sin criticidad").</summary>
     public List<ConteoDto> EquiposPorCriticidad { get; set; } = new();
 
@@ -60,19 +66,42 @@ public class DashboardFiltroAplicadoDto
     public DateTime Hasta { get; set; }
     /// <summary>Plantas aplicadas; vacía, todas (desde el 29/10/2026 se pueden elegir varias).</summary>
     public List<string> Plantas { get; set; } = new();
+
+    /// <summary>
+    /// «Total general» (30/10/2026): todo el historial, sin el límite de un año. Desde es el primer día del mes
+    /// de la primera inspección (de las plantas elegidas) y Hasta, hoy.
+    /// </summary>
+    public bool Total { get; set; }
 }
 
-/// <summary>Tendencia del tablero y filtros efectivos usados para calcularla.</summary>
+/// <summary>Cómo se agrupa la tendencia: por semana (de lunes a domingo) o por mes.</summary>
+public static class TendenciaAgrupaciones
+{
+    public const string Semana = "Semana";
+    public const string Mes = "Mes";
+}
+
+/// <summary>
+/// Tendencia del tablero y filtros efectivos usados para calcularla. Desde el 30/10/2026 sigue el periodo
+/// del tablero: por semana hasta 92 días y por mes en un rango más largo o en el total general.
+/// </summary>
 public class DashboardTendenciaDto
 {
+    /// <summary>Cantidad de puntos (semanas o meses) de Datos.</summary>
     public int Semanas { get; set; }
     public DateTime Desde { get; set; }
     public DateTime Hasta { get; set; }
     public List<string> Plantas { get; set; } = new();
+    /// <summary><see cref="TendenciaAgrupaciones.Semana"/> o <see cref="TendenciaAgrupaciones.Mes"/>.</summary>
+    public string Agrupacion { get; set; } = TendenciaAgrupaciones.Semana;
+    public bool Total { get; set; }
     public List<DashboardSemanaDto> Datos { get; set; } = new();
 }
 
-/// <summary>Conteos de una semana colombiana, desde el lunes hasta el domingo.</summary>
+/// <summary>
+/// Conteos de un tramo de la tendencia en hora de Colombia: una semana (de lunes a domingo) o un mes. El primero
+/// y el último se recortan al periodo, así que pueden ser más cortos.
+/// </summary>
 public class DashboardSemanaDto
 {
     public DateTime Desde { get; set; }

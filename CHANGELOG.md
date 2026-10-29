@@ -5,6 +5,24 @@ horaria de Colombia.
 
 ## [Sin publicar] — Fase 5
 
+### Cambiado (pedidos del 30/10/2026, rama `integracion-back-front-fase-5`)
+
+- **Sin pantalla de bienvenida**: al abrir el sistema sin sesión se va directo al inicio de sesión. La portada con
+  «Bienvenido…» y «Iniciar Sesión» se quitó de `Pages/Home.razor`.
+- **El tablero sigue al filtro** (antes la gráfica era siempre la de las últimas 8 semanas):
+  - La tendencia (gráfica y tabla) es la del periodo elegido. Va por semana, de lunes a domingo, hasta 92 días, y por
+    mes en un periodo más largo. La primera y la última semana o mes se recortan al periodo.
+  - `GET /api/dashboard/tendencia` acepta `desde`, `hasta` y `total`, con las mismas reglas que el tablero. Trae
+    `Agrupacion` (`Semana` o `Mes`). Sin ellos sigue dando las últimas `semanas` semanas.
+  - La tarjeta «Equipos activos» dice cuántos se inspeccionaron en el periodo (`EquiposInspeccionados`, también en el
+    PDF). «Equipos por criticidad» y «Equipos por área» aclaran que son el inventario actual: cambian con la planta,
+    no con el periodo.
+- **«Total general»** en el filtro de periodo: todos los meses, desde el de la primera inspección (de las plantas
+  elegidas) hasta hoy, sin el límite de un año. La tendencia va por mes.
+  - Contrato: `?total=true` en `GET /api/dashboard`, `/tendencia` y `/pdf`. `DashboardFiltroAplicadoDto.Total` lo
+    indica; el periodo dice «Total general (del … al …)», y el pie del PDF y la auditoría empiezan con «total general».
+  - Un rango de fechas sigue teniendo el máximo de un año.
+
 ### Cambiado (pedidos del 29/10/2026, rama `integracion-back-front-fase-5`)
 
 - **Sin la pantalla «Preguntas de Checklist»**: se quitaron la página `/checklists/preguntas`, su formulario y su opción
@@ -40,6 +58,23 @@ horaria de Colombia.
   - Aplica a los reportes, la auditoría, el tablero y el registro de la inspección.
   - Se revisaron los PDF convertidos a imagen: nada se sale de su celda.
 - Evidencias: un nombre de archivo largo sin espacios ya no ensancha la tarjeta ni la página a 375 px.
+- **«¿Presenta novedad?» en cada pregunta** (formulario de la inspección):
+  - Cada pregunta trae, debajo de su Sí/No, un segundo Sí/No «¿Presenta novedad?». Empieza en «No».
+  - La novedad la decide esa casilla y no la respuesta: responder «No» ya no crea una novedad, y un «Sí» con la casilla
+    marcada sí la crea. Marcarla exige la observación, aunque la pregunta sea opcional.
+  - Columna nueva `RespuestasInspeccion.PresentaNovedad` (`bit` nulo; migración `PresentaNovedadYSede`). Se muestra en el
+    resultado («Con novedad» / «Sin novedad») y en el registro PDF (columna «¿Presenta novedad?»).
+  - Las firmadas antes del cambio siguen mostrando como novedad su respuesta «No» (`ReglaNovedad`).
+- **Sede de la inspección**: Rionegro o Medellín (`ECAR.Shared/Sedes`).
+  - Se elige una vez, arriba del formulario, y se guarda al momento con `PUT /api/inspecciones/{id}/sede`. Solo la
+    cambia quien ejecuta, mientras la inspección está en curso; otro valor da 400.
+  - Sin sede no se firma, y la pantalla no deja pasar del paso de preguntas.
+  - Columna nueva `Inspecciones.Sede` (`nvarchar(30)` nula). Sale en el resultado, en el registro PDF, en la columna
+    «Sede» de los cuatro reportes tabulares y como filtro de varios valores (`?sedes=`) en todos los reportes.
+- **Todas las preguntas son Sí/No**: el formulario del checklist ya no pide el tipo. El API rechaza con 400 una pregunta
+  nueva o editada de tipo «Texto»; las que ya existen no cambian.
+- **Sello `HMACSHA256-v3`**: cubre también la sede y la marca «¿Presenta novedad?» de cada respuesta. Los sellos v0, v1
+  y v2 se siguen verificando.
 
 ### Completado en la integración (rama `integracion-back-front-fase-5`, 29/10/2026)
 

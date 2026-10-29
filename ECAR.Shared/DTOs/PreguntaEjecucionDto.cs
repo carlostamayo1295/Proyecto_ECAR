@@ -24,10 +24,17 @@ public class PreguntaEjecucionDto
 
     public string? Observacion { get; set; }
 
-    /// <summary>true cuando es una pregunta Sí/No respondida con "No" (novedad, regla 4 del SRS).</summary>
-    public bool EsNovedad =>
-        TipoRespuesta == TiposRespuesta.SiNo &&
-        string.Equals(Respuesta, "No", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// «¿Presenta novedad?» de esta pregunta (29/10/2026): true, novedad; false o null, no. En las firmadas
+    /// antes de ese día el servidor lo deduce de la regla de entonces (respuesta «No»).
+    /// </summary>
+    public bool? PresentaNovedad { get; set; }
+
+    /// <summary>
+    /// true cuando el inspector marcó «¿Presenta novedad?» = Sí (regla 4 del SRS). Desde el 29/10/2026 la
+    /// novedad ya no sale de responder «No» a la pregunta.
+    /// </summary>
+    public bool EsNovedad => PresentaNovedad == true;
 
     /// <summary>true cuando la pregunta es obligatoria y todavía no tiene respuesta (regla 3 del SRS).</summary>
     public bool FaltaResponder => Obligatoria && string.IsNullOrWhiteSpace(Respuesta);

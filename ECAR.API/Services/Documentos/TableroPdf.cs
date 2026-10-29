@@ -39,6 +39,7 @@ public static class TableroPdf
         Tabla(seccion, "Indicador", "Valor",
         [
             new() { Etiqueta = "Equipos activos", Cantidad = tablero.TotalEquipos },
+            new() { Etiqueta = "Equipos inspeccionados en el periodo", Cantidad = tablero.EquiposInspeccionados },
             new() { Etiqueta = "Inspecciones realizadas desde el inicio", Cantidad = tablero.InspeccionesRealizadas },
             new() { Etiqueta = "Inspecciones realizadas en el periodo", Cantidad = tablero.InspeccionesRealizadasMes },
             new() { Etiqueta = "Inspecciones en curso (iniciadas en el periodo)", Cantidad = tablero.InspeccionesEnCurso },

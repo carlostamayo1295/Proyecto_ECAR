@@ -210,6 +210,7 @@ public class BackendPhaseThreeFirmaTests
         {
             IdPregunta = escenario.PreguntaSiNo.IdPregunta,
             Respuesta = "No",
+            PresentaNovedad = true,
             Observacion = "Carcasa golpeada"
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
@@ -291,7 +292,8 @@ public class BackendPhaseThreeFirmaTests
         var inspeccion = await CrearInspeccionAsync(escenario, new RespuestaInspeccion
         {
             IdPregunta = escenario.PreguntaSiNo.IdPregunta,
-            Respuesta = "No"
+            Respuesta = "No",
+            PresentaNovedad = true
         });
         var controller = ControladorDe(escenario, escenario.Tecnico);
 
@@ -603,6 +605,7 @@ public class BackendPhaseThreeFirmaTests
         {
             IdPregunta = escenario.PreguntaSiNo.IdPregunta,
             Respuesta = "No",
+            PresentaNovedad = true,
             Observacion = "Fuga en el sello"
         });
         await ControladorDe(escenario, escenario.Tecnico)

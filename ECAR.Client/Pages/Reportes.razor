@@ -32,6 +32,16 @@
                                 Clave="@(e => e.IdEquipo)" Seleccionados="equiposSeleccionados"
                                 HelperText="Opcional: elija uno o varios; vacío, todos los equipos" />
                         </MudItem>
+                        <MudItem xs="12" sm="6" lg="2">
+                            <MudSelect T="string" Label="Sedes" MultiSelection="true" SelectedValues="@estadoEquipo.Filtro.Sedes"
+                                SelectedValuesChanged="@(v => estadoEquipo.Filtro.Sedes = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Rionegro, Medellín o las dos">
+                                @foreach (var sede in Sedes.Todas)
+                                {
+                                    <MudSelectItem T="string" Value="@sede">@sede</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
                             <MudDatePicker Label="Desde" @bind-Date="estadoEquipo.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
                         </MudItem>
@@ -51,6 +61,7 @@
                         <MudTable Items="estadoEquipo.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
                             <HeaderContent>
                                 <MudTh>Inspección</MudTh>
+                                <MudTh>Sede</MudTh>
                                 <MudTh>Equipo</MudTh>
                                 <MudTh>Código / Activo fijo</MudTh>
                                 <MudTh>Marca / Modelo</MudTh>
@@ -62,6 +73,7 @@
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
+                                <MudTd DataLabel="Sede">@(context.Sede ?? "—")</MudTd>
                                 <MudTd DataLabel="Equipo">@context.NombreEquipo</MudTd>
                                 <MudTd DataLabel="Código / Activo fijo">@context.CodigoInterno / @context.ActivoFijo</MudTd>
                                 <MudTd DataLabel="Marca / Modelo">@context.Marca @context.Modelo</MudTd>
@@ -87,7 +99,7 @@
                 <MudTabPanel Text="Historial por Área">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
-<MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Plantas"
+                            <MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Plantas"
                                 SelectedValuesChanged="@(v => estadoArea.Filtro.Plantas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
                                 HelperText="Una o varias; vacío, todas">
                                 @foreach (var planta in Plantas)
@@ -97,12 +109,22 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6" lg="3">
-<MudSelect T="string" Label="Áreas" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Areas"
+                            <MudSelect T="string" Label="Áreas" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Areas"
                                 SelectedValuesChanged="@(v => estadoArea.Filtro.Areas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
                                 HelperText="Una o varias; vacío, todas">
                                 @foreach (var area in AreasDe(estadoArea.Filtro.Plantas))
                                 {
                                     <MudSelectItem T="string" Value="@area">@area</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" lg="2">
+                            <MudSelect T="string" Label="Sedes" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Sedes"
+                                SelectedValuesChanged="@(v => estadoArea.Filtro.Sedes = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Rionegro, Medellín o las dos">
+                                @foreach (var sede in Sedes.Todas)
+                                {
+                                    <MudSelectItem T="string" Value="@sede">@sede</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
@@ -125,6 +147,7 @@
                         <MudTable Items="estadoArea.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
                             <HeaderContent>
                                 <MudTh>Inspección</MudTh>
+                                <MudTh>Sede</MudTh>
                                 <MudTh>Planta</MudTh>
                                 <MudTh>Área</MudTh>
                                 <MudTh>Equipo</MudTh>
@@ -134,6 +157,7 @@
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
+                                <MudTd DataLabel="Sede">@(context.Sede ?? "—")</MudTd>
                                 <MudTd DataLabel="Planta">@context.Planta</MudTd>
                                 <MudTd DataLabel="Área">@context.Area</MudTd>
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
@@ -162,6 +186,16 @@
                                 Clave="@(u => u.IdUsuario)" Seleccionados="usuariosSeleccionados"
                                 HelperText="Opcional: elija uno o varios; vacío, todos los usuarios" />
                         </MudItem>
+                        <MudItem xs="12" sm="6" lg="2">
+                            <MudSelect T="string" Label="Sedes" MultiSelection="true" SelectedValues="@estadoUsuario.Filtro.Sedes"
+                                SelectedValuesChanged="@(v => estadoUsuario.Filtro.Sedes = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Rionegro, Medellín o las dos">
+                                @foreach (var sede in Sedes.Todas)
+                                {
+                                    <MudSelectItem T="string" Value="@sede">@sede</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
                             <MudDatePicker Label="Desde" @bind-Date="estadoUsuario.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
                         </MudItem>
@@ -181,6 +215,7 @@
                         <MudTable Items="estadoUsuario.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
                             <HeaderContent>
                                 <MudTh>Inspección</MudTh>
+                                <MudTh>Sede</MudTh>
                                 <MudTh>Usuario</MudTh>
                                 <MudTh>Equipo</MudTh>
                                 <MudTh>Fecha</MudTh>
@@ -189,6 +224,7 @@
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="Inspección">#@context.IdInspeccion</MudTd>
+                                <MudTd DataLabel="Sede">@(context.Sede ?? "—")</MudTd>
                                 <MudTd DataLabel="Usuario">@context.Usuario</MudTd>
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
                                 <MudTd DataLabel="Fecha">@context.FechaInspeccion.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
@@ -211,7 +247,7 @@
                 <MudTabPanel Text="Equipos con Novedades">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
-<MudSelect T="string" Label="Estados" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Estados"
+                            <MudSelect T="string" Label="Estados" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Estados"
                                 SelectedValuesChanged="@(v => estadoNovedades.Filtro.Estados = Lista(v))" Variant="Variant.Outlined" Clearable="true"
                                 HelperText="Uno o varios; vacío, todos">
                                 @foreach (var estadoNovedad in NovedadEstados.Todos)
@@ -221,12 +257,22 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6" lg="3">
-<MudSelect T="string" Label="Criticidades" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Criticidades"
+                            <MudSelect T="string" Label="Criticidades" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Criticidades"
                                 SelectedValuesChanged="@(v => estadoNovedades.Filtro.Criticidades = Lista(v))" Variant="Variant.Outlined" Clearable="true"
                                 HelperText="Una o varias; vacío, todas">
                                 @foreach (var criticidad in Criticidades.Todas)
                                 {
                                     <MudSelectItem T="string" Value="@criticidad">@criticidad</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" lg="2">
+                            <MudSelect T="string" Label="Sedes" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Sedes"
+                                SelectedValuesChanged="@(v => estadoNovedades.Filtro.Sedes = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Rionegro, Medellín o las dos">
+                                @foreach (var sede in Sedes.Todas)
+                                {
+                                    <MudSelectItem T="string" Value="@sede">@sede</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
@@ -249,6 +295,7 @@
                         <MudTable Items="estadoNovedades.Filas" Hover="true" Striped="true" Elevation="0" Dense="true">
                             <HeaderContent>
                                 <MudTh>Novedad</MudTh>
+                                <MudTh>Sede</MudTh>
                                 <MudTh>Equipo</MudTh>
                                 <MudTh>Área</MudTh>
                                 <MudTh>Descripción</MudTh>
@@ -259,6 +306,7 @@
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="Novedad">#@context.IdNovedad</MudTd>
+                                <MudTd DataLabel="Sede">@(context.Sede ?? "—")</MudTd>
                                 <MudTd DataLabel="Equipo">@context.Equipo</MudTd>
                                 <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
                                 <MudTd DataLabel="Descripción">@context.Novedad</MudTd>
@@ -285,7 +333,7 @@
                 <MudTabPanel Text="Inspecciones por Fechas">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
-<MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@filtroFechas.Plantas"
+                            <MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@filtroFechas.Plantas"
                                 SelectedValuesChanged="@(v => filtroFechas.Plantas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
                                 HelperText="Una o varias; vacío, todas">
                                 @foreach (var planta in Plantas)
@@ -295,12 +343,22 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6" lg="3">
-<MudSelect T="string" Label="Áreas" MultiSelection="true" SelectedValues="@filtroFechas.Areas"
+                            <MudSelect T="string" Label="Áreas" MultiSelection="true" SelectedValues="@filtroFechas.Areas"
                                 SelectedValuesChanged="@(v => filtroFechas.Areas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
                                 HelperText="Una o varias; vacío, todas">
                                 @foreach (var area in AreasDe(filtroFechas.Plantas))
                                 {
                                     <MudSelectItem T="string" Value="@area">@area</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" lg="2">
+                            <MudSelect T="string" Label="Sedes" MultiSelection="true" SelectedValues="@filtroFechas.Sedes"
+                                SelectedValuesChanged="@(v => filtroFechas.Sedes = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Rionegro, Medellín o las dos">
+                                @foreach (var sede in Sedes.Todas)
+                                {
+                                    <MudSelectItem T="string" Value="@sede">@sede</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>

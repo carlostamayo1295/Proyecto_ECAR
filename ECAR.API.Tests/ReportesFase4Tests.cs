@@ -214,7 +214,7 @@ public class ReportesFase4Tests
         Assert.Equal("Historial por equipo", hoja.Cell(1, 1).GetString());
         Assert.Contains("Generado por Carla Admin", hoja.Cell(3, 1).GetString());
         Assert.Contains("Historial por equipo · Filtros:", Fabrica.PieDeExcel(excel.FileContents));
-        Assert.Contains(hoja.RowsUsed(), r => r.Cell(2).GetString() == "BAL-1");
+        Assert.Contains(hoja.RowsUsed(), r => r.Cell(3).GetString() == "BAL-1"); // la 2 es la sede
         Assert.Equal(2, await d.Db.Auditoria.CountAsync(a => a.Accion == AuditoriaAcciones.Exportacion));
     }
 
@@ -256,7 +256,7 @@ public class ReportesFase4Tests
         {
             IdEquipo = d.Balanza.IdEquipo, IdChecklist = checklist.IdChecklist, IdUsuario = d.Tecnico.IdUsuario,
             FechaInspeccion = DateTime.UtcNow,
-            Respuestas = [new RespuestaInspeccion { IdPregunta = pregunta.IdPregunta, Respuesta = "No", Observacion = "Burbuja corrida" }],
+            Respuestas = [new RespuestaInspeccion { IdPregunta = pregunta.IdPregunta, Respuesta = "No", Observacion = "Burbuja corrida", PresentaNovedad = true }],
             Evidencias = [new Evidencia { Archivo = "f.png", NombreOriginal = "f.png", TipoContenido = "image/png", IdUsuarioCarga = d.Tecnico.IdUsuario }]
         };
         d.Db.Inspecciones.Add(inspeccion);
@@ -309,6 +309,24 @@ public class ReportesFase4Tests
         var fechas = Filtro(); fechas.Areas = ["Producción"];
         var totales = Datos_<InspeccionesPorFechasDto>(await c.GetInspeccionesFechas(fechas));
         Assert.Equal((1, 1), (totales.TotalInspecciones, totales.Satisfactorias));
+    }
+
+    // 29/10/2026: la sede de la inspección sale en los reportes y se puede filtrar.
+    [Fact]
+    public async Task El_filtro_de_sede_trae_solo_las_de_esa_sede_y_la_fila_la_muestra()
+    {
+        var d = await SeedAsync();
+        var firmadas = await d.Db.Inspecciones.Where(i => i.Estado == InspeccionEstados.Cerrada)
+            .OrderBy(i => i.IdInspeccion).ToListAsync();
+        firmadas[0].Sede = Sedes.Rionegro;
+        firmadas[1].Sede = Sedes.Medellin;
+        await d.Db.SaveChangesAsync();
+        var filtro = Mes();
+        filtro.Sedes = [Sedes.Medellin];
+
+        var pagina = Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await Controlador(d.Db).GetHistorialEquipo(filtro));
+
+        Assert.Equal(Sedes.Medellin, Assert.Single(pagina.Data).Sede);
     }
 
     [Fact]

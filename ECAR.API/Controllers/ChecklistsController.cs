@@ -418,14 +418,21 @@ public class ChecklistsController : ControllerBase
         }
     }
 
-    /// <summary>Devuelve un mensaje de error cuando una pregunta usa un tipo de respuesta fuera del catálogo.</summary>
+    /// <summary>
+    /// Devuelve un mensaje de error cuando una pregunta no es Sí/No: desde el 29/10/2026 todas lo son
+    /// (<see cref="TiposRespuesta.EsValidoParaGuardar"/>). «Nueva versión» copia las preguntas tal como están.
+    /// </summary>
     private static string? GetInvalidTipoRespuesta(IEnumerable<CreatePreguntaChecklistDto>? preguntas)
     {
-        var invalida = preguntas?.FirstOrDefault(p => !TiposRespuesta.EsValido(p.TipoRespuesta));
+        var invalida = preguntas?.FirstOrDefault(p => !TiposRespuesta.EsValidoParaGuardar(p.TipoRespuesta));
+        if (invalida == null)
+        {
+            return null;
+        }
 
-        return invalida == null
-            ? null
-            : $"El tipo de respuesta '{invalida.TipoRespuesta}' no es válido. Valores permitidos: {TiposRespuesta.ValoresPermitidos}";
+        return TiposRespuesta.EsValido(invalida.TipoRespuesta)
+            ? TiposRespuesta.MensajeSoloSiNo
+            : $"El tipo de respuesta '{invalida.TipoRespuesta}' no es válido. {TiposRespuesta.MensajeSoloSiNo}";
     }
 
     private static ChecklistDto MapToDto(Checklist checklist)

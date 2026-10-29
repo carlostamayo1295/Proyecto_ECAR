@@ -71,7 +71,7 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
     [Fact]
     public async Task Una_firma_HMAC_leida_de_la_base_se_verifica_integra()
     {
-        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmacV2);
+        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmacV3);
 
         var leida = await LeerAsync(id);
 
@@ -105,7 +105,7 @@ public class FirmaSqlServerTests(BaseCompartida compartida) : IClassFixture<Base
     [Fact]
     public async Task Alterar_una_respuesta_en_la_base_rompe_la_firma()
     {
-        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmacV2);
+        var id = await InspeccionCerradaAsync((i, _) => Firma.CalcularSelloAsync(i), VerificadorIntegridad.AlgoritmoHmacV3);
         await compartida.Base.EjecutarAsync($"UPDATE RespuestasInspeccion SET Respuesta = N'No' WHERE IdInspeccion = {id}");
 
         Assert.False(await Firma.VerificarAsync(await LeerAsync(id)));

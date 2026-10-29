@@ -1194,6 +1194,13 @@ public class HttpClientService
     /// Devuelve el estado completo recalculado por el servidor —incluidos los contadores—,
     /// así que no hace falta volver a pedir la ejecución tras guardar.
     /// </summary>
+    /// <summary>
+    /// Sede de la inspección en curso, Rionegro o Medellín (29/10/2026): obligatoria para firmarla. Nunca devuelve
+    /// null; el 400 trae el motivo en Message.
+    /// </summary>
+    public Task<ApiResponse<InspeccionEjecucionDto>> CambiarSedeAsync(long idInspeccion, string sede) =>
+        EnviarAsync<InspeccionEjecucionDto>(HttpMethod.Put, $"api/inspecciones/{idInspeccion}/sede", new SedeDto { Sede = sede });
+
     public async Task<ApiResponse<InspeccionEjecucionDto>?> GuardarRespuestasAsync(long idInspeccion,
         GuardarRespuestasDto guardarDto)
     {
@@ -1594,12 +1601,12 @@ public class HttpClientService
     /// <summary>
     /// Indicadores del tablero (SRS §6; Fase 5, B-01). Sin filtros, el mes en curso; desde y hasta son días en hora
     /// de Colombia y el rango no puede pasar de un año (400). La respuesta trae en Filtros los que se aplicaron.
-    /// Nunca devuelve null. Desde el 29/10/2026 acepta varias plantas; sin plantas, todas.
+    /// Nunca devuelve null. Desde el 29/10/2026 acepta varias plantas; sin plantas, todas. Con total («Total
+    /// general», 30/10/2026), todo el historial: las fechas no se envían y no hay límite de un año.
     /// </summary>
     public Task<ApiResponse<DashboardDto>> GetDashboardAsync(DateTime? desde = null, DateTime? hasta = null,
-        IReadOnlyCollection<string>? plantas = null) =>
-        EnviarAsync<DashboardDto>(HttpMethod.Get,
-            ConFiltros("api/dashboard", ("desde", desde), ("hasta", hasta), ("planta", plantas)));
+        IReadOnlyCollection<string>? plantas = null, bool total = false) =>
+        EnviarAsync<DashboardDto>(HttpMethod.Get, ConFiltros("api/dashboard", FiltrosTablero(desde, hasta, plantas, total)));
 
     /// <summary>Tendencia del tablero (B-02): de 1 a 52 semanas que empiezan el lunes, la actual incluida.</summary>
     public Task<ApiResponse<DashboardTendenciaDto>> GetTendenciaTableroAsync(int semanas = 8,
@@ -1607,11 +1614,27 @@ public class HttpClientService
         EnviarAsync<DashboardTendenciaDto>(HttpMethod.Get,
             ConFiltros("api/dashboard/tendencia", ("semanas", semanas), ("planta", plantas)));
 
+    /// <summary>
+    /// Tendencia del mismo periodo que el tablero (30/10/2026): por semana hasta 92 días y por mes en un periodo
+    /// más largo o en el total general (Agrupacion dice cuál).
+    /// </summary>
+    public Task<ApiResponse<DashboardTendenciaDto>> GetTendenciaTableroAsync(DateTime? desde, DateTime? hasta,
+        IReadOnlyCollection<string>? plantas, bool total = false) =>
+        EnviarAsync<DashboardTendenciaDto>(HttpMethod.Get,
+            ConFiltros("api/dashboard/tendencia", FiltrosTablero(desde, hasta, plantas, total)));
+
     /// <summary>El tablero en PDF con los mismos filtros (B-03); cada descarga queda en la auditoría.</summary>
     public Task<ApiResponse<bool>> DescargarTableroPdfAsync(DateTime? desde = null, DateTime? hasta = null,
-        IReadOnlyCollection<string>? plantas = null) =>
-        DescargarArchivoAsync(ConFiltros("api/dashboard/pdf", ("desde", desde), ("hasta", hasta), ("planta", plantas)),
+        IReadOnlyCollection<string>? plantas = null, bool total = false) =>
+        DescargarArchivoAsync(ConFiltros("api/dashboard/pdf", FiltrosTablero(desde, hasta, plantas, total)),
             $"ECAR_tablero_{DateTime.Now:yyyyMMdd_HHmm}.pdf");
+
+    /// <summary>En el total general solo van las plantas y total=true; si no, las fechas y las plantas.</summary>
+    private static (string Clave, object? Valor)[] FiltrosTablero(DateTime? desde, DateTime? hasta,
+        IReadOnlyCollection<string>? plantas, bool total) =>
+        total
+            ? [("planta", plantas), ("total", true)]
+            : [("desde", desde), ("hasta", hasta), ("planta", plantas)];
 
     public Task<ApiResponse<IntegridadInspeccionDto>> VerificarIntegridadInspeccionAsync(long id) =>
         EnviarAsync<IntegridadInspeccionDto>(HttpMethod.Get, $"api/inspecciones/{id}/integridad");
@@ -1647,7 +1670,7 @@ public class HttpClientService
             ("formato", formato), ("page", page), ("pageSize", pageSize),
             ("desde", filtro.Desde), ("hasta", filtro.Hasta), ("plantas", filtro.Plantas), ("areas", filtro.Areas),
             ("idEquipos", filtro.IdEquipos), ("idUsuarios", filtro.IdUsuarios), ("estados", filtro.Estados),
-            ("criticidades", filtro.Criticidades));
+            ("criticidades", filtro.Criticidades), ("sedes", filtro.Sedes));
 
     // --- Cuentas (endpoints 23 a 26; el login sigue en AuthService) ---
 

@@ -144,7 +144,7 @@ public class NovedadesTests
     private static RespuestaInspeccion Si(PreguntaChecklist pregunta) => new() { IdPregunta = pregunta.IdPregunta, Respuesta = "Si" };
 
     private static RespuestaInspeccion No(PreguntaChecklist pregunta, string observacion) =>
-        new() { IdPregunta = pregunta.IdPregunta, Respuesta = "No", Observacion = observacion };
+        new() { IdPregunta = pregunta.IdPregunta, Respuesta = "No", Observacion = observacion, PresentaNovedad = true };
 
     private static async Task<Inspeccion> EnCursoAsync(Escenario e, params RespuestaInspeccion[] respuestas)
     {
@@ -217,7 +217,7 @@ public class NovedadesTests
         var firmada = await InspeccionAsync(e, inspeccion.IdInspeccion);
         Assert.Equal(InspeccionEstados.NovedadesPendientes, firmada.Estado);
         Assert.Equal(InspeccionResultados.Pendiente, firmada.Resultado);
-        Assert.Equal(VerificadorIntegridad.AlgoritmoHmacV2, firmada.FirmaAlgoritmo);
+        Assert.Equal(VerificadorIntegridad.AlgoritmoHmacV3, firmada.FirmaAlgoritmo);
         Assert.NotNull(firmada.FechaCierre);
 
         var novedades = await e.Db.Novedades.AsNoTracking().OrderBy(n => n.IdPregunta).ToListAsync();
@@ -829,5 +829,132 @@ public class NovedadesTests
             i.Properties.Select(p => p.Name).SequenceEqual([nameof(Novedad.IdInspeccion), nameof(Novedad.IdPregunta)]));
         Assert.Contains(tipo.GetIndexes(), i => i.IsUnique &&
             i.Properties.Select(p => p.Name).SequenceEqual([nameof(Novedad.IdRespuesta)]));
+    }
+
+    // ------------------------------------------------------------------ «¿Presenta novedad?» y sede (29/10/2026)
+
+    [Fact]
+    public async Task Responder_No_sin_marcar_presenta_novedad_ya_no_crea_novedad()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e,
+            new RespuestaInspeccion { IdPregunta = e.Limpieza.IdPregunta, Respuesta = "No" },
+            new RespuestaInspeccion { IdPregunta = e.Nivel.IdPregunta, Respuesta = "No", PresentaNovedad = false });
+
+        Assert.IsType<OkObjectResult>((await FirmarAsync(e, inspeccion.IdInspeccion)).Result);
+
+        var firmada = await InspeccionAsync(e, inspeccion.IdInspeccion);
+        Assert.Equal((InspeccionEstados.Cerrada, InspeccionResultados.Satisfactorio), (firmada.Estado, firmada.Resultado));
+        Assert.False(await e.Db.Novedades.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Presenta_novedad_crea_la_novedad_aunque_la_respuesta_sea_Si()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e,
+            new RespuestaInspeccion { IdPregunta = e.Limpieza.IdPregunta, Respuesta = "Si", PresentaNovedad = true, Observacion = "Rayón en el plato" },
+            Si(e.Nivel));
+
+        Assert.IsType<OkObjectResult>((await FirmarAsync(e, inspeccion.IdInspeccion)).Result);
+
+        var novedad = Assert.Single(await e.Db.Novedades.AsNoTracking().ToListAsync());
+        Assert.Equal("¿Está limpia?: Rayón en el plato", novedad.Descripcion);
+        Assert.Equal(InspeccionEstados.NovedadesPendientes, (await InspeccionAsync(e, inspeccion.IdInspeccion)).Estado);
+    }
+
+    [Fact]
+    public async Task Presenta_novedad_sin_observacion_no_deja_firmar_aunque_la_pregunta_sea_opcional()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e, Si(e.Limpieza), Si(e.Nivel),
+            new RespuestaInspeccion { IdPregunta = e.Etiqueta.IdPregunta, PresentaNovedad = true });
+
+        var accion = await FirmarAsync(e, inspeccion.IdInspeccion);
+
+        Assert.IsType<BadRequestObjectResult>(accion.Result);
+        Assert.Contains("La novedad de «¿Tiene etiqueta?» requiere una observación", Respuesta<InspeccionResultadoDto>(accion).Errors!);
+    }
+
+    [Fact]
+    public async Task Sin_sede_no_se_firma()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e, Si(e.Limpieza), Si(e.Nivel));
+
+        var accion = await Inspecciones(e, e.Inspector).FirmarConPassword(e.Db, inspeccion.IdInspeccion,
+            new FirmarInspeccionDto { FirmaPngBase64 = FirmaPng }, new Almacen(), sede: null);
+
+        Assert.IsType<BadRequestObjectResult>(accion.Result);
+        Assert.Contains(InspeccionesController.MensajeSedeRequerida, Respuesta<InspeccionResultadoDto>(accion).Errors!);
+    }
+
+    [Fact]
+    public async Task La_sede_la_elige_quien_ejecuta_mientras_esta_en_curso_y_solo_Rionegro_o_Medellin()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e, Si(e.Limpieza), Si(e.Nivel));
+
+        var valida = await Inspecciones(e, e.Inspector).CambiarSede(inspeccion.IdInspeccion, new SedeDto { Sede = " medellín " });
+        var invalida = await Inspecciones(e, e.Inspector).CambiarSede(inspeccion.IdInspeccion, new SedeDto { Sede = "Bogotá" });
+        var ajena = await Inspecciones(e, e.OtroTecnico, RolesSistema.Estandar)
+            .CambiarSede(inspeccion.IdInspeccion, new SedeDto { Sede = Sedes.Rionegro });
+        e.Db.ChangeTracker.Clear();
+
+        Assert.Equal(Sedes.Medellin, Respuesta<InspeccionEjecucionDto>(valida).Data!.Sede);
+        Assert.Equal(InspeccionesController.MensajeSedeInvalida,
+            Assert.IsType<ApiResponse<InspeccionEjecucionDto>>(Assert.IsType<BadRequestObjectResult>(invalida.Result).Value).Message);
+        Assert.IsType<ForbidResult>(ajena.Result);
+        Assert.Equal(Sedes.Medellin, (await InspeccionAsync(e, inspeccion.IdInspeccion)).Sede);
+
+        Assert.IsType<OkObjectResult>((await FirmarAsync(e, inspeccion.IdInspeccion)).Result);
+        var trasFirmar = await Inspecciones(e, e.Inspector).CambiarSede(inspeccion.IdInspeccion, new SedeDto { Sede = Sedes.Rionegro });
+        Assert.IsType<ConflictObjectResult>(trasFirmar.Result);
+        Assert.Equal(Sedes.Medellin, (await InspeccionAsync(e, inspeccion.IdInspeccion)).Sede);
+    }
+
+    [Fact]
+    public async Task El_sello_v3_cubre_la_sede_y_presenta_novedad()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e, Si(e.Limpieza), Si(e.Nivel));
+        Assert.IsType<OkObjectResult>((await FirmarAsync(e, inspeccion.IdInspeccion)).Result);
+        var verificador = FirmaPruebas.CrearVerificador(new Almacen());
+
+        async Task<bool> SelloValidoAsync(Action<Inspeccion> alterar)
+        {
+            var firmada = await e.Db.Inspecciones.AsNoTracking().Include(i => i.Respuestas).Include(i => i.Evidencias)
+                .SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion);
+            alterar(firmada);
+            return await verificador.VerificarAsync(firmada);
+        }
+
+        Assert.True(await SelloValidoAsync(_ => { }));
+        Assert.False(await SelloValidoAsync(i => i.Sede = Sedes.Medellin));
+        Assert.False(await SelloValidoAsync(i => i.Respuestas.First().PresentaNovedad = true));
+    }
+
+    [Fact]
+    public async Task Una_firmada_antes_del_cambio_sigue_mostrando_como_novedad_su_respuesta_No()
+    {
+        var e = await SeedAsync();
+        var inspeccion = await EnCursoAsync(e,
+            new RespuestaInspeccion { IdPregunta = e.Limpieza.IdPregunta, Respuesta = "No", Observacion = "Polvo" }, Si(e.Nivel));
+        // Firmada con el sello v2, cuando la novedad salía de responder «No»: no tiene «¿Presenta novedad?».
+        var guardada = await e.Db.Inspecciones.SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion);
+        guardada.Estado = InspeccionEstados.Cerrada;
+        guardada.Resultado = InspeccionResultados.Conforme;
+        guardada.FechaCierre = DateTime.UtcNow;
+        guardada.FirmaDigital = FirmaPng;
+        guardada.FirmaHash = new string('a', 64);
+        guardada.FirmaAlgoritmo = VerificadorIntegridad.AlgoritmoHmacV2;
+        await e.Db.SaveChangesAsync();
+        e.Db.ChangeTracker.Clear();
+
+        var resultado = Respuesta<InspeccionResultadoDto>(await Inspecciones(e, e.Admin, "Administrador").GetResultado(inspeccion.IdInspeccion)).Data!;
+
+        Assert.True(resultado.Preguntas.Single(p => p.IdPregunta == e.Limpieza.IdPregunta).EsNovedad);
+        Assert.False(resultado.Preguntas.Single(p => p.IdPregunta == e.Nivel.IdPregunta).EsNovedad);
+        Assert.Equal(1, resultado.TotalNovedades);
     }
 }

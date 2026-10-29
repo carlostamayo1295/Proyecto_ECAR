@@ -7,4 +7,5 @@ public class RespuestaInspeccionDto
     public long IdPregunta { get; set; }
     public string Respuesta { get; set; } = string.Empty;
     public string? Observacion { get; set; }
+    public bool? PresentaNovedad { get; set; }
 }

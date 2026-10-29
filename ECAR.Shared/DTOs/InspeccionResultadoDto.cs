@@ -26,6 +26,9 @@ public class InspeccionResultadoDto
     public DateTime? FechaCierre { get; set; }
     public string? Observaciones { get; set; }
 
+    /// <summary>Sede (Rionegro o Medellín); null en las firmadas antes del 29/10/2026.</summary>
+    public string? Sede { get; set; }
+
     // --- Cabecera ---
     public long IdEquipo { get; set; }
     public string CodigoInterno { get; set; } = string.Empty;

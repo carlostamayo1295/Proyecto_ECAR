@@ -73,10 +73,12 @@ public class InspeccionService : IInspeccionService
 
             var respuestaExistente = inspeccion.Respuestas.FirstOrDefault(r => r.IdPregunta == item.IdPregunta);
 
+            // «¿Presenta novedad?» (29/10/2026) se guarda con la respuesta: es lo que decide la novedad al firmar.
             if (respuestaExistente != null)
             {
                 respuestaExistente.Respuesta = valor;
                 respuestaExistente.Observacion = item.Observacion;
+                respuestaExistente.PresentaNovedad = item.PresentaNovedad;
             }
             else
             {
@@ -85,7 +87,8 @@ public class InspeccionService : IInspeccionService
                     IdInspeccion = inspeccionId,
                     IdPregunta = item.IdPregunta,
                     Respuesta = valor,
-                    Observacion = item.Observacion
+                    Observacion = item.Observacion,
+                    PresentaNovedad = item.PresentaNovedad
                 });
             }
         }
@@ -120,7 +123,8 @@ public class InspeccionService : IInspeccionService
                 IdInspeccion = r.IdInspeccion,
                 IdPregunta = r.IdPregunta,
                 Respuesta = r.Respuesta ?? string.Empty,
-                Observacion = r.Observacion
+                Observacion = r.Observacion,
+                PresentaNovedad = r.PresentaNovedad
             })
             .ToListAsync();
     }
@@ -214,7 +218,8 @@ public class InspeccionService : IInspeccionService
                 IdInspeccion = r.IdInspeccion,
                 IdPregunta = r.IdPregunta,
                 Respuesta = r.Respuesta ?? string.Empty,
-                Observacion = r.Observacion
+                Observacion = r.Observacion,
+                PresentaNovedad = r.PresentaNovedad
             })
             .ToListAsync();
 

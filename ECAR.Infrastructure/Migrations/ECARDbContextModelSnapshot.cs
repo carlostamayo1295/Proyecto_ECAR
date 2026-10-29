@@ -470,6 +470,11 @@ namespace ECAR.Infrastructure.Migrations
                         .HasColumnType("rowversion")
                         .HasColumnName("RowVersion");
 
+                    b.Property<string>("Sede")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("Sede");
+
                     b.HasKey("IdInspeccion");
 
                     b.HasIndex("Estado");
@@ -685,6 +690,10 @@ namespace ECAR.Infrastructure.Migrations
                     b.Property<string>("Observacion")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("Observacion");
+
+                    b.Property<bool?>("PresentaNovedad")
+                        .HasColumnType("bit")
+                        .HasColumnName("PresentaNovedad");
 
                     b.Property<string>("Respuesta")
                         .HasColumnType("nvarchar(max)")

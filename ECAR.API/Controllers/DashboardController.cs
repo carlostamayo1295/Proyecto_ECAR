@@ -24,6 +24,9 @@ public class DashboardController : ControllerBase
     private const string SinCriticidad = "Sin criticidad";
     private const string SinUbicacion = "Sin ubicación";
 
+    /// <summary>Hasta tres meses la tendencia va por semana (unas 13); en un periodo más largo, por mes.</summary>
+    internal const int DiasMaximosPorSemana = 92;
+
     /// <summary>Valor de "Reporte" en la auditoría de la exportación.</summary>
     public const string ReporteTablero = "tablero";
 
@@ -34,12 +37,16 @@ public class DashboardController : ControllerBase
         _context = context;
     }
 
+    /// <summary>
+    /// Sin fechas, el mes en curso. Con <paramref name="total"/> («Total general», 30/10/2026), todo el historial
+    /// y las fechas no cuentan.
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<DashboardDto>>> GetDashboard(
         [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null,
-        [FromQuery(Name = "planta")] List<string>? plantas = null)
+        [FromQuery(Name = "planta")] List<string>? plantas = null, [FromQuery] bool total = false)
     {
-        var (dto, error) = await CalcularAsync(desde, hasta, plantas);
+        var (dto, error) = await CalcularAsync(desde, hasta, plantas, total);
         if (error != null)
             return BadRequest(ApiResponse<DashboardDto>.ErrorResponse(error));
 
@@ -53,9 +60,9 @@ public class DashboardController : ControllerBase
     [HttpGet("pdf")]
     public async Task<IActionResult> GetDashboardPdf([FromServices] ICurrentUser currentUser,
         [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null,
-        [FromQuery(Name = "planta")] List<string>? plantas = null)
+        [FromQuery(Name = "planta")] List<string>? plantas = null, [FromQuery] bool total = false)
     {
-        var (tablero, error) = await CalcularAsync(desde, hasta, plantas);
+        var (tablero, error) = await CalcularAsync(desde, hasta, plantas, total);
         if (error != null)
             return BadRequest(ApiResponse<DashboardDto>.ErrorResponse(error));
 
@@ -70,19 +77,16 @@ public class DashboardController : ControllerBase
     }
 
     private async Task<(DashboardDto? Tablero, string? Error)> CalcularAsync(DateTime? desde, DateTime? hasta,
-        List<string>? plantasPedidas)
+        List<string>? plantasPedidas, bool total)
     {
         var ahora = DateTime.UtcNow;
         var hoy = HoraColombia.DesdeUtc(ahora).Date;
-        var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
-        var desdeAplicado = desde?.Date ?? inicioMes;
-        var hastaAplicado = hasta?.Date ?? hoy;
-        var error = ValidarRango(desdeAplicado, hastaAplicado);
+        // Varias plantas a la vez (29/10/2026): cuenta lo de cualquiera de ellas. Sin plantas, todas.
+        var plantas = ReporteService.Valores(plantasPedidas);
+        var (desdeAplicado, hastaAplicado, error) = await PeriodoAsync(desde, hasta, total, plantas, hoy);
         if (error != null)
             return (null, error);
 
-        // Varias plantas a la vez (29/10/2026): cuenta lo de cualquiera de ellas. Sin plantas, todas.
-        var plantas = ReporteService.Valores(plantasPedidas);
         var (inicioUtc, finUtc) = HoraColombia.RangoUtc(desdeAplicado, hastaAplicado);
         var inicio = inicioUtc!.Value;
         var fin = finUtc!.Value;
@@ -126,6 +130,13 @@ public class DashboardController : ControllerBase
             .Select(g => new { Estado = g.Key, Cantidad = g.Count() })
             .ToDictionaryAsync(g => g.Estado, g => g.Cantidad);
 
+        var equiposInspeccionados = await inspeccionesQuery
+            .Where(i => i.Equipo.Activo &&
+                        (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes))
+            .Select(i => i.IdEquipo)
+            .Distinct()
+            .CountAsync();
+
         var firmadasTotalesQuery = _context.Inspecciones.AsNoTracking()
             .Where(i => i.Estado == InspeccionEstados.Cerrada ||
                         i.Estado == InspeccionEstados.NovedadesPendientes);
@@ -154,9 +165,11 @@ public class DashboardController : ControllerBase
             {
                 Desde = desdeAplicado,
                 Hasta = hastaAplicado,
-                Plantas = plantas
+                Plantas = plantas,
+                Total = total
             },
             TotalEquipos = equipos.Count,
+            EquiposInspeccionados = equiposInspeccionados,
             EquiposPorCriticidad = criticidades,
             EquiposPorArea = areas,
             InspeccionesRealizadas = firmadasTotales,
@@ -167,7 +180,9 @@ public class DashboardController : ControllerBase
             InspeccionesConNovedadesPendientes = conPendientes,
             NovedadesPendientes = novedadesPendientes,
             NovedadesResueltas = novedadesResueltas,
-            Periodo = TextoPeriodo(desdeAplicado, hastaAplicado, hoy),
+            Periodo = total
+                ? $"Total general (del {desdeAplicado:dd/MM/yyyy} al {hastaAplicado:dd/MM/yyyy})"
+                : TextoPeriodo(desdeAplicado, hastaAplicado, hoy),
             GeneradoEn = ahora
         };
 
@@ -175,24 +190,45 @@ public class DashboardController : ControllerBase
     }
 
     /// <summary>
-    /// Tendencia de las últimas semanas, incluida la actual. Cada semana empieza el lunes a las
-    /// 00:00 y termina el domingo en hora de Colombia; las fechas UTC usan un rango [inicio, fin).
+    /// Tendencia del tablero. Con <paramref name="desde"/>, <paramref name="hasta"/> o <paramref name="total"/>
+    /// (30/10/2026) sigue el periodo del tablero, con sus mismas reglas: por semana hasta 92 días y por mes en un
+    /// periodo más largo o en el total general. Sin ellos, las últimas <paramref name="semanas"/> semanas, incluida
+    /// la actual. Las semanas van de lunes a domingo en hora de Colombia; las fechas UTC usan un rango [inicio, fin).
     /// </summary>
     [HttpGet("tendencia")]
     public async Task<ActionResult<ApiResponse<DashboardTendenciaDto>>> GetTendencia(
-        [FromQuery] int semanas = 8, [FromQuery(Name = "planta")] List<string>? plantasPedidas = null)
+        [FromQuery] int semanas = 8, [FromQuery(Name = "planta")] List<string>? plantasPedidas = null,
+        [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null, [FromQuery] bool total = false)
     {
-        if (semanas is < 1 or > 52)
-        {
-            return BadRequest(ApiResponse<DashboardTendenciaDto>.ErrorResponse(
-                "La cantidad de semanas debe estar entre 1 y 52"));
-        }
-
         var plantas = ReporteService.Valores(plantasPedidas);
         var hoy = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
-        var lunesActual = hoy.AddDays(-(((int)hoy.DayOfWeek + 6) % 7));
-        var desdeLocal = lunesActual.AddDays(-7 * (semanas - 1));
-        var hastaLocal = lunesActual.AddDays(6);
+        DateTime desdeLocal;
+        DateTime hastaLocal;
+        bool porMes;
+        if (total || desde.HasValue || hasta.HasValue)
+        {
+            var (desdeAplicado, hastaAplicado, error) = await PeriodoAsync(desde, hasta, total, plantas, hoy);
+            if (error != null)
+                return BadRequest(ApiResponse<DashboardTendenciaDto>.ErrorResponse(error));
+
+            desdeLocal = desdeAplicado;
+            hastaLocal = hastaAplicado;
+            porMes = total || (hastaLocal - desdeLocal).Days + 1 > DiasMaximosPorSemana;
+        }
+        else
+        {
+            if (semanas is < 1 or > 52)
+            {
+                return BadRequest(ApiResponse<DashboardTendenciaDto>.ErrorResponse(
+                    "La cantidad de semanas debe estar entre 1 y 52"));
+            }
+
+            var lunesActual = hoy.AddDays(-(((int)hoy.DayOfWeek + 6) % 7));
+            desdeLocal = lunesActual.AddDays(-7 * (semanas - 1));
+            hastaLocal = lunesActual.AddDays(6);
+            porMes = false;
+        }
+
         var (inicioUtc, finUtc) = HoraColombia.RangoUtc(desdeLocal, hastaLocal);
         var inicio = inicioUtc!.Value;
         var fin = finUtc!.Value;
@@ -218,31 +254,78 @@ public class DashboardController : ControllerBase
             .Select(n => new { n.FechaRegistro, n.FechaResolucion })
             .ToListAsync();
 
-        var datos = Enumerable.Range(0, semanas)
-            .Select(indice =>
+        var datos = Tramos(desdeLocal, hastaLocal, porMes)
+            .Select(tramo =>
             {
-                var lunes = desdeLocal.AddDays(indice * 7);
-                var siguienteLunes = lunes.AddDays(7);
+                var fin = tramo.Hasta.AddDays(1);
                 return new DashboardSemanaDto
                 {
-                    Desde = lunes,
-                    Hasta = siguienteLunes.AddDays(-1),
-                    InspeccionesFirmadas = cierres.Count(f => EstaEnSemana(f, lunes, siguienteLunes)),
-                    NovedadesRegistradas = novedades.Count(n => EstaEnSemana(n.FechaRegistro, lunes, siguienteLunes)),
+                    Desde = tramo.Desde,
+                    Hasta = tramo.Hasta,
+                    InspeccionesFirmadas = cierres.Count(f => EstaEnTramo(f, tramo.Desde, fin)),
+                    NovedadesRegistradas = novedades.Count(n => EstaEnTramo(n.FechaRegistro, tramo.Desde, fin)),
                     NovedadesResueltas = novedades.Count(n => n.FechaResolucion.HasValue &&
-                        EstaEnSemana(n.FechaResolucion.Value, lunes, siguienteLunes))
+                        EstaEnTramo(n.FechaResolucion.Value, tramo.Desde, fin))
                 };
             })
             .ToList();
 
         return Ok(ApiResponse<DashboardTendenciaDto>.SuccessResponse(new DashboardTendenciaDto
         {
-            Semanas = semanas,
+            Semanas = datos.Count,
             Desde = desdeLocal,
             Hasta = hastaLocal,
             Plantas = plantas,
+            Agrupacion = porMes ? TendenciaAgrupaciones.Mes : TendenciaAgrupaciones.Semana,
+            Total = total,
             Datos = datos
         }));
+    }
+
+    /// <summary>
+    /// Días de Colombia que se aplican. Sin fechas, el mes en curso hasta hoy. Con <paramref name="total"/>, desde
+    /// el primer día del mes de la primera inspección de las plantas elegidas hasta hoy, sin el límite de un año.
+    /// </summary>
+    private async Task<(DateTime Desde, DateTime Hasta, string? Error)> PeriodoAsync(DateTime? desde, DateTime? hasta,
+        bool total, List<string> plantas, DateTime hoy)
+    {
+        var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+        if (total)
+        {
+            var inspecciones = _context.Inspecciones.AsNoTracking();
+            if (plantas.Count > 0)
+                inspecciones = inspecciones.Where(i =>
+                    i.Equipo.Ubicacion != null && plantas.Contains(i.Equipo.Ubicacion.Planta));
+
+            var primera = await inspecciones.MinAsync(i => (DateTime?)i.FechaInspeccion);
+            var dia = primera is { } utc ? HoraColombia.DesdeUtc(utc).Date : inicioMes;
+            var mesPrimera = new DateTime(dia.Year, dia.Month, 1);
+            return (mesPrimera < inicioMes ? mesPrimera : inicioMes, hoy, null);
+        }
+
+        var desdeAplicado = desde?.Date ?? inicioMes;
+        var hastaAplicado = hasta?.Date ?? hoy;
+        return (desdeAplicado, hastaAplicado, ValidarRango(desdeAplicado, hastaAplicado));
+    }
+
+    /// <summary>
+    /// Tramos de la tendencia en días de Colombia: semanas de lunes a domingo o meses, recortados a
+    /// [<paramref name="desde"/>, <paramref name="hasta"/>], así que el primero y el último pueden ser más cortos.
+    /// </summary>
+    internal static List<(DateTime Desde, DateTime Hasta)> Tramos(DateTime desde, DateTime hasta, bool porMes)
+    {
+        var tramos = new List<(DateTime Desde, DateTime Hasta)>();
+        for (var inicio = desde.Date; inicio <= hasta.Date;)
+        {
+            var siguiente = porMes
+                ? new DateTime(inicio.Year, inicio.Month, 1).AddMonths(1)
+                : inicio.AddDays(7 - ((int)inicio.DayOfWeek + 6) % 7);
+            var fin = siguiente.AddDays(-1);
+            tramos.Add((inicio, fin < hasta.Date ? fin : hasta.Date));
+            inicio = siguiente;
+        }
+
+        return tramos;
     }
 
     /// <summary>"todas las plantas", "planta Norte" o "plantas Norte, Sur y Este".</summary>
@@ -264,13 +347,13 @@ public class DashboardController : ControllerBase
 
     /// <summary>
     /// "desde 01/10/2026, hasta 24/10/2026, planta Planta 1" (o "plantas Norte y Sur", o "todas las plantas"),
-    /// para el pie del PDF y la auditoría.
+    /// para el pie del PDF y la auditoría. El total general empieza con "total general, ".
     /// </summary>
     internal static string TextoFiltros(DashboardFiltroAplicadoDto filtros)
     {
         var texto = $"desde {filtros.Desde.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}, " +
                     $"hasta {filtros.Hasta.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
-        return texto + ", " + TextoPlantas(filtros.Plantas);
+        return (filtros.Total ? "total general, " : string.Empty) + texto + ", " + TextoPlantas(filtros.Plantas);
     }
 
     /// <summary>
@@ -288,9 +371,9 @@ public class DashboardController : ControllerBase
         return $"{desde:dd/MM/yyyy} al {hasta:dd/MM/yyyy}";
     }
 
-    private static bool EstaEnSemana(DateTime utc, DateTime lunes, DateTime siguienteLunes)
+    private static bool EstaEnTramo(DateTime utc, DateTime desde, DateTime finExclusivo)
     {
         var local = HoraColombia.DesdeUtc(utc);
-        return local >= lunes && local < siguienteLunes;
+        return local >= desde && local < finExclusivo;
     }
 }
