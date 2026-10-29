@@ -5,7 +5,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-<MudDialog Options="Opciones"Class="form-enter">
+<MudDialog Options="Opciones" Class="form-enter">
     <TitleContent>
         <MudText Typo="Typo.h6">Registrar Nueva Inspección</MudText>
     </TitleContent>
@@ -35,9 +35,11 @@
                 }
             </MudSelect>
 
-            @* La fecha la registra el servidor al guardar (ALCOA+ contemporáneo): solo se muestra. *@
-            <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
-                Disabled="true" HelperText="Se registra la fecha y hora del servidor al guardar" Class="mb-3" />
+            @* La fecha la registra el servidor al guardar (ALCOA+ contemporáneo): solo se muestra, como
+               texto y sin el botón del calendario (F-37). *@
+            <MudTextField T="string" Label="Fecha de inspección" Value="@FechaHoy" Variant="Variant.Outlined"
+                ReadOnly="true" HelperText="Se registra la fecha y hora del servidor al guardar" Class="mb-3"
+                Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Event" />
 
             @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
@@ -75,7 +77,8 @@
     private List<ChecklistDto> checklistsActivos = new();
     private long? checklistSeleccionado;
 
-    private DateTime? fechaInspeccion = DateTime.Today;
+    // El API ignora CreateInspeccionDto.FechaInspeccion y pone la suya; aquí solo se informa el día.
+    private static string FechaHoy => FormatoEstados.HoraColombia(DateTime.UtcNow, "dd/MM/yyyy");
     private string? observaciones;
 
     // Evita repetir el mismo mensaje de error en cada pulsación del buscador.
@@ -156,7 +159,7 @@
             // IdUsuario no se envía: el API lo toma del token.
             IdEquipo = equipoSeleccionado.IdEquipo,
             IdChecklist = checklistSeleccionado.Value,
-            FechaInspeccion = fechaInspeccion ?? DateTime.Today,
+            FechaInspeccion = DateTime.UtcNow,
             Observaciones = observaciones
         };
 

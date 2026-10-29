@@ -166,7 +166,7 @@ public class DashboardController : ControllerBase
             InspeccionesConNovedadesPendientes = conPendientes,
             NovedadesPendientes = novedadesPendientes,
             NovedadesResueltas = novedadesResueltas,
-            Periodo = TextoPeriodo(desdeAplicado, hastaAplicado),
+            Periodo = TextoPeriodo(desdeAplicado, hastaAplicado, hoy),
             GeneradoEn = ahora
         };
 
@@ -261,10 +261,16 @@ public class DashboardController : ControllerBase
         return filtros.Planta == null ? texto + ", todas las plantas" : texto + $", planta {filtros.Planta}";
     }
 
-    private static string TextoPeriodo(DateTime desde, DateTime hasta)
+    /// <summary>
+    /// «octubre de 2026» para un mes entero o el mes en curso hasta hoy; si no, el rango. Antes cualquier
+    /// rango dentro de un mes (del 05/10 al 10/10) salía como el mes completo.
+    /// </summary>
+    internal static string TextoPeriodo(DateTime desde, DateTime hasta, DateTime hoy)
     {
         var cultura = CultureInfo.GetCultureInfo("es-CO");
-        if (desde.Year == hasta.Year && desde.Month == hasta.Month)
+        var mesEntero = desde.Day == 1 && desde.Year == hasta.Year && desde.Month == hasta.Month
+                        && (hasta.AddDays(1).Day == 1 || hasta == hoy);
+        if (mesEntero)
             return desde.ToString("MMMM 'de' yyyy", cultura);
 
         return $"{desde:dd/MM/yyyy} al {hasta:dd/MM/yyyy}";

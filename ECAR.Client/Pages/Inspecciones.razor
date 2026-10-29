@@ -95,7 +95,7 @@
                         <MudTd DataLabel="Acciones" Class="col-acciones">
                             @if (PuedeContinuar(context))
                             {
-                                <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Continuar(context)" Class="action-button">
                                     Continuar
                                 </MudButton>
@@ -110,7 +110,7 @@
                             @* El Operador no entra a Novedades: las de su inspección las ve en «Ver resultado». *@
                             @if (context.TotalNovedades > 0 && veNovedades)
                             {
-                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                     StartIcon="@Icons.Material.Filled.ReportProblem" Href="@($"/novedades?inspeccion={context.IdInspeccion}")" Class="action-button">
                                     Novedades
                                 </MudButton>

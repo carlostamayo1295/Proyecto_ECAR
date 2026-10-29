@@ -156,4 +156,20 @@ public class DashboardPdfTests
         Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new Supervisor(), Hoy.AddYears(-2), Hoy));
         Assert.False(await db.Auditoria.AnyAsync(a => a.Accion == AuditoriaAcciones.Exportacion));
     }
+
+    // El periodo del título (pantalla y PDF) es el nombre del mes solo si es el mes entero o el mes en
+    // curso hasta hoy; un rango dentro de un mes salía antes como el mes completo.
+    [Theory]
+    [InlineData("2026-03-01", "2026-03-31", "marzo de 2026")]
+    [InlineData("2026-10-01", "2026-10-29", "octubre de 2026")]
+    [InlineData("2026-10-05", "2026-10-10", "05/10/2026 al 10/10/2026")]
+    [InlineData("2026-10-01", "2026-10-15", "01/10/2026 al 15/10/2026")]
+    [InlineData("2026-09-15", "2026-10-14", "15/09/2026 al 14/10/2026")]
+    public void El_periodo_lleva_el_nombre_del_mes_solo_si_es_el_mes_entero_o_el_en_curso(string desde, string hasta,
+        string esperado)
+    {
+        var hoy = new DateTime(2026, 10, 29);
+
+        Assert.Equal(esperado, DashboardController.TextoPeriodo(DateTime.Parse(desde), DateTime.Parse(hasta), hoy));
+    }
 }

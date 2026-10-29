@@ -153,7 +153,7 @@
                 <MudTabPanel Text="Historial por Usuario">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="4">
-                            <MudAutocomplete T="UsuarioDto" Label="Usuario" @bind-Value="usuarioSeleccionado"
+                            <MudAutocomplete T="UsuarioBusquedaDto" Label="Usuario" @bind-Value="usuarioSeleccionado"
                                 SearchFunc="BuscarUsuariosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
                                 Variant="Variant.Outlined" Clearable="true" ResetValueOnEmptyText="true"
                                 HelperText="Opcional: deje vacío para todos los usuarios" />
@@ -406,7 +406,7 @@
     private bool descargandoFechas;
 
     private EquipoDto? equipoSeleccionado;
-    private UsuarioDto? usuarioSeleccionado;
+    private UsuarioBusquedaDto? usuarioSeleccionado;
     private bool errorEquiposAvisado;
     private bool errorUsuariosAvisado;
 
@@ -420,7 +420,9 @@
         ubicacionesFiltro = respuesta?.Success == true ? respuesta.Data?.Data ?? new() : new();
     }
 
-    protected override void OnParametersSet()
+    // El equipo y el usuario elegidos pasan al filtro justo antes de cada consulta o descarga. Antes se
+    // copiaban en OnParametersSet, que no corre al elegir en el buscador: el filtro salía sin ellos.
+    private void AplicarSelecciones()
     {
         estadoEquipo.Filtro.IdEquipo = equipoSeleccionado?.IdEquipo;
         estadoUsuario.Filtro.IdUsuario = usuarioSeleccionado?.IdUsuario;
@@ -443,21 +445,23 @@
         return respuesta.Data?.Data ?? new List<EquipoDto>();
     }
 
-    private async Task<IEnumerable<UsuarioDto>> BuscarUsuariosAsync(string valor, CancellationToken token)
+    // F-24: GET api/reportes/usuarios (B-04) es de Administrador y Supervisor; api/usuarios era solo
+    // del Administrador y al Supervisor le fallaba. Devuelve hasta 20, con id, nombre y correo.
+    private async Task<IEnumerable<UsuarioBusquedaDto>> BuscarUsuariosAsync(string valor, CancellationToken token)
     {
-        var respuesta = await HttpClientService.GetUsuariosAsync(1, MaxResultadosBusqueda, valor);
-        if (respuesta == null || !respuesta.Success)
+        var respuesta = await HttpClientService.BuscarUsuariosReportesAsync(valor);
+        if (!respuesta.Success)
         {
             if (!errorUsuariosAvisado)
             {
                 errorUsuariosAvisado = true;
-                Snackbar.Add(respuesta?.Message ?? "No se pudieron cargar los usuarios", Severity.Error);
+                Snackbar.Add(respuesta.Message, Severity.Error);
             }
-            return Array.Empty<UsuarioDto>();
+            return Array.Empty<UsuarioBusquedaDto>();
         }
 
         errorUsuariosAvisado = false;
-        return respuesta.Data?.Data ?? new List<UsuarioDto>();
+        return respuesta.Data ?? new List<UsuarioBusquedaDto>();
     }
 
     /// <summary>Fechas obligatorias, rango correcto y máximo un año (SRS §7 / PLAN_FASE4_TAREAS §6 FE-2).</summary>
@@ -497,6 +501,7 @@
 
     private async Task CargarPaginaAsync<T>(EstadoReporte<T> estado, string tipo)
     {
+        AplicarSelecciones();
         estado.Cargando = true;
 
         var respuesta = await HttpClientService.GetReporteAsync<PagedResultDto<T>>(tipo, estado.Filtro, estado.Pagina, TamanoPagina);
@@ -531,6 +536,7 @@
             return;
         }
 
+        AplicarSelecciones();
         estado.Descargando = true;
         Snackbar.Add("Generando el archivo…", Severity.Info);
 

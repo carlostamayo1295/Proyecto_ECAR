@@ -5,6 +5,69 @@ horaria de Colombia.
 
 ## [Sin publicar] — Fase 5
 
+### Completado en la integración (rama `integracion-back-front-fase-5`, 29/10/2026)
+
+Lo que faltaba del cronograma al mezclar todas las ramas. No tenía rama: el tablero y la búsqueda de usuarios de FE-2,
+y F-35 a F-37 de FE-3.
+
+- **Tablero** (`Pages/Home.razor`):
+  - F-20: textos que dicen qué depende del periodo, hora de Colombia en «actualizado a las» y vista a 375 px.
+    «Actualizar» y «Exportar PDF» comparten la fila.
+  - F-21: filtros por periodo (el mes en curso, uno de los 11 anteriores o un rango de fechas) y por planta. El título
+    dice el periodo y la planta que aplicó el servidor. Si el rango no es válido (más de un año, «Desde» después de
+    «Hasta»), se muestra el motivo del API junto a los filtros y se conservan los indicadores anteriores.
+  - F-22: tendencia de las últimas 8 semanas (`MudChart` de líneas): firmadas, novedades registradas y resueltas. Solo
+    depende de la planta. Debajo va una tabla con las mismas cifras, para el teléfono y para quien no distingue los
+    colores.
+  - F-23: «Exportar PDF» descarga el tablero con los filtros aplicados (B-03).
+- **F-24 «Historial por usuario»:** el filtro «Usuario» busca en `GET /api/reportes/usuarios` (B-04). El Supervisor ya
+  no recibe el error de `api/usuarios`.
+- **Reportes:** el equipo y el usuario elegidos en los buscadores no llegaban al API. Se copiaban al filtro en
+  `OnParametersSet`, que no corre al elegir. Ahora se aplican antes de cada consulta o descarga.
+- **F-35 Cambiar contraseña:** se muestra cada motivo que devuelve el API (`Errors`, B-06), por ejemplo «La contraseña
+  actual es incorrecta».
+- **F-36 Firma:** `ConfirmarIdentidadDialog` reconoce la cuenta bloqueada por `CodigoHttp == 423` (B-07), no por la
+  palabra «bloquead». Se probó en pantalla: el quinto intento fallido bloquea y el diálogo lo muestra.
+- **F-37 Nueva inspección:** la fecha es un texto de solo lectura (hoy, hora de Colombia), sin el botón del calendario.
+- **F-11:** «Continuar» y «Novedades» de Inspecciones, en azul.
+- **F-13:** faltaba un espacio entre `Options` y `Class` en el `<MudDialog>` de `InspeccionModal`.
+- **Tablero, periodo:** un rango dentro de un mes (del 05/10 al 10/10) se rotulaba «octubre de 2026», como si fuera el
+  mes entero, en la pantalla y en el PDF. Ahora el nombre del mes sale solo para el mes entero o para el mes en curso
+  hasta hoy (`DashboardController.TextoPeriodo`, prueba
+  `DashboardPdfTests.El_periodo_lleva_el_nombre_del_mes_solo_si_es_el_mes_entero_o_el_en_curso`).
+- `appsettings.json`: se deshizo una sangría accidental en `Evidencias:RutaBase` (commit `f20bb73` de `develop`).
+
+### Integrado en `integracion-back-front-fase-5` (29/10/2026)
+
+- Sobre `develop` (`d79814b`): `fase5/integracion-parcial` (`0c11a27`, que trae las ramas del 27/10),
+  `feature/fase5-cierre-backend`, `fase5/colores-erica` (`1694d79`), `fase5/checklist-repetido-erica` y
+  `fase5/enter-erica`, `fase5/resultado-gary` y `fase5/textos-gary`.
+- Un solo conflicto, en la fila «§11.10(g)» de la matriz: se unió la lectura del Estándar (28/10) con la búsqueda de
+  usuarios de reportes (B-04).
+- Compila con 0 avisos; pasan 320 pruebas del API y 44 contra SQL Server, y no hay cambios de modelo pendientes.
+- Se revisaron en pantalla las tareas del frontend y 18 pantallas a 1366, 1024, 768 y 375 px, sin desbordes ni botones
+  ocultos.
+
+### Corregido (ramas `fase5/colores-erica`, `fase5/checklist-repetido-erica` y `fase5/enter-erica`, 27 y 28/10/2026; FE-1)
+
+- **F-11:** «Desactivar» lleva el ícono de bloqueo en lugar de la papelera, en Equipos, Usuarios y Checklists.
+- **F-12 Checklist con nombre repetido:** con el 409 de B-05, el formulario muestra el mensaje del API y ofrece crear una
+  «Nueva versión» del checklist activo que tiene ese nombre, con sus preguntas actuales.
+- **F-13 Enter pasa al siguiente campo** (`wwwroot/js/formularios.js`): en los formularios de categoría, rol,
+  ubicación, rol de usuario, checklist, usuario, inspección y equipo (clase `form-enter`). En el último campo lleva el
+  foco a «Guardar» (`enter-guardar`) y nunca guarda solo. Las áreas de texto conservan el salto de línea, y el login,
+  «Enter inicia sesión».
+
+### Corregido (ramas `fase5/resultado-gary` y `fase5/textos-gary`, 27 y 28/10/2026; FE-3)
+
+- **F-30 Resultado:** «Fecha de firma» en hora de Colombia (`dd/MM/yyyy HH:mm`) y «Sin ubicación» cuando el equipo no la
+  tiene.
+- **F-31:** un solo botón de PDF en el resultado, «Descargar registro PDF». Se quitó «Imprimir / PDF».
+- **F-32:** «Atrás» y «Volver al listado» con `Variant.Filled`.
+- **F-33 Roles de usuario:** los combos «Usuario» y «Rol» dicen «Seleccione un usuario» y «Seleccione un rol» en vez
+  de «0».
+- **F-34:** «Contraseña» y «La contraseña es requerida» en el login y en el formulario de usuario.
+
 ### Corregido (rama `feature/fase5-cierre-backend`, 28/10/2026; B-06, B-07 y B-09)
 
 - **B-06 · Validaciones de contraseña (ECAR-225):** se retiró de los DTO de usuarios la regla antigua de
