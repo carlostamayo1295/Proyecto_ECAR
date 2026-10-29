@@ -21,7 +21,8 @@ public class PoliticaSeguridadDto
 {
     public int LongitudMinimaPassword { get; set; } = 10;
     public bool RequiereLetrasYNumeros { get; set; } = true;
-    public int DiasExpiracionPassword { get; set; } = 90;
+    /// <summary>0: la contraseña no caduca (desde el 29/10/2026).</summary>
+    public int DiasExpiracionPassword { get; set; }
     public int PasswordsRecordadas { get; set; } = 5;
     public int MaxIntentosFallidos { get; set; } = 5;
     public int MinutosBloqueo { get; set; } = 30;

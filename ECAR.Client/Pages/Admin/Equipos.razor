@@ -122,8 +122,10 @@
                                            StartIcon="@Icons.Material.Filled.QrCode" OnClick="() => OpenQrDialog(context)" Class="action-button">
                                     QR
                                 </MudButton>
-                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
-                                           StartIcon="@Icons.Material.Filled.Delete" OnClick="() => DeleteEquipo(context)" Class="action-button">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled"
+                                           Color="@(context.Activo ? Color.Error : Color.Primary)"
+                                           StartIcon="@(context.Activo ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                           OnClick="() => DeleteEquipo(context)" Class="action-button">
                                     @(context.Activo ? "Desactivar" : "Activar")
                                 </MudButton>
                             }
@@ -158,7 +160,9 @@
     private int currentPage = 1;
     private int pageSize = 10;
     private int totalPages = 1;
-    private bool isLoading = false;
+    // true hasta la primera respuesta: con false, el primer render mostraba «No hay … para mostrar»
+    // antes de que llegaran los datos (Fase 5, F-02).
+    private bool isLoading = true;
 
     private IEnumerable<string> Plantas => ubicacionesFiltro
         .Select(u => u.Planta).Distinct().OrderBy(p => p);

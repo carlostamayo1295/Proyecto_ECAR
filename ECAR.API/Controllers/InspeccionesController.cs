@@ -554,7 +554,9 @@ public class InspeccionesController : ControllerBase
         var conNovedades = TieneNovedades(inspeccion);
         inspeccion.Estado = conNovedades ? InspeccionEstados.NovedadesPendientes : InspeccionEstados.Cerrada;
         inspeccion.FechaCierre = fechaCierre;
-        inspeccion.Resultado = conNovedades ? InspeccionResultados.Pendiente : InspeccionResultados.Conforme;
+        // Sin novedades, Satisfactorio. Con novedades, Pendiente hasta resolverse la última, y entonces
+        // Conforme (NovedadesController).
+        inspeccion.Resultado = conNovedades ? InspeccionResultados.Pendiente : InspeccionResultados.Satisfactorio;
 
         if (!string.IsNullOrWhiteSpace(firmarDto.Observaciones))
         {

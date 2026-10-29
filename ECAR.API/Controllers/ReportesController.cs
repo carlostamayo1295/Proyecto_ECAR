@@ -32,13 +32,46 @@ namespace ECAR.API.Controllers
             _currentUser = currentUser;
         }
 
+        /// <summary>Máximo de usuarios por búsqueda: el filtro del cliente pide 20.</summary>
+        public const int MaximoUsuariosBusqueda = 20;
+
+        /// <summary>
+        /// Búsqueda de usuarios para el filtro «Usuario» (B-04). GET api/usuarios es solo del
+        /// Administrador; esta la usa también el Supervisor y devuelve solo id, nombre y correo.
+        /// Incluye a los inactivos, porque sus inspecciones siguen en los reportes.
+        /// </summary>
+        [HttpGet("usuarios")]
+        public async Task<ActionResult<ApiResponse<List<UsuarioBusquedaDto>>>> GetUsuarios([FromQuery] string? texto = null)
+        {
+            var query = _context.Usuarios.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(texto))
+            {
+                var term = texto.Trim();
+                query = query.Where(u => u.Nombre.Contains(term) || u.Correo.Contains(term));
+            }
+
+            var usuarios = await query
+                .OrderBy(u => u.Nombre)
+                .Take(MaximoUsuariosBusqueda)
+                .Select(u => new UsuarioBusquedaDto
+                {
+                    IdUsuario = u.IdUsuario,
+                    Nombre = u.Nombre,
+                    Correo = u.Correo
+                })
+                .ToListAsync();
+
+            return Ok(ApiResponse<List<UsuarioBusquedaDto>>.SuccessResponse(usuarios));
+        }
+
         [HttpGet("historial-equipo")]
         public Task<IActionResult> GetHistorialEquipo([FromQuery] ReporteFiltroDto filtro,
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
             Tabular(ReporteTipos.HistorialEquipo, "Historial por equipo", filtro, formato, page, pageSize,
                 () => _reporteService.HistorialEquipo(filtro),
-                [new("Inspección", 1.6), new("Código", 2), new("Activo fijo", 2), new("Equipo", 4), new("Marca / modelo", 3),
-                 new("Área", 3), new("Fecha", 2.4), new("Resultado", 2), new("Observaciones", 3.6), new("Inspector", 2.5)],
+                [new("Inspección"), new("Código"), new("Activo fijo"), new("Equipo"), new("Marca / modelo"),
+                 new("Área"), new("Fecha"), new("Resultado"), new("Observaciones"), new("Inspector")],
                 f => [f.IdInspeccion, f.CodigoInterno, f.ActivoFijo, f.NombreEquipo, $"{f.Marca} {f.Modelo}".Trim(),
                       f.Area, HoraColombia.DesdeUtc(f.FechaInspeccion), Resultado(f.Resultado), f.Observaciones, f.Inspector]);
 
@@ -47,8 +80,8 @@ namespace ECAR.API.Controllers
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
             Tabular(ReporteTipos.HistorialArea, "Historial por área", filtro, formato, page, pageSize,
                 () => _reporteService.HistorialArea(filtro),
-                [new("Inspección", 2), new("Planta", 3.5), new("Área", 3.5), new("Equipo", 6), new("Fecha", 3),
-                 new("Resultado", 3), new("Responsable", 4.7)],
+                [new("Inspección"), new("Planta"), new("Área"), new("Equipo"), new("Fecha"),
+                 new("Resultado"), new("Responsable")],
                 f => [f.IdInspeccion, f.Planta, f.Area, f.Equipo, HoraColombia.DesdeUtc(f.Fecha), Resultado(f.Resultado), f.Responsable]);
 
         [HttpGet("historial-usuario")]
@@ -56,8 +89,8 @@ namespace ECAR.API.Controllers
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
             Tabular(ReporteTipos.HistorialUsuario, "Historial por usuario", filtro, formato, page, pageSize,
                 () => _reporteService.HistorialUsuario(filtro),
-                [new("Inspección", 2), new("Usuario", 4.5), new("Equipo", 6), new("Fecha", 3), new("Resultado", 3),
-                 new("Observaciones", 7.2)],
+                [new("Inspección"), new("Usuario"), new("Equipo"), new("Fecha"), new("Resultado"),
+                 new("Observaciones")],
                 f => [f.IdInspeccion, f.Usuario, f.Equipo, HoraColombia.DesdeUtc(f.FechaInspeccion), Resultado(f.Resultado), f.Observaciones]);
 
         [HttpGet("equipos-novedades")]
@@ -65,8 +98,8 @@ namespace ECAR.API.Controllers
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
             Tabular(ReporteTipos.EquiposNovedades, "Equipos con novedades", filtro, formato, page, pageSize,
                 () => _reporteService.EquiposNovedades(filtro),
-                [new("Novedad", 1.6), new("Equipo", 4.5), new("Área", 3.2), new("Descripción", 7), new("Criticidad", 1.8),
-                 new("Fecha", 2.4), new("Responsable", 3), new("Estado", 2.2)],
+                [new("Novedad"), new("Equipo"), new("Área"), new("Descripción"), new("Criticidad"),
+                 new("Fecha"), new("Responsable"), new("Estado")],
                 f => [f.IdNovedad, f.Equipo, f.Area, f.Novedad, f.Criticidad, HoraColombia.DesdeUtc(f.Fecha),
                       f.Responsable ?? "Sin resolver", f.Estado]);
 
@@ -89,12 +122,12 @@ namespace ECAR.API.Controllers
             var resumen = new List<(string, string)>
             {
                 ("Total de inspecciones", resultado.TotalInspecciones.ToString()),
-                ("Satisfactorias (conformes)", resultado.Satisfactorias.ToString()),
+                ("Satisfactorias (sin novedades)", resultado.Satisfactorias.ToString()),
                 ("Con novedad", resultado.ConNovedad.ToString())
             };
 
             return await Archivo(ReporteTipos.InspeccionesFechas, "Inspecciones por fechas", filtro, formato,
-                [new("Planta", 6), new("Área", 6), new("Inspecciones", 4.5), new("Satisfactorias", 4.5), new("Con novedad", 4.5)],
+                [new("Planta"), new("Área"), new("Inspecciones"), new("Satisfactorias"), new("Con novedad")],
                 resultado.PorArea.Select(f => (IReadOnlyList<object?>)[f.Planta, f.Area, f.TotalInspecciones, f.Satisfactorias,
                     f.ConNovedad]).ToList(),
                 resumen);
@@ -140,7 +173,7 @@ namespace ECAR.API.Controllers
         private async Task<IActionResult> Archivo(string tipo, string titulo, ReporteFiltroDto filtro, string formato,
             Columna[] columnas, List<IReadOnlyList<object?>> filas, IReadOnlyList<(string, string)>? resumen)
         {
-            var textoFiltros = TextoFiltros(filtro);
+            var textoFiltros = await TextoFiltrosAsync(filtro);
             var pie = new PieDocumento(titulo, textoFiltros, _currentUser.Nombre, DateTime.UtcNow);
             var bytes = formato == ReporteFormatos.Excel
                 ? ExportadorTabla.Excel(titulo, columnas, filas, pie, resumen)
@@ -167,16 +200,43 @@ namespace ECAR.API.Controllers
             return null;
         }
 
-        private static string TextoFiltros(ReporteFiltroDto f)
+        /// <summary>
+        /// Los filtros para el pie del archivo y la auditoría, con el código del equipo y el nombre del
+        /// usuario en lugar de sus id: «desde 01/10/2026, hasta 29/10/2026, plantas Norte y Sur, equipos BAL-01 y BOM-01».
+        /// </summary>
+        private async Task<string> TextoFiltrosAsync(ReporteFiltroDto f)
         {
             var partes = new List<string> { $"desde {f.Desde:dd/MM/yyyy}", $"hasta {f.Hasta:dd/MM/yyyy}" };
-            if (!string.IsNullOrWhiteSpace(f.Planta)) partes.Add($"planta {f.Planta}");
-            if (!string.IsNullOrWhiteSpace(f.Area)) partes.Add($"área {f.Area}");
-            if (f.IdEquipo.HasValue) partes.Add($"equipo {f.IdEquipo}");
-            if (f.IdUsuario.HasValue) partes.Add($"usuario {f.IdUsuario}");
-            if (!string.IsNullOrWhiteSpace(f.Estado)) partes.Add($"estado {f.Estado}");
-            if (!string.IsNullOrWhiteSpace(f.Criticidad)) partes.Add($"criticidad {f.Criticidad}");
+            Agregar(partes, "planta", "plantas", ReporteService.Valores(f.Plantas));
+            Agregar(partes, "área", "áreas", ReporteService.Valores(f.Areas));
+
+            var idEquipos = f.IdEquipos.Distinct().ToList();
+            if (idEquipos.Count > 0)
+            {
+                var codigos = await _context.Equipos.AsNoTracking().Where(e => idEquipos.Contains(e.IdEquipo))
+                    .OrderBy(e => e.CodigoInterno).Select(e => e.CodigoInterno).ToListAsync();
+                Agregar(partes, "equipo", "equipos", codigos);
+            }
+
+            var idUsuarios = f.IdUsuarios.Distinct().ToList();
+            if (idUsuarios.Count > 0)
+            {
+                var nombres = await _context.Usuarios.AsNoTracking().Where(u => idUsuarios.Contains(u.IdUsuario))
+                    .OrderBy(u => u.Nombre).Select(u => u.Nombre).ToListAsync();
+                Agregar(partes, "usuario", "usuarios", nombres);
+            }
+
+            Agregar(partes, "estado", "estados", ReporteService.Valores(f.Estados));
+            Agregar(partes, "criticidad", "criticidades", ReporteService.Valores(f.Criticidades));
             return string.Join(", ", partes);
+        }
+
+        private static void Agregar(List<string> partes, string singular, string plural, IReadOnlyList<string> valores)
+        {
+            if (valores.Count == 1)
+                partes.Add($"{singular} {valores[0]}");
+            else if (valores.Count > 1)
+                partes.Add($"{plural} {string.Join(", ", valores.Take(valores.Count - 1))} y {valores[^1]}");
         }
 
         private static string? Resultado(string? resultado) =>

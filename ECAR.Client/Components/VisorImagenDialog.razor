@@ -1,0 +1,75 @@
+@inject IJSRuntime JS
+
+@* Una evidencia en grande para leerla mejor (29/10/2026): rueda del mouse, botones o pellizco para acercar,
+   arrastrar para mover y doble clic para volver a ajustarla (wwwroot/js/visor-imagen.js). Solo lectura.
+
+   Uso:
+       await VisorImagenDialog.AbrirAsync(DialogService, dataUrl, evidencia.NombreOriginal); *@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="visor-titulo">@Titulo</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="visor-imagen" @ref="contenedor">
+            <img src="@Src" alt="@Titulo" draggable="false" />
+        </div>
+        <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-2">
+            Acerque con la rueda del mouse, los botones o pellizcando la pantalla; arrastre para mover y haga doble
+            clic para volver a ajustarla.
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <div class="d-flex flex-wrap gap-2 justify-end" style="width:100%">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ZoomOut"
+                       OnClick="@(() => AcercarAsync(1 / 1.25))">Alejar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ZoomIn"
+                       OnClick="@(() => AcercarAsync(1.25))">Acercar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FitScreen"
+                       OnClick="AjustarAsync">Ajustar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Cerrar">Cerrar</MudButton>
+        </div>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>La imagen como data URL (la que ya se descargó para la miniatura).</summary>
+    [Parameter, EditorRequired] public string Src { get; set; } = string.Empty;
+
+    [Parameter] public string Titulo { get; set; } = "Evidencia";
+
+    // MudBlazor 9 solo aplica las Options de <MudDialog> en línea: se aplican al abrirse.
+    private static readonly DialogOptions Opciones = new()
+    {
+        MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true
+    };
+
+    private ElementReference contenedor;
+
+    protected override async Task OnInitializedAsync() => await MudDialog.SetOptionsAsync(Opciones);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("visorImagen.iniciar", contenedor);
+        }
+    }
+
+    private async Task AcercarAsync(double factor) => await JS.InvokeVoidAsync("visorImagen.acercar", contenedor, factor);
+
+    private async Task AjustarAsync() => await JS.InvokeVoidAsync("visorImagen.ajustar", contenedor);
+
+    private void Cerrar() => MudDialog.Close();
+
+    public static Task AbrirAsync(IDialogService dialogos, string src, string? titulo = null)
+    {
+        var parametros = new DialogParameters<VisorImagenDialog>
+        {
+            { d => d.Src, src },
+            { d => d.Titulo, string.IsNullOrWhiteSpace(titulo) ? "Evidencia" : titulo }
+        };
+        return dialogos.ShowAsync<VisorImagenDialog>(titulo ?? "Evidencia", parametros);
+    }
+}

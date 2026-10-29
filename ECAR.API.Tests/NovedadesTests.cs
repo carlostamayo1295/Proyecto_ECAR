@@ -238,7 +238,7 @@ public class NovedadesTests
     }
 
     [Fact]
-    public async Task Firmar_sin_No_cierra_la_inspeccion_conforme_y_no_envia_correos()
+    public async Task Firmar_sin_No_cierra_la_inspeccion_satisfactoria_y_no_envia_correos()
     {
         var e = await SeedAsync();
         var inspeccion = await EnCursoAsync(e, Si(e.Limpieza), Si(e.Nivel),
@@ -249,7 +249,7 @@ public class NovedadesTests
         Assert.IsType<OkObjectResult>(accion.Result);
         var firmada = await InspeccionAsync(e, inspeccion.IdInspeccion);
         Assert.Equal(InspeccionEstados.Cerrada, firmada.Estado);
-        Assert.Equal(InspeccionResultados.Conforme, firmada.Resultado);
+        Assert.Equal(InspeccionResultados.Satisfactorio, firmada.Resultado);
         // Un "No" escrito en una pregunta de texto no es novedad.
         Assert.False(await e.Db.Novedades.AnyAsync());
         Assert.Empty(e.Notificador.Encolados);
@@ -393,6 +393,30 @@ public class NovedadesTests
         var accion = await ResolverAsync(e, e.OtroTecnico, novedades[0].IdNovedad);
 
         Assert.Equal(423, Assert.IsType<ObjectResult>(accion.Result).StatusCode);
+    }
+
+    [Fact]
+    public async Task El_quinto_intento_incorrecto_bloquea_y_responde_423_sin_resolver_la_novedad()
+    {
+        var e = await SeedAsync();
+        var (_, novedades) = await FirmadaConDosNovedadesAsync(e);
+        var idNovedad = novedades[0].IdNovedad;
+
+        for (var intento = 0; intento < 4; intento++)
+        {
+            var incorrecta = await ResolverAsync(e, e.OtroTecnico, idNovedad, password: $"Incorrecta{intento}");
+            Assert.IsType<BadRequestObjectResult>(incorrecta.Result);
+            e.Db.ChangeTracker.Clear();
+        }
+
+        var quinto = await ResolverAsync(e, e.OtroTecnico, idNovedad, password: "Incorrecta4");
+        e.Db.ChangeTracker.Clear();
+        var conLaCorrecta = await ResolverAsync(e, e.OtroTecnico, idNovedad);
+
+        Assert.Equal(StatusCodes.Status423Locked, Assert.IsType<ObjectResult>(quinto.Result).StatusCode);
+        Assert.Equal(StatusCodes.Status423Locked, Assert.IsType<ObjectResult>(conLaCorrecta.Result).StatusCode);
+        Assert.Equal(NovedadEstados.Pendiente,
+            (await e.Db.Novedades.AsNoTracking().SingleAsync(n => n.IdNovedad == idNovedad)).Estado);
     }
 
     [Fact]

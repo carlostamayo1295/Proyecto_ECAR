@@ -36,18 +36,20 @@
         </MudCardHeader>
 
         <MudCardContent>
-            @if (verificacion != null)
+            @* Copia local: al cerrar, MudAlert vuelve a pintar su contenido después de que el clic dejó
+               verificacion en null, y leer el campo ahí lanzaba NullReferenceException (Fase 5, F-03). *@
+            @if (verificacion is { } resultado)
             {
-                <MudAlert Severity="@(verificacion.Valida ? Severity.Success : Severity.Error)" Class="mb-4"
+                <MudAlert Severity="@(resultado.Valida ? Severity.Success : Severity.Error)" Class="mb-4"
                     ShowCloseIcon="true" CloseIconClicked="@(() => verificacion = null)">
-                    @if (verificacion.Valida)
+                    @if (resultado.Valida)
                     {
-                        <span>Integridad correcta: @verificacion.FilasRevisadas fila(s) revisadas, ninguna alterada ni borrada.</span>
+                        <span>Integridad correcta: @resultado.FilasRevisadas fila(s) revisadas, ninguna alterada ni borrada.</span>
                     }
                     else
                     {
                         <span>
-                            La cadena está rota a partir de la fila #@verificacion.PrimeraFilaRota:
+                            La cadena está rota a partir de la fila #@resultado.PrimeraFilaRota:
                             ese registro o uno anterior fue alterado o borrado fuera del sistema. Avise a Calidad.
                         </span>
                     }
@@ -154,7 +156,9 @@
     private int currentPage = 1;
     private int totalPages = 1;
     private int totalRegistros;
-    private bool isLoading;
+    // true hasta la primera respuesta: con false, el primer render mostraba «No hay … para mostrar»
+    // antes de que llegaran los datos (Fase 5, F-02).
+    private bool isLoading = true;
     private bool verificando;
     private bool exportando;
     private VerificacionAuditoriaDto? verificacion;
@@ -166,6 +170,7 @@
         var roles = await AuthorizationService.GetUserRolesAsync();
         if (!roles.Contains(RolesSistema.Administrador) && !roles.Contains(RolesSistema.Supervisor))
         {
+            isLoading = false;
             return;
         }
 

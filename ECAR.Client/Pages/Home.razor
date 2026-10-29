@@ -2,6 +2,7 @@
 @inject NavigationManager NavigationManager
 @inject AuthService AuthService
 @inject HttpClientService HttpClientService
+@inject ISnackbar Snackbar
 
 @using ECAR.Client.Services
 @using ECAR.Shared
@@ -10,7 +11,8 @@
 
 @*
   Portada. Sin sesión: bienvenida y acceso al login. Con sesión: el tablero de indicadores del
-  SRS §6 (equipos, inspecciones y novedades), calculado por GET api/dashboard.
+  SRS §6 (equipos, inspecciones y novedades), calculado por GET api/dashboard, con filtros por
+  periodo y plantas (F-21), la tendencia semanal (F-22) y la exportación a PDF (F-23).
 *@
 <MudContainer MaxWidth="MaxWidth.Large" Class="home-container">
     @if (cargando)
@@ -73,15 +75,69 @@
         <div class="tablero-cabecera">
             <div>
                 <MudText Typo="Typo.h4" Class="welcome-title">Tablero</MudText>
+                @* F-21: el periodo y la planta que aplicó el servidor se ven en el título. *@
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Indicadores de @tablero.Periodo · actualizado a las @tablero.GeneradoEn.ToLocalTime().ToString("HH:mm")
+                    Indicadores de @tablero.Periodo · @TextoPlantas(tablero.Filtros.Plantas)
+                    · actualizado a las @FormatoEstados.HoraColombia(tablero.GeneradoEn, "HH:mm") (hora de Colombia)
                 </MudText>
             </div>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CargarAsync" StartIcon="@Icons.Material.Filled.Refresh"
-                       title="Actualizar indicadores">
-                Actualizar
-            </MudButton>
+            <div class="tablero-acciones">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CargarAsync" StartIcon="@Icons.Material.Filled.Refresh"
+                           Disabled="@actualizando" title="Actualizar indicadores">
+                    Actualizar
+                </MudButton>
+                @* F-23: el PDF lleva los mismos filtros que la pantalla y queda en la auditoría (B-03). *@
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ExportarPdfAsync" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           Disabled="@exportando" title="Descargar el tablero en PDF con los filtros aplicados">
+                    @(exportando ? "Generando…" : "Exportar PDF")
+                </MudButton>
+            </div>
         </div>
+
+        <MudPaper Class="tablero-filtros" Elevation="1">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="string" Label="Periodo" Value="@periodo" ValueChanged="CambiarPeriodoAsync"
+                               Variant="Variant.Outlined" Dense="true">
+                        @foreach (var (clave, texto) in OpcionesPeriodo())
+                        {
+                            <MudSelectItem T="string" Value="@clave">@texto</MudSelectItem>
+                        }
+                        <MudSelectItem T="string" Value="@PeriodoRango">Rango de fechas</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                @if (periodo == PeriodoRango)
+                {
+                    <MudItem xs="6" sm="3" md="2">
+                        <MudDatePicker Label="Desde" Date="@rangoDesde" DateChanged="CambiarDesdeAsync" Variant="Variant.Outlined"
+                                       Editable="true" DateFormat="dd/MM/yyyy" MaxDate="@Hoy" />
+                    </MudItem>
+                    <MudItem xs="6" sm="3" md="2">
+                        <MudDatePicker Label="Hasta" Date="@rangoHasta" DateChanged="CambiarHastaAsync" Variant="Variant.Outlined"
+                                       Editable="true" DateFormat="dd/MM/yyyy" MaxDate="@Hoy" />
+                    </MudItem>
+                }
+                <MudItem xs="12" sm="6" md="3">
+                    @* Varias plantas a la vez (29/10/2026); ninguna, todas. *@
+                    <MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@plantasElegidas"
+                               SelectedValuesChanged="CambiarPlantasAsync"
+                               Variant="Variant.Outlined" Dense="true" Clearable="true" Placeholder="Todas las plantas">
+                        @foreach (var nombre in plantas)
+                        {
+                            <MudSelectItem T="string" Value="@nombre">@nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            @if (actualizando)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-2" />
+            }
+            @if (!string.IsNullOrEmpty(errorFiltros))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@errorFiltros</MudAlert>
+            }
+        </MudPaper>
 
         <MudGrid Spacing="3" Class="mb-2">
             <MudItem xs="12" sm="6" md="4">
@@ -109,7 +165,7 @@
                     <div>
                         <MudText Typo="Typo.h4">@tablero.InspeccionesEnCurso</MudText>
                         <MudText Typo="Typo.body2">Inspecciones en curso</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">iniciadas y todavía sin firmar</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">iniciadas en el periodo y todavía sin firmar</MudText>
                     </div>
                 </MudPaper>
             </MudItem>
@@ -120,7 +176,7 @@
                         <MudText Typo="Typo.h4">@tablero.NovedadesPendientes</MudText>
                         <MudText Typo="Typo.body2">Novedades pendientes</MudText>
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            en @tablero.InspeccionesConNovedadesPendientes inspección(es) firmada(s) sin cerrar
+                            registradas en el periodo; @tablero.InspeccionesConNovedadesPendientes inspección(es) firmada(s) sin cerrar
                         </MudText>
                     </div>
                 </MudPaper>
@@ -131,10 +187,47 @@
                     <div>
                         <MudText Typo="Typo.h4">@tablero.NovedadesResueltas</MudText>
                         <MudText Typo="Typo.body2">Novedades resueltas</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">resueltas con firma en el periodo</MudText>
                     </div>
                 </MudPaper>
             </MudItem>
         </MudGrid>
+
+        @* F-22: tendencia de las últimas 8 semanas (B-02), de lunes a domingo en hora de Colombia. Solo
+           depende de la planta: el periodo de arriba no la cambia. La tabla da los mismos números en el
+           teléfono y para quien no distingue los colores. *@
+        <MudPaper Class="pa-4 mb-4 tendencia" Elevation="1">
+            <MudText Typo="Typo.h6">Tendencia de las últimas @SemanasTendencia semanas</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                Por semana, de lunes a domingo · @TextoPlantas(plantasElegidas) · no depende del periodo
+            </MudText>
+            @if (tendencia is null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@(errorTendencia ?? "Cargando la tendencia…")</MudText>
+            }
+            else
+            {
+                <div class="tendencia-grafica">
+                    <MudChart T="double" ChartType="ChartType.Line" ChartSeries="@seriesTendencia" ChartLabels="@etiquetasTendencia"
+                              ChartOptions="@opcionesTendencia" Width="100%" Height="280px" />
+                </div>
+                <MudTable Items="@tendencia.Datos" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.None"
+                          Class="tendencia-tabla mt-2">
+                    <HeaderContent>
+                        <MudTh>Semana del</MudTh>
+                        <MudTh Style="text-align:right">Firmadas</MudTh>
+                        <MudTh Style="text-align:right">Novedades</MudTh>
+                        <MudTh Style="text-align:right">Resueltas</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd title="@($"{context.Desde:dd/MM/yyyy} al {context.Hasta:dd/MM/yyyy}")">@context.Desde.ToString("dd/MM")</MudTd>
+                        <MudTd Style="text-align:right">@context.InspeccionesFirmadas</MudTd>
+                        <MudTd Style="text-align:right">@context.NovedadesRegistradas</MudTd>
+                        <MudTd Style="text-align:right">@context.NovedadesResueltas</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
 
         <MudGrid Spacing="3">
             <MudItem xs="12" md="6">
@@ -292,35 +385,255 @@
     overflow-wrap: anywhere;
 }
 
+.tablero-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tablero-filtros {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    background: white;
+}
+
+.tendencia {
+    background: white;
+}
+
+.tendencia-grafica {
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Más específico que el relleno de MudTable (16–24 px), que a 375 px obligaba a desplazar la tabla. */
+.tendencia-tabla .mud-table-row .mud-table-cell {
+    padding: 4px 8px !important;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
 @@media (max-width: 600px) {
     .home-container {
         padding: 1rem 0.5rem;
+    }
+
+    .tablero-acciones,
+    .tablero-acciones .mud-button-root {
+        width: 100%;
+    }
+
+    .tablero-acciones .mud-button-root {
+        flex: 1 1 0;
+        min-width: 0;
     }
 }
 </style>
 
 @code {
+    private const string PeriodoRango = "rango";
+    private const int SemanasTendencia = 8;
+
+    // Mismo orden en la serie, la leyenda y la tabla (azul de ECAR, naranja y aguamarina); validados
+    // para daltonismo sobre blanco. El aguamarina tiene poco contraste: por eso la tabla de abajo.
+    private static readonly string[] ColoresTendencia = ["#397FDE", "#EB6834", "#1BAF7A"];
+
     private bool cargando = true;
     private bool autenticado;
     private DashboardDto? tablero;
     private string mensajeError = string.Empty;
+
+    // F-21: «mes:0» es el mes en curso, «mes:1» el anterior… y «rango» las dos fechas.
+    private string periodo = "mes:0";
+    private DateTime? rangoDesde;
+    private DateTime? rangoHasta;
+    private List<string> plantasElegidas = new();
+    private List<string> plantas = new();
+    private bool actualizando;
+    private bool exportando;
+    private string? errorFiltros;
+
+    private DashboardTendenciaDto? tendencia;
+    private string? errorTendencia;
+    private List<ChartSeries<double>> seriesTendencia = new();
+    private string[] etiquetasTendencia = [];
+    private readonly LineChartOptions opcionesTendencia = new()
+    {
+        ChartPalette = ColoresTendencia,
+        YAxisRequireZeroPoint = true,
+        YAxisFormat = "0",
+        // Conteos pequeños: con el paso por defecto (20) el eje iba de 0 a 20 y las líneas quedaban pegadas al piso.
+        YAxisTicks = 1,
+        MaxNumYAxisTicks = 6,
+        LineStrokeWidth = 2,
+        ShowDataMarkers = true
+    };
+
+    /// <summary>«todas las plantas», «Planta Norte» o «Planta Norte y Planta Sur».</summary>
+    private static string TextoPlantas(IReadOnlyList<string> elegidas) => elegidas.Count switch
+    {
+        0 => "todas las plantas",
+        1 => elegidas[0],
+        _ => $"{string.Join(", ", elegidas.Take(elegidas.Count - 1))} y {elegidas[^1]}"
+    };
+
+    /// <summary>Hoy en Colombia (UTC−5), como los días del servidor.</summary>
+    private static DateTime Hoy => DateTime.UtcNow.AddHours(-5).Date;
 
     protected override async Task OnInitializedAsync()
     {
         autenticado = await AuthService.IsAuthenticated();
         if (autenticado)
         {
-            await CargarAsync();
+            await Task.WhenAll(CargarPlantasAsync(), CargarAsync());
         }
 
         cargando = false;
     }
 
+    private async Task CargarPlantasAsync()
+    {
+        // Ubicaciones las leen todos los roles; las plantas salen de ahí, sin repetir.
+        var respuesta = await HttpClientService.GetUbicacionesAsync(1, 100);
+        plantas = respuesta?.Success == true
+            ? (respuesta.Data?.Data ?? new()).Select(u => u.Planta).Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct().OrderBy(p => p).ToList()
+            : new();
+    }
+
     private async Task CargarAsync()
     {
-        var respuesta = await HttpClientService.GetDashboardAsync();
-        tablero = respuesta.Success ? respuesta.Data : null;
-        mensajeError = respuesta.Message;
+        var (desde, hasta) = RangoElegido();
+        actualizando = true;
+        errorFiltros = null;
+
+        var pedidoTablero = HttpClientService.GetDashboardAsync(desde, hasta, plantasElegidas);
+        var pedidoTendencia = HttpClientService.GetTendenciaTableroAsync(SemanasTendencia, plantasElegidas);
+        var respuesta = await pedidoTablero;
+        var respuestaTendencia = await pedidoTendencia;
+        actualizando = false;
+
+        if (respuesta.Success && respuesta.Data != null)
+        {
+            tablero = respuesta.Data;
+        }
+        else if (tablero == null)
+        {
+            // Sin datos todavía: pantalla de «Reintentar».
+            mensajeError = respuesta.Message;
+        }
+        else
+        {
+            // Ya había un tablero: se conserva y el motivo (p. ej. un rango de más de un año) va junto a los filtros.
+            errorFiltros = respuesta.Message;
+        }
+
+        MostrarTendencia(respuestaTendencia);
+    }
+
+    private void MostrarTendencia(ApiResponse<DashboardTendenciaDto> respuesta)
+    {
+        if (!respuesta.Success || respuesta.Data == null)
+        {
+            tendencia = null;
+            errorTendencia = respuesta.Message;
+            return;
+        }
+
+        tendencia = respuesta.Data;
+        errorTendencia = null;
+        etiquetasTendencia = tendencia.Datos.Select(s => s.Desde.ToString("dd/MM")).ToArray();
+        seriesTendencia =
+        [
+            new() { Name = "Inspecciones firmadas", Data = tendencia.Datos.Select(s => (double)s.InspeccionesFirmadas).ToArray() },
+            new() { Name = "Novedades registradas", Data = tendencia.Datos.Select(s => (double)s.NovedadesRegistradas).ToArray() },
+            new() { Name = "Novedades resueltas", Data = tendencia.Datos.Select(s => (double)s.NovedadesResueltas).ToArray() }
+        ];
+    }
+
+    /// <summary>
+    /// Fechas que se envían al API (días de Colombia, ambos incluidos). En el rango, null mientras falte
+    /// una de las dos: el servidor usaría el mes en curso y el título lo diría.
+    /// </summary>
+    private (DateTime? Desde, DateTime? Hasta) RangoElegido()
+    {
+        if (periodo == PeriodoRango)
+        {
+            return rangoDesde is { } d && rangoHasta is { } h ? (d.Date, h.Date) : (null, null);
+        }
+
+        var meses = int.TryParse(periodo.AsSpan(4), out var atras) ? atras : 0;
+        var inicio = new DateTime(Hoy.Year, Hoy.Month, 1).AddMonths(-meses);
+        var fin = meses == 0 ? Hoy : inicio.AddMonths(1).AddDays(-1);
+        return (inicio, fin);
+    }
+
+    /// <summary>El mes en curso y los 11 anteriores, con el nombre que usa el servidor («octubre de 2026»).</summary>
+    private static IEnumerable<(string Clave, string Texto)> OpcionesPeriodo()
+    {
+        var cultura = System.Globalization.CultureInfo.GetCultureInfo("es-CO");
+        var inicioMes = new DateTime(Hoy.Year, Hoy.Month, 1);
+        yield return ("mes:0", "Mes en curso");
+        for (var atras = 1; atras < 12; atras++)
+        {
+            yield return ($"mes:{atras}", inicioMes.AddMonths(-atras).ToString("MMMM 'de' yyyy", cultura));
+        }
+    }
+
+    private async Task CambiarPeriodoAsync(string valor)
+    {
+        periodo = valor;
+        if (periodo == PeriodoRango)
+        {
+            // Arranca con el periodo que se estaba viendo, para ajustarlo desde ahí.
+            rangoDesde ??= tablero?.Filtros.Desde;
+            rangoHasta ??= tablero?.Filtros.Hasta;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CambiarDesdeAsync(DateTime? valor)
+    {
+        rangoDesde = valor;
+        if (rangoDesde != null && rangoHasta != null)
+        {
+            await CargarAsync();
+        }
+    }
+
+    private async Task CambiarHastaAsync(DateTime? valor)
+    {
+        rangoHasta = valor;
+        if (rangoDesde != null && rangoHasta != null)
+        {
+            await CargarAsync();
+        }
+    }
+
+    private async Task CambiarPlantasAsync(IEnumerable<string?>? valores)
+    {
+        plantasElegidas = (valores ?? []).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!).ToList();
+        await CargarAsync();
+    }
+
+    private async Task ExportarPdfAsync()
+    {
+        if (exportando || tablero == null)
+        {
+            return;
+        }
+
+        // Los filtros que el servidor aplicó a lo que se ve, para que el PDF diga lo mismo.
+        exportando = true;
+        var respuesta = await HttpClientService.DescargarTableroPdfAsync(tablero.Filtros.Desde, tablero.Filtros.Hasta,
+            tablero.Filtros.Plantas);
+        exportando = false;
+
+        if (!respuesta.Success)
+        {
+            Snackbar.Add(respuesta.Message, Severity.Error);
+        }
     }
 
     /// <summary>Largo de la barra: proporción sobre el total de equipos activos.</summary>

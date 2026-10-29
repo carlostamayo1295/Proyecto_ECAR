@@ -6,6 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
+// Cada clase crea y migra su propia base en el mismo SQL Server. En paralelo, las migraciones se
+// agotaban por tiempo («Cannot release the application lock __EFMigrationsLock») y la suite fallaba
+// al azar; en serie es estable (B-08).
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace ECAR.IntegrationTests;
 
 /// <summary>
@@ -54,14 +59,21 @@ public sealed class BaseDePruebas : IAsyncDisposable
         return baseDePruebas;
     }
 
+    /// <summary>
+    /// Migrar una base entera en un solo comando puede pasar de los 30 s por defecto cuando el
+    /// servidor está cargado, y la prueba fallaba por tiempo de espera; con 120 s no depende de eso.
+    /// </summary>
+    private const int SegundosPorComando = 120;
+
     public ECARDbContext CrearContexto(IContextoAuditoria? contexto = null) =>
-        new(new DbContextOptionsBuilder<ECARDbContext>().UseSqlServer(CadenaConexion).Options, contexto);
+        new(new DbContextOptionsBuilder<ECARDbContext>()
+            .UseSqlServer(CadenaConexion, sql => sql.CommandTimeout(SegundosPorComando)).Options, contexto);
 
     public async Task EjecutarAsync(string sql)
     {
         await using var conexion = new SqlConnection(CadenaConexion);
         await conexion.OpenAsync();
-        await using var comando = new SqlCommand(sql, conexion);
+        await using var comando = new SqlCommand(sql, conexion) { CommandTimeout = SegundosPorComando };
         await comando.ExecuteNonQueryAsync();
     }
 
@@ -69,7 +81,7 @@ public sealed class BaseDePruebas : IAsyncDisposable
     {
         await using var conexion = new SqlConnection(CadenaConexion);
         await conexion.OpenAsync();
-        await using var comando = new SqlCommand(sql, conexion);
+        await using var comando = new SqlCommand(sql, conexion) { CommandTimeout = SegundosPorComando };
         return (T)(await comando.ExecuteScalarAsync())!;
     }
 

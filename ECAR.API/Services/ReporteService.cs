@@ -72,16 +72,21 @@ namespace ECAR.API.Services
             var query = _context.Novedades.AsNoTracking()
                 .Where(n => n.FechaRegistro >= inicio!.Value && n.FechaRegistro < fin!.Value);
 
-            if (!string.IsNullOrWhiteSpace(filtro.Estado))
-                query = query.Where(n => n.Estado == filtro.Estado);
-            if (!string.IsNullOrWhiteSpace(filtro.Criticidad))
-                query = query.Where(n => n.Criticidad == filtro.Criticidad);
-            if (filtro.IdEquipo.HasValue)
-                query = query.Where(n => n.Inspeccion.IdEquipo == filtro.IdEquipo.Value);
-            if (!string.IsNullOrWhiteSpace(filtro.Planta))
-                query = query.Where(n => n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Planta == filtro.Planta);
-            if (!string.IsNullOrWhiteSpace(filtro.Area))
-                query = query.Where(n => n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Area == filtro.Area);
+            var estados = Valores(filtro.Estados);
+            var criticidades = Valores(filtro.Criticidades);
+            var plantas = Valores(filtro.Plantas);
+            var areas = Valores(filtro.Areas);
+            var equipos = filtro.IdEquipos.Distinct().ToList();
+            if (estados.Count > 0)
+                query = query.Where(n => estados.Contains(n.Estado));
+            if (criticidades.Count > 0)
+                query = query.Where(n => n.Criticidad != null && criticidades.Contains(n.Criticidad));
+            if (equipos.Count > 0)
+                query = query.Where(n => equipos.Contains(n.Inspeccion.IdEquipo));
+            if (plantas.Count > 0)
+                query = query.Where(n => n.Inspeccion.Equipo.Ubicacion != null && plantas.Contains(n.Inspeccion.Equipo.Ubicacion.Planta));
+            if (areas.Count > 0)
+                query = query.Where(n => n.Inspeccion.Equipo.Ubicacion != null && areas.Contains(n.Inspeccion.Equipo.Ubicacion.Area));
 
             // "Responsable" (SRS §7) es quien firmó la resolución; vacío mientras está pendiente.
             return query
@@ -116,8 +121,10 @@ namespace ECAR.API.Services
                     TotalInspecciones = g.Count(),
                     // "Con novedad" es haber encontrado alguna, resuelta o no: al resolverse la última, el
                     // resultado pasa a Conforme, pero la inspección sigue contando aquí. ConNovedad (sin
-                    // filas en Novedades) es de las firmadas antes de las novedades.
-                    Satisfactorias = g.Count(i => i.Resultado == InspeccionResultados.Conforme && !i.Novedades.Any()),
+                    // filas en Novedades) es de las firmadas antes de las novedades. Las firmadas sin
+                    // novedades antes del 29/10/2026 quedaron Conforme en lugar de Satisfactorio.
+                    Satisfactorias = g.Count(i => i.Resultado == InspeccionResultados.Satisfactorio ||
+                                                  (i.Resultado == InspeccionResultados.Conforme && !i.Novedades.Any())),
                     ConNovedad = g.Count(i => i.Novedades.Any() || i.Resultado == InspeccionResultados.ConNovedad ||
                                               i.Resultado == InspeccionResultados.Pendiente)
                 })
@@ -148,16 +155,28 @@ namespace ECAR.API.Services
                 .Where(i => (i.Estado == InspeccionEstados.Cerrada || i.Estado == InspeccionEstados.NovedadesPendientes) &&
                             i.FechaInspeccion >= inicio!.Value && i.FechaInspeccion < fin!.Value);
 
-            if (filtro.IdEquipo.HasValue)
-                query = query.Where(i => i.IdEquipo == filtro.IdEquipo.Value);
-            if (filtro.IdUsuario.HasValue)
-                query = query.Where(i => i.IdUsuario == filtro.IdUsuario.Value);
-            if (!string.IsNullOrWhiteSpace(filtro.Planta))
-                query = query.Where(i => i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == filtro.Planta);
-            if (!string.IsNullOrWhiteSpace(filtro.Area))
-                query = query.Where(i => i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Area == filtro.Area);
+            var equipos = filtro.IdEquipos.Distinct().ToList();
+            var usuarios = filtro.IdUsuarios.Distinct().ToList();
+            var plantas = Valores(filtro.Plantas);
+            var areas = Valores(filtro.Areas);
+            if (equipos.Count > 0)
+                query = query.Where(i => equipos.Contains(i.IdEquipo));
+            if (usuarios.Count > 0)
+                query = query.Where(i => usuarios.Contains(i.IdUsuario));
+            if (plantas.Count > 0)
+                query = query.Where(i => i.Equipo.Ubicacion != null && plantas.Contains(i.Equipo.Ubicacion.Planta));
+            if (areas.Count > 0)
+                query = query.Where(i => i.Equipo.Ubicacion != null && areas.Contains(i.Equipo.Ubicacion.Area));
 
             return query;
         }
+
+        /// <summary>Los valores de un filtro de texto sin espacios externos, sin vacíos y sin repetir.</summary>
+        internal static List<string> Valores(IEnumerable<string>? valores) =>
+            (valores ?? [])
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
     }
 }

@@ -113,7 +113,7 @@ public class ReportesFase4Tests
         var d = await SeedAsync();
 
         var pagina = Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await Controlador(d.Db).GetHistorialEquipo(
-            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipo = d.Balanza.IdEquipo }, pageSize: 1));
+            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipos = [d.Balanza.IdEquipo] }, pageSize: 1));
         var soloHoy = Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await Controlador(d.Db).GetHistorialEquipo(
             new ReporteFiltroDto { Desde = Hoy, Hasta = Hoy }));
 
@@ -130,9 +130,9 @@ public class ReportesFase4Tests
         var c = Controlador(d.Db);
 
         var produccion = Datos_<PagedResultDto<HistorialAreaFilaDto>>(await c.GetHistorialArea(
-            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, Area = "Producción" }));
+            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, Areas = ["Producción"] }));
         var porUsuario = Datos_<PagedResultDto<HistorialUsuarioFilaDto>>(await c.GetHistorialUsuario(
-            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdUsuario = d.Tecnico.IdUsuario }));
+            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdUsuarios = [d.Tecnico.IdUsuario] }));
 
         Assert.Equal(0, produccion.TotalCount);
         Assert.Equal(2, porUsuario.TotalCount);
@@ -145,7 +145,7 @@ public class ReportesFase4Tests
         var d = await SeedAsync();
 
         var filas = Datos_<PagedResultDto<EquipoNovedadFilaDto>>(await Controlador(d.Db).GetEquiposNovedades(
-            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, Criticidad = "Alta" }));
+            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, Criticidades = ["Alta"] }));
 
         var fila = Assert.Single(filas.Data);
         Assert.Equal("BAL-1 - Balanza", fila.Equipo);
@@ -181,7 +181,7 @@ public class ReportesFase4Tests
 
         var totales = Datos_<InspeccionesPorFechasDto>(await c.GetInspeccionesFechas(Mes()));
         var historial = Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await c.GetHistorialEquipo(
-            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipo = d.Bomba.IdEquipo }));
+            new ReporteFiltroDto { Desde = Mes().Desde, Hasta = Hoy, IdEquipos = [d.Bomba.IdEquipo] }));
 
         Assert.Equal(3, totales.TotalInspecciones);
         Assert.Equal(1, totales.Satisfactorias);
@@ -231,9 +231,7 @@ public class ReportesFase4Tests
 
         var pie = new PieDocumento("Prueba", "ninguno", "Carla Admin", DateTime.UtcNow);
         var pagina = ExportadorTabla.Documento("Prueba", pie, horizontal: true).LastSection.PageSetup;
-        var anchos = ExportadorTabla.AnchosAjustados([new("A", 2), new("B", 30), new("C", 4)], ExportadorTabla.AnchoUtilCm(pagina));
-        Assert.Equal(25.7, anchos.Sum(), 3); // MigraDoc guarda las medidas como float
-        Assert.Equal(15 * anchos[0], anchos[1], 3);
+        Assert.Equal(25.7, ExportadorTabla.AnchoUtilCm(pagina), 3); // MigraDoc guarda las medidas como float
     }
 
     [Fact]
@@ -276,6 +274,110 @@ public class ReportesFase4Tests
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(archivo.FileContents, 0, 4));
         Assert.InRange(TamanoPrimeraPagina(archivo.FileContents).Ancho, 594, 596); // el registro sigue en vertical
         Assert.Contains(await d.Db.Auditoria.Select(a => a.Accion).ToListAsync(), a => a == AuditoriaAcciones.Exportacion);
+    }
+
+    // 29/10/2026: cada filtro admite varios valores; el reporte trae lo que coincide con cualquiera.
+    [Fact]
+    public async Task Los_filtros_admiten_varios_valores_a_la_vez()
+    {
+        var d = await SeedAsync();
+        d.Db.Inspecciones.Add(new Inspeccion
+        {
+            IdEquipo = d.Bomba.IdEquipo, IdChecklist = d.Db.Checklists.First().IdChecklist, IdUsuario = d.Tecnico.IdUsuario,
+            FechaInspeccion = DateTime.UtcNow, FechaCierre = DateTime.UtcNow,
+            Estado = InspeccionEstados.Cerrada, Resultado = InspeccionResultados.Satisfactorio
+        });
+        await d.Db.SaveChangesAsync();
+        var c = Controlador(d.Db);
+
+        async Task<int> EquiposAsync(ReporteFiltroDto f) =>
+            Datos_<PagedResultDto<HistorialEquipoFilaDto>>(await c.GetHistorialEquipo(f)).TotalCount;
+        ReporteFiltroDto Filtro() => new() { Desde = Mes().Desde, Hasta = Hoy };
+
+        var dosEquipos = Filtro(); dosEquipos.IdEquipos = [d.Balanza.IdEquipo, d.Bomba.IdEquipo];
+        var soloBomba = Filtro(); soloBomba.IdEquipos = [d.Bomba.IdEquipo];
+        var dosAreas = Filtro(); dosAreas.Areas = ["Control de Calidad", " Producción "];
+        var otraPlanta = Filtro(); otraPlanta.Plantas = ["Planta Principal", "Planta Norte"];
+        var ninguna = Filtro(); ninguna.Plantas = ["Planta Norte", "Planta Sur"];
+
+        Assert.Equal(3, await EquiposAsync(dosEquipos));
+        Assert.Equal(1, await EquiposAsync(soloBomba));
+        Assert.Equal(3, await EquiposAsync(dosAreas));
+        Assert.Equal(3, await EquiposAsync(otraPlanta));
+        Assert.Equal(0, await EquiposAsync(ninguna));
+
+        var fechas = Filtro(); fechas.Areas = ["Producción"];
+        var totales = Datos_<InspeccionesPorFechasDto>(await c.GetInspeccionesFechas(fechas));
+        Assert.Equal((1, 1), (totales.TotalInspecciones, totales.Satisfactorias));
+    }
+
+    [Fact]
+    public async Task El_pie_del_archivo_nombra_los_equipos_y_las_plantas_filtradas()
+    {
+        var d = await SeedAsync();
+        var filtro = Mes();
+        filtro.IdEquipos = [d.Bomba.IdEquipo, d.Balanza.IdEquipo];
+        filtro.Plantas = ["Planta Principal"];
+
+        Assert.IsType<FileContentResult>(await Controlador(d.Db).GetHistorialEquipo(filtro, ReporteFormatos.Pdf));
+
+        var exportacion = await d.Db.Auditoria.AsNoTracking().SingleAsync(a => a.Accion == AuditoriaAcciones.Exportacion);
+        Assert.Contains("planta Planta Principal", exportacion.ValorNuevo);
+        Assert.Contains("equipos BAL-1 y BOM-1", exportacion.ValorNuevo);
+    }
+
+    // 29/10/2026: el texto de los PDF ya no se sale de las celdas.
+    [Fact]
+    public void Las_palabras_mas_anchas_que_la_columna_se_parten_y_ningun_trozo_la_supera()
+    {
+        using var ajuste = new AjusteTexto(ExportadorTabla.TamanoTablaPt);
+        var json = "{\"Nombre\":\"Balanza analítica de precisión\",\"Correo\":\"responsable.de.calidad@laboratoriosecar.com.co\"," +
+                   "\"Hash\":\"" + new string('a', 64) + "\"}";
+        const double limiteCm = 3;
+
+        var trozos = ajuste.Partir("Valor nuevo " + json + " fin", limiteCm, negrita: false);
+
+        Assert.True(trozos.Count > 1);
+        Assert.All(trozos.SelectMany(t => t.Split(' ')), palabra => Assert.True(ajuste.AnchoCm(palabra) <= limiteCm,
+            $"«{palabra}» mide {ajuste.AnchoCm(palabra):0.00} cm"));
+        // Una columna que mide justo la palabra más su relleno no la parte (el redondeo partía «Códig / o»).
+        var justa = ajuste.AnchoCm("Código", negrita: true) + AjusteTexto.RellenoCm;
+        Assert.Single(ajuste.Partir("Código", justa - AjusteTexto.RellenoCm, negrita: true));
+
+        // El texto no cambia: solo se reparte en renglones.
+        Assert.Equal(("Valor nuevo " + json + " fin").Replace(" ", ""), string.Concat(trozos).Replace(" ", ""));
+    }
+
+    [Fact]
+    public void Las_columnas_se_reparten_segun_el_contenido_y_la_de_mas_informacion_recibe_mas()
+    {
+        using var ajuste = new AjusteTexto(ExportadorTabla.TamanoTablaPt);
+        string[] encabezados = ["#", "Fecha", "Observaciones", "Estado"];
+        IReadOnlyList<string>[] filas =
+        [
+            ["1", "29/10/2026 14:30", string.Join(" ", Enumerable.Repeat("la balanza se calibró y se registró el resultado", 6)), "Cerrada"],
+            ["2", "28/10/2026 09:05", "Sin novedad", "Anulada"]
+        ];
+
+        var anchos = ajuste.Anchos(encabezados, filas, 25.7);
+
+        Assert.Equal(25.7, anchos.Sum(), 6);
+        Assert.Equal(2, Enumerable.Range(0, 4).MaxBy(c => anchos[c]));
+        // Las columnas cortas caben en una línea: la fecha completa no se parte.
+        Assert.True(anchos[1] >= ajuste.AnchoCm("29/10/2026 14:30") + AjusteTexto.RellenoCm - 1e-9);
+    }
+
+    [Fact]
+    public async Task Un_reporte_con_textos_largos_sin_espacios_sale_en_PDF()
+    {
+        var d = await SeedAsync();
+        var inspeccion = await d.Db.Inspecciones.FirstAsync(i => i.Estado == InspeccionEstados.Cerrada);
+        inspeccion.Observaciones = new string('x', 400) + " " + "correo.muy.largo.de.una.persona@laboratoriosecar.com.co";
+        await d.Db.SaveChangesAsync();
+
+        var pdf = Assert.IsType<FileContentResult>(await Controlador(d.Db).GetHistorialEquipo(Mes(), ReporteFormatos.Pdf));
+
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdf.FileContents, 0, 4));
     }
 
     private static (double Ancho, double Alto) TamanoPrimeraPagina(byte[] pdf)

@@ -1,0 +1,64 @@
+@typeparam TItem
+
+@* Filtro de varios valores con buscador (29/10/2026), para listas largas como equipos o usuarios: lo que
+   se elige en el buscador se agrega como etiqueta debajo, se pueden agregar varios y cada uno se quita
+   con su X. Vacío, no filtra.
+
+   Uso:
+       <BuscadorMultiple TItem="EquipoDto" Label="Equipos" SearchFunc="BuscarEquiposAsync"
+                         ToStringFunc="@(e => e == null ? "" : e.CodigoInterno)" Clave="@(e => e.IdEquipo)"
+                         Seleccionados="equiposSeleccionados" /> *@
+<MudAutocomplete @ref="buscador" T="TItem" Label="@Label" Value="@seleccionActual" ValueChanged="AgregarAsync"
+                 SearchFunc="SearchFunc" ToStringFunc="ToStringFunc" Variant="Variant.Outlined"
+                 MinCharacters="0" MaxItems="20" ResetValueOnEmptyText="true"
+                 HelperText="@(Seleccionados.Count == 0 ? HelperText : $"{Seleccionados.Count} elegido(s)")" />
+@if (Seleccionados.Count > 0)
+{
+    <div class="d-flex flex-wrap gap-1 mt-1 buscador-multiple-etiquetas">
+        @foreach (var item in Seleccionados)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                     Text="@ToStringFunc(item)" OnClose="@(() => QuitarAsync(item))" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+
+    [Parameter] public string? HelperText { get; set; }
+
+    [Parameter, EditorRequired] public Func<string, CancellationToken, Task<IEnumerable<TItem>>> SearchFunc { get; set; } = null!;
+
+    [Parameter, EditorRequired] public Func<TItem?, string> ToStringFunc { get; set; } = null!;
+
+    /// <summary>Identifica cada elemento para no agregarlo dos veces.</summary>
+    [Parameter, EditorRequired] public Func<TItem, long> Clave { get; set; } = null!;
+
+    /// <summary>La lista elegida; el componente le agrega y le quita elementos.</summary>
+    [Parameter, EditorRequired] public List<TItem> Seleccionados { get; set; } = new();
+
+    private MudAutocomplete<TItem>? buscador;
+    private TItem? seleccionActual;
+
+    private async Task AgregarAsync(TItem? item)
+    {
+        if (item is not null && Seleccionados.All(s => Clave(s) != Clave(item)))
+        {
+            Seleccionados.Add(item);
+        }
+
+        // El buscador queda vacío para elegir el siguiente.
+        seleccionActual = default;
+        if (buscador is not null)
+        {
+            await buscador.ClearAsync();
+        }
+    }
+
+    private Task QuitarAsync(TItem item)
+    {
+        Seleccionados.RemoveAll(s => Clave(s) == Clave(item));
+        return Task.CompletedTask;
+    }
+}

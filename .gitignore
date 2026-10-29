@@ -75,6 +75,7 @@ ScaffoldingReadMe.txt
 *.pidb
 *.svclog
 *.scc
+Reportes
 
 # NuGet Packages
 *.nupkg

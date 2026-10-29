@@ -26,17 +26,31 @@ public static class ReporteFormatos
 /// <summary>
 /// Filtros de los reportes. Cada reporte usa los suyos (ver la tabla de endpoints 15–20);
 /// las fechas son obligatorias en todos y el rango máximo es de un año.
+/// Cada lista admite varios valores (29/10/2026): en la URL se repite la clave
+/// (<c>?plantas=Norte&amp;plantas=Sur</c>) y el reporte trae los que coinciden con cualquiera de ellos.
+/// Vacía o ausente, no filtra.
 /// </summary>
 public class ReporteFiltroDto
 {
     public DateTime? Desde { get; set; }
     public DateTime? Hasta { get; set; }
-    public string? Planta { get; set; }
-    public string? Area { get; set; }
-    public long? IdEquipo { get; set; }
-    public long? IdUsuario { get; set; }
-    public string? Estado { get; set; }
-    public string? Criticidad { get; set; }
+    public List<string> Plantas { get; set; } = new();
+    public List<string> Areas { get; set; } = new();
+    public List<long> IdEquipos { get; set; } = new();
+    public List<long> IdUsuarios { get; set; } = new();
+    public List<string> Estados { get; set; } = new();
+    public List<string> Criticidades { get; set; } = new();
+}
+
+/// <summary>
+/// Resultado de GET /api/reportes/usuarios (B-04): lo justo para el filtro «Usuario» de los reportes.
+/// Sin contraseña, roles, usuario de Active Directory ni datos de la cuenta.
+/// </summary>
+public class UsuarioBusquedaDto
+{
+    public long IdUsuario { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public string Correo { get; set; } = string.Empty;
 }
 
 /// <summary>Reporte "Historial por Equipo" (SRS §7).</summary>
@@ -105,7 +119,7 @@ public class InspeccionesPorFechasDto
     public DateTime Hasta { get; set; }
     public int TotalInspecciones { get; set; }
 
-    /// <summary>"Inspecciones satisfactorias" del SRS: Conforme y sin ninguna novedad.</summary>
+    /// <summary>"Inspecciones satisfactorias" del SRS: resultado Satisfactorio (o Conforme sin ninguna novedad, las anteriores al 29/10/2026).</summary>
     public int Satisfactorias { get; set; }
 
     /// <summary>

@@ -8,7 +8,11 @@ public class SeguridadOptions
 
     public int LongitudMinimaPassword { get; set; } = 10;
     public bool RequiereLetrasYNumeros { get; set; } = true;
-    public int DiasExpiracionPassword { get; set; } = 90;
+    /// <summary>
+    /// 0: la contraseña no caduca (decisión de ECAR, 29/10/2026; antes 90 días). Con un valor mayor que
+    /// 0 vuelve la caducidad: <see cref="Services.PoliticaPasswords.EstaCaducada"/> obliga a cambiarla.
+    /// </summary>
+    public int DiasExpiracionPassword { get; set; }
 
     public int PasswordsRecordadas { get; set; } = 5;
 

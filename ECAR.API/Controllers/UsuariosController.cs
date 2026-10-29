@@ -164,9 +164,9 @@ public class UsuariosController : ControllerBase
             UsuarioAD = createDto.UsuarioAD,
             PasswordHash = passwordHash,
             Activo = true,
-            // La contraseña inicial la conoce el Administrador: el usuario la cambia al entrar
-            // (Parte 11 §11.200(a)(3)).
-            DebeCambiarPassword = tienePasswordLocal,
+            // La contraseña que pone el Administrador al crear el usuario ya no es temporal (decisión de
+            // ECAR, 29/10/2026): no se obliga a cambiarla al entrar. Restablecer sí da una temporal.
+            DebeCambiarPassword = false,
             FechaCambioPassword = tienePasswordLocal ? DateTime.UtcNow : null
         };
 

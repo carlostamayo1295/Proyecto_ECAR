@@ -228,6 +228,126 @@ public class CorreccionesPruebasTests
         Assert.Equal(1, t.InspeccionesEnCurso);
         Assert.Equal(1, t.NovedadesPendientes);
         Assert.Equal(0, t.NovedadesResueltas);
+        var hoyColombia = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
+        Assert.Equal(new DateTime(hoyColombia.Year, hoyColombia.Month, 1), t.Filtros.Desde);
+        Assert.Empty(t.Filtros.Plantas);
+    }
+
+    [Fact]
+    public async Task El_tablero_aplica_periodo_y_planta_en_hora_de_Colombia()
+    {
+        var e = await SeedAsync();
+        var desde = new DateTime(2026, 10, 1);
+        var hasta = new DateTime(2026, 10, 10);
+        var (inicio, fin) = HoraColombia.RangoUtc(desde, hasta);
+        var otraUbicacion = new Ubicacion { Planta = "Planta 2", Area = "Laboratorio" };
+        var otroEquipo = new Equipo
+        {
+            CodigoInterno = "EQ-2", ActivoFijo = "AF-2", NombreEquipo = "Horno", Activo = true,
+            Criticidad = Criticidades.Media, Ubicacion = otraUbicacion
+        };
+        e.Db.Add(otroEquipo);
+        await e.Db.SaveChangesAsync();
+        e.Db.Inspecciones.AddRange(
+            new Inspeccion
+            {
+                IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist,
+                IdUsuario = e.Tecnico.IdUsuario, FechaInspeccion = inicio!.Value,
+                Estado = InspeccionEstados.Cerrada
+            },
+            new Inspeccion
+            {
+                IdEquipo = otroEquipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist,
+                IdUsuario = e.Tecnico.IdUsuario, FechaInspeccion = inicio.Value,
+                Estado = InspeccionEstados.Cerrada
+            },
+            new Inspeccion
+            {
+                IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist,
+                IdUsuario = e.Tecnico.IdUsuario, FechaInspeccion = fin!.Value,
+                Estado = InspeccionEstados.Cerrada
+            });
+        await e.Db.SaveChangesAsync();
+
+        var resultado = await new DashboardController(e.Db).GetDashboard(desde, hasta, ["  Planta 1 "]);
+
+        var dto = Assert.IsType<ApiResponse<DashboardDto>>(
+            Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
+        Assert.Equal(desde, dto.Filtros.Desde);
+        Assert.Equal(hasta, dto.Filtros.Hasta);
+        Assert.Equal(["Planta 1"], dto.Filtros.Plantas);
+        Assert.Equal(1, dto.TotalEquipos);
+        Assert.Equal(1, dto.InspeccionesRealizadasMes);
+    }
+
+    [Fact]
+    public async Task El_tablero_rechaza_un_rango_mayor_de_un_anio()
+    {
+        var e = await SeedAsync();
+
+        var resultado = await new DashboardController(e.Db).GetDashboard(
+            new DateTime(2025, 1, 1), new DateTime(2026, 1, 2));
+
+        var error = Assert.IsType<ApiResponse<DashboardDto>>(
+            Assert.IsType<BadRequestObjectResult>(resultado.Result).Value);
+        Assert.False(error.Success);
+        Assert.Contains("un año", error.Message);
+    }
+
+    [Fact]
+    public async Task La_tendencia_incluye_semanas_vacias_y_datos_a_ambos_lados_del_cambio_de_mes()
+    {
+        var e = await SeedAsync();
+        var hoyColombia = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
+        var primerDiaMes = hoyColombia.AddDays(1 - hoyColombia.Day);
+        var antes = primerDiaMes.AddDays(-1).AddHours(10) - HoraColombia.Desfase;
+        var despues = primerDiaMes.AddHours(10) - HoraColombia.Desfase;
+        var inspeccionAntes = new Inspeccion
+        {
+            IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist,
+            IdUsuario = e.Tecnico.IdUsuario, FechaInspeccion = antes, FechaCierre = antes,
+            Estado = InspeccionEstados.Cerrada
+        };
+        var inspeccionDespues = new Inspeccion
+        {
+            IdEquipo = e.Equipo.IdEquipo, IdChecklist = e.Checklist.IdChecklist,
+            IdUsuario = e.Tecnico.IdUsuario, FechaInspeccion = despues, FechaCierre = despues,
+            Estado = InspeccionEstados.Cerrada
+        };
+        e.Db.Inspecciones.AddRange(inspeccionAntes, inspeccionDespues);
+        await e.Db.SaveChangesAsync();
+        var respuesta = new RespuestaInspeccion
+        {
+            IdInspeccion = inspeccionAntes.IdInspeccion,
+            IdPregunta = e.Checklist.Preguntas.Single().IdPregunta,
+            Respuesta = "No"
+        };
+        e.Db.RespuestasInspeccion.Add(respuesta);
+        await e.Db.SaveChangesAsync();
+        e.Db.Novedades.Add(new Novedad
+        {
+            IdInspeccion = inspeccionAntes.IdInspeccion,
+            IdPregunta = respuesta.IdPregunta,
+            IdRespuesta = respuesta.IdRespuesta,
+            IdUsuarioRegistro = e.Tecnico.IdUsuario,
+            Descripcion = "Novedad en cambio de mes",
+            FechaRegistro = antes,
+            FechaResolucion = despues,
+            Estado = NovedadEstados.Resuelta
+        });
+        await e.Db.SaveChangesAsync();
+
+        var resultado = await new DashboardController(e.Db).GetTendencia(8, ["Planta 1"]);
+
+        var dto = Assert.IsType<ApiResponse<DashboardTendenciaDto>>(
+            Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
+        Assert.Equal(8, dto.Datos.Count);
+        Assert.Equal(2, dto.Datos.Sum(s => s.InspeccionesFirmadas));
+        Assert.Equal(1, dto.Datos.Sum(s => s.NovedadesRegistradas));
+        Assert.Equal(1, dto.Datos.Sum(s => s.NovedadesResueltas));
+        Assert.Contains(dto.Datos, s => s.InspeccionesFirmadas == 0 &&
+                                        s.NovedadesRegistradas == 0 && s.NovedadesResueltas == 0);
+        Assert.All(dto.Datos, s => Assert.Equal(DayOfWeek.Monday, s.Desde.DayOfWeek));
     }
 
     private sealed class AlmacenVacio : IEvidenciaStorage

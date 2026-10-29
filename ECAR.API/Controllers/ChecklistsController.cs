@@ -104,6 +104,12 @@ public class ChecklistsController : ControllerBase
             return BadRequest(ApiResponse<ChecklistDto>.ErrorResponse(tipoInvalido));
         }
 
+        createDto.Nombre = createDto.Nombre.Trim();
+        if (await ExisteActivoConNombreAsync(createDto.Nombre))
+        {
+            return Conflict(ApiResponse<ChecklistDto>.ErrorResponse(NombreRepetido(createDto.Nombre)));
+        }
+
         var existente = await _context.Checklists
             .FirstOrDefaultAsync(c => c.Nombre == createDto.Nombre && c.Version == createDto.Version);
 
@@ -171,8 +177,16 @@ public class ChecklistsController : ControllerBase
             return BadRequest(ApiResponse<ChecklistDto>.ErrorResponse(tipoInvalido));
         }
 
-        if (!string.IsNullOrEmpty(updateDto.Nombre))
-            checklist.Nombre = updateDto.Nombre;
+        // B-05: solo se valida si el nombre cambia; el formulario lo reenvía en cada edición.
+        var nombre = string.IsNullOrWhiteSpace(updateDto.Nombre) ? null : updateDto.Nombre.Trim();
+        if (nombre != null && NormalizarNombre(nombre) != NormalizarNombre(checklist.Nombre) &&
+            await ExisteActivoConNombreAsync(nombre, excluirId: id))
+        {
+            return Conflict(ApiResponse<ChecklistDto>.ErrorResponse(NombreRepetido(nombre)));
+        }
+
+        if (nombre != null)
+            checklist.Nombre = nombre;
 
         if (!string.IsNullOrEmpty(updateDto.Version))
             checklist.Version = updateDto.Version;
@@ -363,6 +377,26 @@ public class ChecklistsController : ControllerBase
         return CreatedAtAction(nameof(GetChecklist), new { id = nueva.IdChecklist },
             ApiResponse<ChecklistDto>.SuccessResponse(MapToDto(nueva), $"Versión '{version}' creada exitosamente"));
     }
+
+    /// <summary>
+    /// B-05: no puede haber dos checklists activos con el mismo nombre, sin distinguir mayúsculas,
+    /// minúsculas ni espacios externos. La normalización va en la consulta y no depende de la
+    /// collation de SQL Server (InMemory distingue mayúsculas). Las versiones comparten nombre,
+    /// pero solo una está activa, y «Nueva versión» no pasa por aquí.
+    /// </summary>
+    private Task<bool> ExisteActivoConNombreAsync(string nombre, long? excluirId = null)
+    {
+        var normalizado = NormalizarNombre(nombre);
+        return _context.Checklists.AnyAsync(c =>
+            c.Activo &&
+            (excluirId == null || c.IdChecklist != excluirId) &&
+            c.Nombre.Trim().ToLower() == normalizado);
+    }
+
+    private static string NormalizarNombre(string nombre) => nombre.Trim().ToLower();
+
+    private static string NombreRepetido(string nombre) =>
+        $"Ya existe un checklist activo llamado «{nombre}». Para cambiarlo cree una nueva versión con «Nueva versión»";
 
     private Task<bool> TieneRespuestasAsync(long idChecklist) =>
         _context.RespuestasInspeccion.AnyAsync(r => r.Pregunta.IdChecklist == idChecklist);

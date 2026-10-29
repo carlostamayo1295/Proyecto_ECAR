@@ -7,12 +7,15 @@
 @using MudBlazor
 
 <MudLayout>
-    <MudThemeProvider />
+    <MudThemeProvider Theme="temaEcar" />
     <MudDialogProvider />
     <MudPopoverProvider />
     <MudSnackbarProvider />
     <VigilanteSesion />
-    
+
+    @* En el login no hay barra ni menú: su tarjeta ya lleva el logo (Fase 5, F-05). *@
+    @if (!EsLogin)
+    {
     <MudAppBar Elevation="3" Class="app-bar">
         @if (isAuthenticated)
         {
@@ -31,49 +34,53 @@
             </MudButton>
         }
     </MudAppBar>
+    }
 
     @* Sin sesión no hay menú: el login y la consulta del QR no deben mostrar el resto del sistema.
-       El cajón se monta siempre (así abre como antes en escritorio) y solo se cierra sin sesión. *@
+       El cajón se monta siempre (así abre como antes en escritorio) y solo se cierra sin sesión.
+       MudNavLink resalta la página en la que se está; «Administración» es un grupo que se despliega,
+       no una opción que parezca seleccionada (Fase 5, F-04). *@
     <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Class="sidebar">
-        @if (isAuthenticated)
+        @if (isAuthenticated && !EsLogin)
         {
-        <MudList T="string">
-            <MudListItem T="string" Text="Home" Icon="@Icons.Material.Filled.Home" Href="/" Class="nav-item" />
-            <MudListItem T="string" Text="Inspecciones" Icon="@Icons.Material.Filled.Assignment" Href="/inspecciones" Class="nav-item" />
+        <MudNavMenu Class="menu-lateral">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+            <MudNavLink Href="/inspecciones" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assignment">Inspecciones</MudNavLink>
             @* Consulta de equipos para todos los roles; crear y editar sigue siendo del Administrador. *@
-            <MudListItem T="string" Text="Equipos" Icon="@Icons.Material.Filled.Devices" Href="/equipos" Class="nav-item" />
-            <MudListItem T="string" Text="Evidencias" Icon="@Icons.Material.Filled.PhotoLibrary" Href="/evidencias" Class="nav-item" />
+            <MudNavLink Href="/equipos" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Devices">Equipos</MudNavLink>
+            <MudNavLink Href="/evidencias" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PhotoLibrary">Evidencias</MudNavLink>
             @* El Operador no resuelve novedades: las de sus inspecciones las ve en el resultado de cada una. *@
             @if (!soloOperador)
             {
-                <MudListItem T="string" Text="Novedades" Icon="@Icons.Material.Filled.ReportProblem" Href="/novedades" Class="nav-item" />
+                <MudNavLink Href="/novedades" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ReportProblem">Novedades</MudNavLink>
             }
-            <MudListItem T="string" Text="Checklists" Icon="@Icons.Material.Filled.PlaylistAddCheck" Href="/checklists" Class="nav-item" />
+            @* Las preguntas se editan dentro de cada checklist: la pantalla «Preguntas de Checklist» se quitó el 29/10/2026. *@
+            <MudNavLink Href="/checklists" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PlaylistAddCheck">Checklists</MudNavLink>
             @if (!soloOperador)
             {
-                <MudListItem T="string" Text="Categoría de Equipos" Icon="@Icons.Material.Filled.Category" Href="/categorias-equipo" Class="nav-item" />
+                <MudNavLink Href="/categorias-equipo" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Category">Categoría de Equipos</MudNavLink>
             }
             @* Reportes y auditoría: solo Administrador y Supervisor, igual que el API. *@
             @if (isAdmin || isSupervisor)
             {
-                <MudListItem T="string" Text="Auditoría" Icon="@Icons.Material.Filled.History" Href="/auditoria" Class="nav-item" />
-                <MudListItem T="string" Text="Reportes" Icon="@Icons.Material.Filled.Summarize" Href="/reportes" Class="nav-item" />
+                <MudNavLink Href="/auditoria" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">Auditoría</MudNavLink>
+                <MudNavLink Href="/reportes" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Summarize">Reportes</MudNavLink>
             }
 
             @if (isAdmin)
             {
-                <MudListItem T="string" Text="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" Class="nav-item admin-section" />
-                <MudListItem T="string" Text="Ubicaciones" Icon="@Icons.Material.Filled.Place" Href="/ubicaciones" Class="nav-item admin-item" />
-                <MudListItem T="string" Text="Usuarios" Icon="@Icons.Material.Filled.People" Href="/admin/users" Class="nav-item admin-item" />
-                <MudListItem T="string" Text="Roles" Icon="@Icons.Material.Filled.AssignmentInd" Href="/admin/roles" Class="nav-item admin-item" />
-                <MudListItem T="string" Text="Roles de Usuario" Icon="@Icons.Material.Filled.ManageAccounts" Href="/admin/usuarios-roles" Class="nav-item admin-item" />
-                <MudListItem T="string" Text="Preguntas de Checklist" Icon="@Icons.Material.Filled.FactCheck" Href="/checklists/preguntas" Class="nav-item admin-item" />
+                <MudNavGroup Title="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" @bind-Expanded="administracionAbierta">
+                    <MudNavLink Href="/ubicaciones" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Place">Ubicaciones</MudNavLink>
+                    <MudNavLink Href="/admin/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Usuarios</MudNavLink>
+                    @* «Roles» está oculta para todos desde el 29/10/2026: los roles son fijos (RolesSistema). *@
+                    <MudNavLink Href="/admin/usuarios-roles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ManageAccounts">Roles de Usuario</MudNavLink>
+                </MudNavGroup>
             }
-        </MudList>
+        </MudNavMenu>
         }
     </MudDrawer>
 
-    <MudMainContent Class="main-content">
+    <MudMainContent Class="@(EsLogin ? "main-content sin-barra" : "main-content")">
         <MudContainer MaxWidth="MaxWidth.Large" Class="content">
             @Body
         </MudContainer>
@@ -93,6 +100,8 @@
 
 .sidebar {
     background-color: #2A5FB8 !important;
+    /* El menú no se desplaza a lo ancho: antes medía 238 px en un cajón de 230 y salía una barra horizontal. */
+    overflow-x: hidden !important;
 }
 
 .main-content {
@@ -100,40 +109,58 @@
     min-height: 100vh;
 }
 
+/* Sin barra (login) el contenido no necesita el espacio que MudBlazor reserva arriba para ella. */
+.main-content.sin-barra {
+    padding-top: 0 !important;
+}
+
+/* El login mide la altura de la pantalla: con el relleno del contenedor sobraban 64 px y se desplazaba. */
+.main-content.sin-barra .content {
+    padding: 0;
+}
+
 .content {
     padding: 2rem;
 }
 
-.nav-item {
-    color: white !important;
-    border-radius: 8px !important;
-    margin: 4px 8px !important;
-    transition: all 0.2s ease !important;
+.menu-lateral {
+    padding-block: 8px;
 }
 
-.nav-item:hover {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    transform: translateX(4px) !important;
+/* Texto e íconos blancos sobre el azul del cajón; MudBlazor los pinta con el color primario al activarse. */
+.sidebar .menu-lateral .mud-nav-link {
+    color: #FFFFFF !important;
+    border-radius: 8px;
+    margin: 2px 8px;
+    width: auto;
+    transition: background-color 0.2s ease;
 }
 
-.admin-section {
+.sidebar .menu-lateral .mud-nav-link .mud-nav-link-icon,
+.sidebar .menu-lateral .mud-nav-link .mud-nav-link-expand-icon {
+    color: #FFFFFF !important;
+}
+
+.sidebar .menu-lateral .mud-nav-link:hover:not(.mud-nav-link-disabled) {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* La página actual: fondo más claro y una marca a la izquierda. */
+.sidebar .menu-lateral .mud-nav-link.active:not(.mud-nav-link-disabled) {
+    background-color: rgba(255, 255, 255, 0.22) !important;
+    box-shadow: inset 4px 0 0 #FFFFFF;
     font-weight: 600;
-    margin-top: 1rem;
-    background-color: rgba(0, 0, 0, 0.1) !important;
-    border-radius: 8px !important;
-    margin: 4px 8px !important;
 }
 
-.admin-item {
-    padding-left: 2rem !important;
-    border-radius: 8px !important;
-    margin: 4px 8px !important;
-    transition: all 0.2s ease !important;
+/* «Administración» es un encabezado: separado del resto y sin fondo propio. */
+.sidebar .menu-lateral .mud-nav-group {
+    margin-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 6px;
 }
 
-.admin-item:hover {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    transform: translateX(4px) !important;
+.sidebar .menu-lateral .mud-nav-group > .mud-nav-link {
+    font-weight: 600;
 }
 
 /* Teléfono (por debajo de 600 px, donde MudBlazor apila las tablas). */
@@ -162,7 +189,26 @@
 </style>
 
 @code {
+    // El primario de MudBlazor es el azul de ECAR: con el morado por defecto salían en morado los campos
+    // enfocados, los interruptores activos y los botones Outlined y Text (Fase 5, F-01).
+    private static readonly MudTheme temaEcar = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#397FDE",
+            PrimaryDarken = "#2A5FB8",
+            PrimaryLighten = "#6BA0E6",
+            AppbarBackground = "#397FDE"
+        }
+    };
+
     private bool drawerOpen = true;
+    private bool administracionAbierta = true;
+
+    // El layout se vuelve a pintar en cada navegación (cambia Body), así que basta con leer la ruta aquí.
+    private bool EsLogin =>
+        NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0]
+            .Equals("login", StringComparison.OrdinalIgnoreCase);
     private bool isAdmin = false;
     private bool isSupervisor = false;
     private bool soloOperador = false;

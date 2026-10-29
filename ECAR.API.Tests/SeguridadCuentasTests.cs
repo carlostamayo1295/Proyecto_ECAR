@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 using ECAR.API.Configuration;
 using ECAR.API.Controllers;
 using ECAR.API.Exceptions;
@@ -159,14 +160,24 @@ public class SeguridadCuentasTests
         var usuario = await CrearUsuarioAsync(context);
         var servicio = FirmaPruebas.CrearAuthService(context);
 
-        Assert.Contains("La contraseña actual es incorrecta",
-            await servicio.CambiarPasswordAsync(usuario.IdUsuario, new CambiarPasswordDto { Actual = "otra", Nueva = "NuevaClave2026" }));
-        Assert.NotEmpty(await servicio.CambiarPasswordAsync(usuario.IdUsuario,
-            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = "corta1" }));
-        Assert.NotEmpty(await servicio.CambiarPasswordAsync(usuario.IdUsuario,
-            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = "SoloLetrasLargas" }));
-        Assert.NotEmpty(await servicio.CambiarPasswordAsync(usuario.IdUsuario,
-            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = FirmaPruebas.Password }));
+        var actualIncorrecta = await servicio.CambiarPasswordAsync(usuario.IdUsuario,
+            new CambiarPasswordDto { Actual = "otra", Nueva = "NuevaClave2026" });
+        var requerida = await servicio.CambiarPasswordAsync(usuario.IdUsuario,
+            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = " " });
+        var corta = await servicio.CambiarPasswordAsync(usuario.IdUsuario,
+            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = "corta1" });
+        var sinNumero = await servicio.CambiarPasswordAsync(usuario.IdUsuario,
+            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = "SoloLetrasLargas" });
+        var reutilizaActual = await servicio.CambiarPasswordAsync(usuario.IdUsuario,
+            new CambiarPasswordDto { Actual = FirmaPruebas.Password, Nueva = FirmaPruebas.Password });
+
+        Assert.Equal(["La contraseña actual es incorrecta"], actualIncorrecta);
+        Assert.Equal(["La contraseña es requerida"], requerida);
+        Assert.Equal(["La contraseña debe tener al menos 10 caracteres"], corta);
+        Assert.Equal(["La contraseña debe combinar letras y números"], sinNumero);
+        Assert.Contains(reutilizaActual, e => e.Contains("últimas"));
+        Assert.DoesNotContain(actualIncorrecta.Concat(requerida).Concat(corta).Concat(sinNumero).Concat(reutilizaActual),
+            mensaje => mensaje.Contains("password", StringComparison.OrdinalIgnoreCase));
 
         var selloAnterior = (await context.Usuarios.AsNoTracking().SingleAsync()).SecurityStamp;
         Assert.Empty(await servicio.CambiarPasswordAsync(usuario.IdUsuario,
@@ -181,6 +192,16 @@ public class SeguridadCuentasTests
         var reutilizada = await servicio.CambiarPasswordAsync(usuario.IdUsuario,
             new CambiarPasswordDto { Actual = "NuevaClave2026", Nueva = FirmaPruebas.Password });
         Assert.Contains(reutilizada, e => e.Contains("últimas"));
+    }
+
+    [Fact]
+    public void LosDtoDeUsuario_NoImponenLaReglaAntiguaDeSeisCaracteres()
+    {
+        var crear = typeof(CreateUsuarioDto).GetProperty(nameof(CreateUsuarioDto.Password))!;
+        var actualizar = typeof(UpdateUsuarioDto).GetProperty(nameof(UpdateUsuarioDto.Password))!;
+
+        Assert.DoesNotContain(crear.GetCustomAttributes(true), atributo => atributo is MinLengthAttribute);
+        Assert.DoesNotContain(actualizar.GetCustomAttributes(true), atributo => atributo is MinLengthAttribute);
     }
 
     [Fact]
@@ -243,7 +264,24 @@ public class SeguridadCuentasTests
     }
 
     [Fact]
-    public async Task PasswordCaducada_ObligaACambiarla()
+    public async Task Por_defecto_la_password_no_caduca()
+    {
+        var (context, _) = CrearContexto();
+        await using var _ = context;
+        var usuario = await CrearUsuarioAsync(context);
+        usuario.FechaCambioPassword = DateTime.UtcNow.AddDays(-400);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var login = await FirmaPruebas.CrearAuthService(context).LoginAsync(Login(FirmaPruebas.Password));
+
+        Assert.Equal(0, new SeguridadOptions().DiasExpiracionPassword);
+        Assert.False(login!.DebeCambiarPassword);
+        Assert.Null(login.PasswordExpiraEl);
+    }
+
+    [Fact]
+    public async Task Con_dias_de_caducidad_configurados_la_password_caducada_obliga_a_cambiarla()
     {
         var (context, _) = CrearContexto();
         await using var _ = context;
@@ -252,10 +290,37 @@ public class SeguridadCuentasTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var login = await FirmaPruebas.CrearAuthService(context).LoginAsync(Login(FirmaPruebas.Password));
+        var login = await FirmaPruebas.CrearAuthService(context, new SeguridadOptions { DiasExpiracionPassword = 90 })
+            .LoginAsync(Login(FirmaPruebas.Password));
 
         Assert.True(login!.DebeCambiarPassword);
         Assert.True(login.PasswordExpiraEl < DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task CrearUsuario_con_password_no_la_deja_temporal_y_entra_sin_cambiarla()
+    {
+        var (context, _) = CrearContexto();
+        await using var _ = context;
+
+        var resultado = await ControladorUsuarios(context).CreateUsuario(new CreateUsuarioDto
+        {
+            Nombre = "Nuevo",
+            Correo = "nuevo@ecar.test",
+            Password = "ClaveInicial2026"
+        });
+
+        Assert.IsType<CreatedAtActionResult>(resultado.Result);
+        var guardado = await context.Usuarios.AsNoTracking().SingleAsync(u => u.Correo == "nuevo@ecar.test");
+        Assert.False(guardado.DebeCambiarPassword);
+
+        context.ChangeTracker.Clear();
+        var login = await FirmaPruebas.CrearAuthService(context).LoginAsync(new LoginDto
+        {
+            CorreoOrUsuarioAD = "nuevo@ecar.test",
+            Password = "ClaveInicial2026"
+        });
+        Assert.False(login!.DebeCambiarPassword);
     }
 
     [Fact]

@@ -114,6 +114,7 @@
         bool firmado;
         string mensaje;
         List<string>? errores;
+        int? codigo;
         if (IdNovedad > 0)
         {
             var result = await HttpClientService.ResolverNovedadAsync(IdNovedad, new ResolverNovedadDto
@@ -122,7 +123,8 @@
                 FirmaPngBase64 = FirmaPngBase64,
                 Password = password
             });
-            (respuesta, firmado, mensaje, errores) = (result, result.Success && result.Data != null, result.Message, result.Errors);
+            (respuesta, firmado, mensaje, errores, codigo) =
+                (result, result.Success && result.Data != null, result.Message, result.Errors, result.CodigoHttp);
         }
         else
         {
@@ -132,7 +134,8 @@
                 Observaciones = Observaciones,
                 Password = password
             });
-            (respuesta, firmado, mensaje, errores) = (result, result.Success && result.Data != null, result.Message, result.Errors);
+            (respuesta, firmado, mensaje, errores, codigo) =
+                (result, result.Success && result.Data != null, result.Message, result.Errors, result.CodigoHttp);
         }
 
         enviando = false;
@@ -146,11 +149,14 @@
         }
 
         // 400 sin Errors (contraseña incorrecta) o 423 (cuenta bloqueada): el diálogo sigue
-        // abierto y la firma dibujada en el canvas queda intacta para reintentar.
-        if (mensaje.Contains("bloquead", StringComparison.OrdinalIgnoreCase))
+        // abierto y la firma dibujada en el canvas queda intacta para reintentar. El bloqueo se
+        // reconoce por el código (F-36, B-07), no por el texto del mensaje.
+        if (codigo == 423)
         {
             bloqueado = true;
-            mensajeError = mensaje;
+            mensajeError = string.IsNullOrWhiteSpace(mensaje)
+                ? "La cuenta está bloqueada temporalmente por intentos fallidos."
+                : mensaje;
         }
         else
         {
