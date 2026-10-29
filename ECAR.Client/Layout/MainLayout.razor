@@ -54,8 +54,8 @@
             {
                 <MudNavLink Href="/novedades" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ReportProblem">Novedades</MudNavLink>
             }
-            @* Exacto: «Preguntas de Checklist» está en /checklists/preguntas y con Prefix se resaltarían las dos. *@
-            <MudNavLink Href="/checklists" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PlaylistAddCheck">Checklists</MudNavLink>
+            @* Las preguntas se editan dentro de cada checklist: la pantalla «Preguntas de Checklist» se quitó el 29/10/2026. *@
+            <MudNavLink Href="/checklists" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PlaylistAddCheck">Checklists</MudNavLink>
             @if (!soloOperador)
             {
                 <MudNavLink Href="/categorias-equipo" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Category">Categoría de Equipos</MudNavLink>
@@ -72,9 +72,8 @@
                 <MudNavGroup Title="Administración" Icon="@Icons.Material.Filled.AdminPanelSettings" @bind-Expanded="administracionAbierta">
                     <MudNavLink Href="/ubicaciones" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Place">Ubicaciones</MudNavLink>
                     <MudNavLink Href="/admin/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Usuarios</MudNavLink>
-                    <MudNavLink Href="/admin/roles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AssignmentInd">Roles</MudNavLink>
+                    @* «Roles» está oculta para todos desde el 29/10/2026: los roles son fijos (RolesSistema). *@
                     <MudNavLink Href="/admin/usuarios-roles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ManageAccounts">Roles de Usuario</MudNavLink>
-                    <MudNavLink Href="/checklists/preguntas" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.FactCheck">Preguntas de Checklist</MudNavLink>
                 </MudNavGroup>
             }
         </MudNavMenu>

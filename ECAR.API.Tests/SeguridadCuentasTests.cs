@@ -264,7 +264,24 @@ public class SeguridadCuentasTests
     }
 
     [Fact]
-    public async Task PasswordCaducada_ObligaACambiarla()
+    public async Task Por_defecto_la_password_no_caduca()
+    {
+        var (context, _) = CrearContexto();
+        await using var _ = context;
+        var usuario = await CrearUsuarioAsync(context);
+        usuario.FechaCambioPassword = DateTime.UtcNow.AddDays(-400);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var login = await FirmaPruebas.CrearAuthService(context).LoginAsync(Login(FirmaPruebas.Password));
+
+        Assert.Equal(0, new SeguridadOptions().DiasExpiracionPassword);
+        Assert.False(login!.DebeCambiarPassword);
+        Assert.Null(login.PasswordExpiraEl);
+    }
+
+    [Fact]
+    public async Task Con_dias_de_caducidad_configurados_la_password_caducada_obliga_a_cambiarla()
     {
         var (context, _) = CrearContexto();
         await using var _ = context;
@@ -273,10 +290,37 @@ public class SeguridadCuentasTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var login = await FirmaPruebas.CrearAuthService(context).LoginAsync(Login(FirmaPruebas.Password));
+        var login = await FirmaPruebas.CrearAuthService(context, new SeguridadOptions { DiasExpiracionPassword = 90 })
+            .LoginAsync(Login(FirmaPruebas.Password));
 
         Assert.True(login!.DebeCambiarPassword);
         Assert.True(login.PasswordExpiraEl < DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task CrearUsuario_con_password_no_la_deja_temporal_y_entra_sin_cambiarla()
+    {
+        var (context, _) = CrearContexto();
+        await using var _ = context;
+
+        var resultado = await ControladorUsuarios(context).CreateUsuario(new CreateUsuarioDto
+        {
+            Nombre = "Nuevo",
+            Correo = "nuevo@ecar.test",
+            Password = "ClaveInicial2026"
+        });
+
+        Assert.IsType<CreatedAtActionResult>(resultado.Result);
+        var guardado = await context.Usuarios.AsNoTracking().SingleAsync(u => u.Correo == "nuevo@ecar.test");
+        Assert.False(guardado.DebeCambiarPassword);
+
+        context.ChangeTracker.Clear();
+        var login = await FirmaPruebas.CrearAuthService(context).LoginAsync(new LoginDto
+        {
+            CorreoOrUsuarioAD = "nuevo@ecar.test",
+            Password = "ClaveInicial2026"
+        });
+        Assert.False(login!.DebeCambiarPassword);
     }
 
     [Fact]

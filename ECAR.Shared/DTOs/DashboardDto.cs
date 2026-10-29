@@ -58,7 +58,8 @@ public class DashboardFiltroAplicadoDto
 {
     public DateTime Desde { get; set; }
     public DateTime Hasta { get; set; }
-    public string? Planta { get; set; }
+    /// <summary>Plantas aplicadas; vacía, todas (desde el 29/10/2026 se pueden elegir varias).</summary>
+    public List<string> Plantas { get; set; } = new();
 }
 
 /// <summary>Tendencia del tablero y filtros efectivos usados para calcularla.</summary>
@@ -67,7 +68,7 @@ public class DashboardTendenciaDto
     public int Semanas { get; set; }
     public DateTime Desde { get; set; }
     public DateTime Hasta { get; set; }
-    public string? Planta { get; set; }
+    public List<string> Plantas { get; set; } = new();
     public List<DashboardSemanaDto> Datos { get; set; } = new();
 }
 

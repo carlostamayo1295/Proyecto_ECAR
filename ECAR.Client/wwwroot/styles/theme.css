@@ -204,3 +204,68 @@ td.col-acciones .mud-button-root {
         max-width: calc(100% - 16px) !important;
     }
 }
+
+/* Miniaturas de evidencias que se abren en grande (29/10/2026, VisorImagenDialog). Botón para que
+   también se abran con el teclado. */
+.miniatura-ampliable {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: zoom-in;
+}
+
+.miniatura-ampliable:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+/* El visor: la imagen ajustada al recuadro; con zoom se mueve arrastrando (visor-imagen.js). */
+.visor-imagen {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 70vh;
+    overflow: hidden;
+    background: #F4F5F7;
+    border-radius: 4px;
+    touch-action: none;
+    user-select: none;
+    cursor: zoom-in;
+}
+
+.visor-imagen.acercada {
+    cursor: grab;
+}
+
+.visor-imagen.acercada.arrastrando {
+    cursor: grabbing;
+}
+
+.visor-imagen img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transform-origin: center center;
+    pointer-events: none;
+}
+
+.visor-titulo {
+    overflow-wrap: anywhere;
+}
+
+/* Textos de una sola palabra larga, como los nombres de las fotos del teléfono
+   (IMG_20261029_143000_….png): sin esto ensanchaban la tarjeta y la página a 375 px. */
+.texto-partible {
+    overflow-wrap: anywhere;
+}
+
+/* En el teléfono el visor deja sitio al título y a los botones dentro de la pantalla. */
+@media (max-width: 600px) {
+    .visor-imagen {
+        height: 50vh;
+    }
+}

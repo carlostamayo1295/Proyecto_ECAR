@@ -19,11 +19,11 @@ public static class FormatoEstados
         _ => Color.Default
     };
 
-    /// <summary>Conforme verde, pendiente rojo, con novedad (ya resuelta) naranja.</summary>
+    /// <summary>Satisfactorio y conforme verde, pendiente rojo, con novedad (ya resuelta) naranja.</summary>
     public static Color ColorResultado(string? resultado) => (resultado ?? string.Empty).ToLowerInvariant() switch
     {
         // "Satisfactoria" y "Con novedad" son de las inspecciones de la Fase 1-2.
-        "conforme" or "satisfactoria" => Color.Success,
+        "satisfactorio" or "conforme" or "satisfactoria" => Color.Success,
         "pendiente" => Color.Error,
         "connovedad" or "con novedad" => Color.Warning,
         _ => Color.Default

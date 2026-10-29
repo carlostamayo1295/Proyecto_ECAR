@@ -9,10 +9,10 @@ using PdfSharp.Fonts;
 namespace ECAR.API.Services.Documentos;
 
 /// <summary>
-/// Una columna del documento. El ancho solo se usa en el PDF y es una proporción: las columnas se
-/// escalan para ocupar el ancho útil de la hoja (horizontal, 25,7 cm).
+/// Una columna del documento. El ancho en el PDF sale del contenido (<see cref="AjusteTexto"/>, 29/10/2026):
+/// antes cada reporte fijaba proporciones y el texto largo se salía de la celda.
 /// </summary>
-public sealed record Columna(string Titulo, double AnchoCm);
+public sealed record Columna(string Titulo);
 
 /// <summary>
 /// Pie de cada documento (PLAN_FASE4_TAREAS §3.9): reporte, filtros, quién lo generó, fecha y hora
@@ -37,6 +37,9 @@ public static class ExportadorTabla
 {
     /// <summary>Un archivo lleva todo el rango; con más filas se pide acotar las fechas (§3.9).</summary>
     public const int MaximoFilas = 10_000;
+
+    /// <summary>Tamaño de letra de las tablas de los reportes en PDF.</summary>
+    internal const double TamanoTablaPt = 7.5;
 
     public const string TipoPdf = "application/pdf";
     public const string TipoExcel = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -147,10 +150,17 @@ public static class ExportadorTabla
         }
 
         var tabla = seccion.AddTable();
+        AjusteTexto.Preparar(tabla);
         tabla.Borders.Width = 0.4;
         tabla.Borders.Color = Colors.Gray;
-        tabla.Format.Font.Size = 7.5;
-        foreach (var ancho in AnchosAjustados(columnas, AnchoUtilCm(seccion.PageSetup)))
+        tabla.Format.Font.Size = TamanoTablaPt;
+
+        // El ancho de cada columna sale de lo que lleva (AjusteTexto): las cortas en una línea y el resto
+        // para la que tiene más información. Las palabras que aun así no caben se parten.
+        var textos = filas.Select(valores => (IReadOnlyList<string>)valores.Select(Texto).ToArray()).ToList();
+        using var ajuste = new AjusteTexto(TamanoTablaPt);
+        var anchos = ajuste.Anchos(columnas.Select(c => c.Titulo).ToArray(), textos, AnchoUtilCm(seccion.PageSetup));
+        foreach (var ancho in anchos)
         {
             tabla.AddColumn(Unit.FromCentimeter(ancho));
         }
@@ -161,21 +171,19 @@ public static class ExportadorTabla
         encabezado.Format.Font.Bold = true;
         for (var c = 0; c < columnas.Count; c++)
         {
-            encabezado.Cells[c].AddParagraph(columnas[c].Titulo);
+            ajuste.Escribir(encabezado.Cells[c].AddParagraph(), columnas[c].Titulo, anchos[c], negrita: true);
         }
 
-        var hayFilas = false;
-        foreach (var valores in filas)
+        foreach (var valores in textos)
         {
-            hayFilas = true;
             var fila = tabla.AddRow();
-            for (var c = 0; c < valores.Count; c++)
+            for (var c = 0; c < valores.Count && c < columnas.Count; c++)
             {
-                fila.Cells[c].AddParagraph(Texto(valores[c]));
+                ajuste.Escribir(fila.Cells[c].AddParagraph(), valores[c], anchos[c]);
             }
         }
 
-        if (!hayFilas)
+        if (textos.Count == 0)
         {
             var vacia = tabla.AddRow();
             vacia.Cells[0].MergeRight = columnas.Count - 1;
@@ -230,18 +238,6 @@ public static class ExportadorTabla
     internal static double AnchoUtilCm(PageSetup pagina) =>
         pagina.PageWidth.Centimeter - pagina.LeftMargin.Centimeter - pagina.RightMargin.Centimeter;
 
-    /// <summary>
-    /// Los anchos de cada reporte son proporciones: se escalan para que la tabla ocupe justo el ancho
-    /// útil. Así nunca se sale de la hoja, aunque cambien las columnas o los márgenes.
-    /// </summary>
-    internal static IReadOnlyList<double> AnchosAjustados(IReadOnlyList<Columna> columnas, double anchoUtilCm)
-    {
-        var total = columnas.Sum(c => c.AnchoCm);
-        return total <= 0
-            ? columnas.Select(_ => anchoUtilCm / Math.Max(columnas.Count, 1)).ToList()
-            : columnas.Select(c => c.AnchoCm * anchoUtilCm / total).ToList();
-    }
-
     internal static byte[] Renderizar(Document documento)
     {
         var renderer = new PdfDocumentRenderer { Document = documento };
@@ -266,7 +262,7 @@ public static class ExportadorTabla
     private static bool _fuentesConfiguradas;
 
     /// <summary>PDFsharp 6 necesita saber de dónde sacar las fuentes; el servidor de ECAR es Windows.</summary>
-    private static void ConfigurarFuentes()
+    internal static void ConfigurarFuentes()
     {
         lock (CandadoFuentes)
         {

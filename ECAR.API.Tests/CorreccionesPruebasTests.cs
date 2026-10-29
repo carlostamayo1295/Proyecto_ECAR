@@ -230,7 +230,7 @@ public class CorreccionesPruebasTests
         Assert.Equal(0, t.NovedadesResueltas);
         var hoyColombia = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
         Assert.Equal(new DateTime(hoyColombia.Year, hoyColombia.Month, 1), t.Filtros.Desde);
-        Assert.Null(t.Filtros.Planta);
+        Assert.Empty(t.Filtros.Plantas);
     }
 
     [Fact]
@@ -269,13 +269,13 @@ public class CorreccionesPruebasTests
             });
         await e.Db.SaveChangesAsync();
 
-        var resultado = await new DashboardController(e.Db).GetDashboard(desde, hasta, "  Planta 1 ");
+        var resultado = await new DashboardController(e.Db).GetDashboard(desde, hasta, ["  Planta 1 "]);
 
         var dto = Assert.IsType<ApiResponse<DashboardDto>>(
             Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
         Assert.Equal(desde, dto.Filtros.Desde);
         Assert.Equal(hasta, dto.Filtros.Hasta);
-        Assert.Equal("Planta 1", dto.Filtros.Planta);
+        Assert.Equal(["Planta 1"], dto.Filtros.Plantas);
         Assert.Equal(1, dto.TotalEquipos);
         Assert.Equal(1, dto.InspeccionesRealizadasMes);
     }
@@ -337,7 +337,7 @@ public class CorreccionesPruebasTests
         });
         await e.Db.SaveChangesAsync();
 
-        var resultado = await new DashboardController(e.Db).GetTendencia(8, "Planta 1");
+        var resultado = await new DashboardController(e.Db).GetTendencia(8, ["Planta 1"]);
 
         var dto = Assert.IsType<ApiResponse<DashboardTendenciaDto>>(
             Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;

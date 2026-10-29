@@ -25,7 +25,7 @@ public class DashboardSqlServerTests(BaseCompartida compartida) : IClassFixture<
         DateTime? desde = null, DateTime? hasta = null, string? planta = null)
     {
         await using var db = baseDePruebas.CrearContexto();
-        var resultado = await new DashboardController(db).GetDashboard(desde, hasta, planta);
+        var resultado = await new DashboardController(db).GetDashboard(desde, hasta, planta is null ? null : [planta]);
         return Assert.IsType<ApiResponse<DashboardDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
     }
 
@@ -63,7 +63,7 @@ public class DashboardSqlServerTests(BaseCompartida compartida) : IClassFixture<
 
         Assert.Equal(Desde, tablero.Filtros.Desde);
         Assert.Equal(Hasta, tablero.Filtros.Hasta);
-        Assert.Equal(datos.Planta, tablero.Filtros.Planta);
+        Assert.Equal([datos.Planta], tablero.Filtros.Plantas);
         Assert.Equal("marzo de 2025", tablero.Periodo);
 
         // Equipos: solo los activos de la planta.
@@ -101,7 +101,7 @@ public class DashboardSqlServerTests(BaseCompartida compartida) : IClassFixture<
         // no distingue mayúsculas. El proveedor en memoria sí las distingue, por eso se prueba aquí.
         var esperado = collation.Contains("_CI_", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         Assert.Equal(esperado, tablero.TotalEquipos);
-        Assert.Equal(datos.Planta.ToUpperInvariant(), tablero.Filtros.Planta);
+        Assert.Equal([datos.Planta.ToUpperInvariant()], tablero.Filtros.Plantas);
     }
 
     [Theory]
@@ -135,7 +135,7 @@ public class DashboardSqlServerTests(BaseCompartida compartida) : IClassFixture<
         var hoy = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
         Assert.Equal(new DateTime(hoy.Year, hoy.Month, 1), tablero.Filtros.Desde);
         Assert.Equal(hoy, tablero.Filtros.Hasta);
-        Assert.Null(tablero.Filtros.Planta);
+        Assert.Empty(tablero.Filtros.Plantas);
         Assert.Equal(2, tablero.TotalEquipos);
         Assert.Equal(2, tablero.InspeccionesRealizadasMes);
         Assert.Equal(2, tablero.InspeccionesRealizadas);

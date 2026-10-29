@@ -37,9 +37,9 @@ public class DashboardController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<DashboardDto>>> GetDashboard(
         [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null,
-        [FromQuery] string? planta = null)
+        [FromQuery(Name = "planta")] List<string>? plantas = null)
     {
-        var (dto, error) = await CalcularAsync(desde, hasta, planta);
+        var (dto, error) = await CalcularAsync(desde, hasta, plantas);
         if (error != null)
             return BadRequest(ApiResponse<DashboardDto>.ErrorResponse(error));
 
@@ -53,9 +53,9 @@ public class DashboardController : ControllerBase
     [HttpGet("pdf")]
     public async Task<IActionResult> GetDashboardPdf([FromServices] ICurrentUser currentUser,
         [FromQuery] DateTime? desde = null, [FromQuery] DateTime? hasta = null,
-        [FromQuery] string? planta = null)
+        [FromQuery(Name = "planta")] List<string>? plantas = null)
     {
-        var (tablero, error) = await CalcularAsync(desde, hasta, planta);
+        var (tablero, error) = await CalcularAsync(desde, hasta, plantas);
         if (error != null)
             return BadRequest(ApiResponse<DashboardDto>.ErrorResponse(error));
 
@@ -70,7 +70,7 @@ public class DashboardController : ControllerBase
     }
 
     private async Task<(DashboardDto? Tablero, string? Error)> CalcularAsync(DateTime? desde, DateTime? hasta,
-        string? planta)
+        List<string>? plantasPedidas)
     {
         var ahora = DateTime.UtcNow;
         var hoy = HoraColombia.DesdeUtc(ahora).Date;
@@ -81,14 +81,15 @@ public class DashboardController : ControllerBase
         if (error != null)
             return (null, error);
 
-        planta = string.IsNullOrWhiteSpace(planta) ? null : planta.Trim();
+        // Varias plantas a la vez (29/10/2026): cuenta lo de cualquiera de ellas. Sin plantas, todas.
+        var plantas = ReporteService.Valores(plantasPedidas);
         var (inicioUtc, finUtc) = HoraColombia.RangoUtc(desdeAplicado, hastaAplicado);
         var inicio = inicioUtc!.Value;
         var fin = finUtc!.Value;
 
         var equiposQuery = _context.Equipos.AsNoTracking().Where(e => e.Activo);
-        if (planta != null)
-            equiposQuery = equiposQuery.Where(e => e.Ubicacion != null && e.Ubicacion.Planta == planta);
+        if (plantas.Count > 0)
+            equiposQuery = equiposQuery.Where(e => e.Ubicacion != null && plantas.Contains(e.Ubicacion.Planta));
 
         var equipos = await equiposQuery
             .Select(e => new
@@ -116,9 +117,9 @@ public class DashboardController : ControllerBase
 
         var inspeccionesQuery = _context.Inspecciones.AsNoTracking()
             .Where(i => i.FechaInspeccion >= inicio && i.FechaInspeccion < fin);
-        if (planta != null)
+        if (plantas.Count > 0)
             inspeccionesQuery = inspeccionesQuery.Where(i =>
-                i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == planta);
+                i.Equipo.Ubicacion != null && plantas.Contains(i.Equipo.Ubicacion.Planta));
 
         var estadosInspeccion = await inspeccionesQuery
             .GroupBy(i => i.Estado)
@@ -128,15 +129,15 @@ public class DashboardController : ControllerBase
         var firmadasTotalesQuery = _context.Inspecciones.AsNoTracking()
             .Where(i => i.Estado == InspeccionEstados.Cerrada ||
                         i.Estado == InspeccionEstados.NovedadesPendientes);
-        if (planta != null)
+        if (plantas.Count > 0)
             firmadasTotalesQuery = firmadasTotalesQuery.Where(i =>
-                i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == planta);
+                i.Equipo.Ubicacion != null && plantas.Contains(i.Equipo.Ubicacion.Planta));
         var firmadasTotales = await firmadasTotalesQuery.CountAsync();
 
         var novedadesQuery = _context.Novedades.AsNoTracking();
-        if (planta != null)
+        if (plantas.Count > 0)
             novedadesQuery = novedadesQuery.Where(n =>
-                n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Planta == planta);
+                n.Inspeccion.Equipo.Ubicacion != null && plantas.Contains(n.Inspeccion.Equipo.Ubicacion.Planta));
 
         var novedadesPendientes = await novedadesQuery.CountAsync(n =>
             n.Estado == NovedadEstados.Pendiente &&
@@ -153,7 +154,7 @@ public class DashboardController : ControllerBase
             {
                 Desde = desdeAplicado,
                 Hasta = hastaAplicado,
-                Planta = planta
+                Plantas = plantas
             },
             TotalEquipos = equipos.Count,
             EquiposPorCriticidad = criticidades,
@@ -179,7 +180,7 @@ public class DashboardController : ControllerBase
     /// </summary>
     [HttpGet("tendencia")]
     public async Task<ActionResult<ApiResponse<DashboardTendenciaDto>>> GetTendencia(
-        [FromQuery] int semanas = 8, [FromQuery] string? planta = null)
+        [FromQuery] int semanas = 8, [FromQuery(Name = "planta")] List<string>? plantasPedidas = null)
     {
         if (semanas is < 1 or > 52)
         {
@@ -187,7 +188,7 @@ public class DashboardController : ControllerBase
                 "La cantidad de semanas debe estar entre 1 y 52"));
         }
 
-        planta = string.IsNullOrWhiteSpace(planta) ? null : planta.Trim();
+        var plantas = ReporteService.Valores(plantasPedidas);
         var hoy = HoraColombia.DesdeUtc(DateTime.UtcNow).Date;
         var lunesActual = hoy.AddDays(-(((int)hoy.DayOfWeek + 6) % 7));
         var desdeLocal = lunesActual.AddDays(-7 * (semanas - 1));
@@ -204,12 +205,12 @@ public class DashboardController : ControllerBase
             .Where(n => n.FechaRegistro >= inicio && n.FechaRegistro < fin ||
                         n.FechaResolucion.HasValue && n.FechaResolucion.Value >= inicio && n.FechaResolucion.Value < fin);
 
-        if (planta != null)
+        if (plantas.Count > 0)
         {
             inspeccionesQuery = inspeccionesQuery.Where(i =>
-                i.Equipo.Ubicacion != null && i.Equipo.Ubicacion.Planta == planta);
+                i.Equipo.Ubicacion != null && plantas.Contains(i.Equipo.Ubicacion.Planta));
             novedadesQuery = novedadesQuery.Where(n =>
-                n.Inspeccion.Equipo.Ubicacion != null && n.Inspeccion.Equipo.Ubicacion.Planta == planta);
+                n.Inspeccion.Equipo.Ubicacion != null && plantas.Contains(n.Inspeccion.Equipo.Ubicacion.Planta));
         }
 
         var cierres = await inspeccionesQuery.Select(i => i.FechaCierre!.Value).ToListAsync();
@@ -239,10 +240,18 @@ public class DashboardController : ControllerBase
             Semanas = semanas,
             Desde = desdeLocal,
             Hasta = hastaLocal,
-            Planta = planta,
+            Plantas = plantas,
             Datos = datos
         }));
     }
+
+    /// <summary>"todas las plantas", "planta Norte" o "plantas Norte, Sur y Este".</summary>
+    internal static string TextoPlantas(IReadOnlyList<string> plantas) => plantas.Count switch
+    {
+        0 => "todas las plantas",
+        1 => $"planta {plantas[0]}",
+        _ => $"plantas {string.Join(", ", plantas.Take(plantas.Count - 1))} y {plantas[^1]}"
+    };
 
     private static string? ValidarRango(DateTime desde, DateTime hasta)
     {
@@ -253,12 +262,15 @@ public class DashboardController : ControllerBase
         return null;
     }
 
-    /// <summary>"desde 01/10/2026, hasta 24/10/2026, planta Planta 1", para el pie del PDF y la auditoría.</summary>
+    /// <summary>
+    /// "desde 01/10/2026, hasta 24/10/2026, planta Planta 1" (o "plantas Norte y Sur", o "todas las plantas"),
+    /// para el pie del PDF y la auditoría.
+    /// </summary>
     internal static string TextoFiltros(DashboardFiltroAplicadoDto filtros)
     {
         var texto = $"desde {filtros.Desde.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}, " +
                     $"hasta {filtros.Hasta.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
-        return filtros.Planta == null ? texto + ", todas las plantas" : texto + $", planta {filtros.Planta}";
+        return texto + ", " + TextoPlantas(filtros.Plantas);
     }
 
     /// <summary>

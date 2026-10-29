@@ -60,11 +60,11 @@ public class DashboardTendenciaSqlServerTests(BaseCompartida compartida) : IClas
         await otra.NovedadAsync(deOtra, NovedadEstados.Resuelta, lunesSemana2, lunesSemana2);
 
         await using var db = Base.CrearContexto();
-        var resultado = await new DashboardController(db).GetTendencia(4, " " + datos.Planta + " ");
+        var resultado = await new DashboardController(db).GetTendencia(4, [" " + datos.Planta + " "]);
 
         var tendencia = Assert.IsType<ApiResponse<DashboardTendenciaDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
         Assert.Equal(4, tendencia.Semanas);
-        Assert.Equal(datos.Planta, tendencia.Planta);
+        Assert.Equal([datos.Planta], tendencia.Plantas);
         Assert.Equal(semana0, tendencia.Desde);
         Assert.Equal(lunes.AddDays(6), tendencia.Hasta);
         Assert.Equal(new[] { semana0, semana1, semana2, lunes }, tendencia.Datos.Select(s => s.Desde));

@@ -1,4 +1,6 @@
-@page "/admin/roles"
+@* Oculta para todos desde el 29/10/2026: sin @page "/admin/roles" la dirección ya no abre nada y el menú
+   no la muestra. Los roles son fijos (RolesSistema); se asignan en «Roles de Usuario». Para volver a
+   mostrarla basta con restaurar la directiva @page y su opción en MainLayout. *@
 @inject AuthorizationService AuthorizationService
 @inject HttpClientService HttpClientService
 @inject ISnackbar Snackbar

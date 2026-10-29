@@ -238,7 +238,7 @@ public class NovedadesTests
     }
 
     [Fact]
-    public async Task Firmar_sin_No_cierra_la_inspeccion_conforme_y_no_envia_correos()
+    public async Task Firmar_sin_No_cierra_la_inspeccion_satisfactoria_y_no_envia_correos()
     {
         var e = await SeedAsync();
         var inspeccion = await EnCursoAsync(e, Si(e.Limpieza), Si(e.Nivel),
@@ -249,7 +249,7 @@ public class NovedadesTests
         Assert.IsType<OkObjectResult>(accion.Result);
         var firmada = await InspeccionAsync(e, inspeccion.IdInspeccion);
         Assert.Equal(InspeccionEstados.Cerrada, firmada.Estado);
-        Assert.Equal(InspeccionResultados.Conforme, firmada.Resultado);
+        Assert.Equal(InspeccionResultados.Satisfactorio, firmada.Resultado);
         // Un "No" escrito en una pregunta de texto no es novedad.
         Assert.False(await e.Db.Novedades.AnyAsync());
         Assert.Empty(e.Notificador.Encolados);

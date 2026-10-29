@@ -27,10 +27,10 @@
                 <MudTabPanel Text="Historial por Equipo">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="4">
-                            <MudAutocomplete T="EquipoDto" Label="Equipo" @bind-Value="equipoSeleccionado"
-                                SearchFunc="BuscarEquiposAsync" ToStringFunc="@(e => e == null ? string.Empty : $"{e.CodigoInterno} - {e.NombreEquipo}")"
-                                Variant="Variant.Outlined" Clearable="true" ResetValueOnEmptyText="true"
-                                HelperText="Opcional: deje vacío para todos los equipos" />
+                            <BuscadorMultiple TItem="EquipoDto" Label="Equipos" SearchFunc="BuscarEquiposAsync"
+                                ToStringFunc="@(e => e == null ? string.Empty : $"{e.CodigoInterno} - {e.NombreEquipo}")"
+                                Clave="@(e => e.IdEquipo)" Seleccionados="equiposSeleccionados"
+                                HelperText="Opcional: elija uno o varios; vacío, todos los equipos" />
                         </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
                             <MudDatePicker Label="Desde" @bind-Date="estadoEquipo.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
@@ -87,7 +87,9 @@
                 <MudTabPanel Text="Historial por Área">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Planta" @bind-Value="estadoArea.Filtro.Planta" Variant="Variant.Outlined" Clearable="true">
+<MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Plantas"
+                                SelectedValuesChanged="@(v => estadoArea.Filtro.Plantas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Una o varias; vacío, todas">
                                 @foreach (var planta in Plantas)
                                 {
                                     <MudSelectItem T="string" Value="@planta">@planta</MudSelectItem>
@@ -95,8 +97,10 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Área" @bind-Value="estadoArea.Filtro.Area" Variant="Variant.Outlined" Clearable="true">
-                                @foreach (var area in Areas)
+<MudSelect T="string" Label="Áreas" MultiSelection="true" SelectedValues="@estadoArea.Filtro.Areas"
+                                SelectedValuesChanged="@(v => estadoArea.Filtro.Areas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Una o varias; vacío, todas">
+                                @foreach (var area in AreasDe(estadoArea.Filtro.Plantas))
                                 {
                                     <MudSelectItem T="string" Value="@area">@area</MudSelectItem>
                                 }
@@ -153,10 +157,10 @@
                 <MudTabPanel Text="Historial por Usuario">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="4">
-                            <MudAutocomplete T="UsuarioBusquedaDto" Label="Usuario" @bind-Value="usuarioSeleccionado"
-                                SearchFunc="BuscarUsuariosAsync" ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
-                                Variant="Variant.Outlined" Clearable="true" ResetValueOnEmptyText="true"
-                                HelperText="Opcional: deje vacío para todos los usuarios" />
+                            <BuscadorMultiple TItem="UsuarioBusquedaDto" Label="Usuarios" SearchFunc="BuscarUsuariosAsync"
+                                ToStringFunc="@(u => u == null ? string.Empty : $"{u.Nombre} ({u.Correo})")"
+                                Clave="@(u => u.IdUsuario)" Seleccionados="usuariosSeleccionados"
+                                HelperText="Opcional: elija uno o varios; vacío, todos los usuarios" />
                         </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
                             <MudDatePicker Label="Desde" @bind-Date="estadoUsuario.Filtro.Desde" Variant="Variant.Outlined" Editable="true" />
@@ -207,7 +211,9 @@
                 <MudTabPanel Text="Equipos con Novedades">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Estado" @bind-Value="estadoNovedades.Filtro.Estado" Variant="Variant.Outlined" Clearable="true">
+<MudSelect T="string" Label="Estados" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Estados"
+                                SelectedValuesChanged="@(v => estadoNovedades.Filtro.Estados = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Uno o varios; vacío, todos">
                                 @foreach (var estadoNovedad in NovedadEstados.Todos)
                                 {
                                     <MudSelectItem T="string" Value="@estadoNovedad">@estadoNovedad</MudSelectItem>
@@ -215,10 +221,13 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Criticidad" @bind-Value="estadoNovedades.Filtro.Criticidad" Variant="Variant.Outlined" Clearable="true">
-                                <MudSelectItem T="string" Value="@("Alta")">Alta</MudSelectItem>
-                                <MudSelectItem T="string" Value="@("Media")">Media</MudSelectItem>
-                                <MudSelectItem T="string" Value="@("Baja")">Baja</MudSelectItem>
+<MudSelect T="string" Label="Criticidades" MultiSelection="true" SelectedValues="@estadoNovedades.Filtro.Criticidades"
+                                SelectedValuesChanged="@(v => estadoNovedades.Filtro.Criticidades = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Una o varias; vacío, todas">
+                                @foreach (var criticidad in Criticidades.Todas)
+                                {
+                                    <MudSelectItem T="string" Value="@criticidad">@criticidad</MudSelectItem>
+                                }
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="6" sm="3" lg="2">
@@ -276,7 +285,9 @@
                 <MudTabPanel Text="Inspecciones por Fechas">
                     <MudGrid Class="mb-2" Spacing="2">
                         <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Planta" @bind-Value="filtroFechas.Planta" Variant="Variant.Outlined" Clearable="true">
+<MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@filtroFechas.Plantas"
+                                SelectedValuesChanged="@(v => filtroFechas.Plantas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Una o varias; vacío, todas">
                                 @foreach (var planta in Plantas)
                                 {
                                     <MudSelectItem T="string" Value="@planta">@planta</MudSelectItem>
@@ -284,8 +295,10 @@
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6" lg="3">
-                            <MudSelect T="string" Label="Área" @bind-Value="filtroFechas.Area" Variant="Variant.Outlined" Clearable="true">
-                                @foreach (var area in Areas)
+<MudSelect T="string" Label="Áreas" MultiSelection="true" SelectedValues="@filtroFechas.Areas"
+                                SelectedValuesChanged="@(v => filtroFechas.Areas = Lista(v))" Variant="Variant.Outlined" Clearable="true"
+                                HelperText="Una o varias; vacío, todas">
+                                @foreach (var area in AreasDe(filtroFechas.Plantas))
                                 {
                                     <MudSelectItem T="string" Value="@area">@area</MudSelectItem>
                                 }
@@ -405,14 +418,22 @@
     private bool cargandoFechas;
     private bool descargandoFechas;
 
-    private EquipoDto? equipoSeleccionado;
-    private UsuarioBusquedaDto? usuarioSeleccionado;
+    // Varios a la vez (29/10/2026); vacíos, no filtran.
+    private readonly List<EquipoDto> equiposSeleccionados = new();
+    private readonly List<UsuarioBusquedaDto> usuariosSeleccionados = new();
     private bool errorEquiposAvisado;
     private bool errorUsuariosAvisado;
 
     private List<UbicacionDto> ubicacionesFiltro = new();
     private IEnumerable<string> Plantas => ubicacionesFiltro.Select(u => u.Planta).Distinct().OrderBy(p => p);
-    private IEnumerable<string> Areas => ubicacionesFiltro.Select(u => u.Area).Distinct().OrderBy(a => a);
+
+    /// <summary>Las áreas de las plantas elegidas; sin plantas elegidas, todas.</summary>
+    private IEnumerable<string> AreasDe(IReadOnlyCollection<string> plantas) => ubicacionesFiltro
+        .Where(u => plantas.Count == 0 || plantas.Contains(u.Planta))
+        .Select(u => u.Area).Distinct().OrderBy(a => a);
+
+    private static List<string> Lista(IEnumerable<string?>? valores) =>
+        (valores ?? []).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!).ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -420,12 +441,12 @@
         ubicacionesFiltro = respuesta?.Success == true ? respuesta.Data?.Data ?? new() : new();
     }
 
-    // El equipo y el usuario elegidos pasan al filtro justo antes de cada consulta o descarga. Antes se
+    // Los equipos y usuarios elegidos pasan al filtro justo antes de cada consulta o descarga. Antes se
     // copiaban en OnParametersSet, que no corre al elegir en el buscador: el filtro salía sin ellos.
     private void AplicarSelecciones()
     {
-        estadoEquipo.Filtro.IdEquipo = equipoSeleccionado?.IdEquipo;
-        estadoUsuario.Filtro.IdUsuario = usuarioSeleccionado?.IdUsuario;
+        estadoEquipo.Filtro.IdEquipos = equiposSeleccionados.Select(e => e.IdEquipo).ToList();
+        estadoUsuario.Filtro.IdUsuarios = usuariosSeleccionados.Select(u => u.IdUsuario).ToList();
     }
 
     private async Task<IEnumerable<EquipoDto>> BuscarEquiposAsync(string valor, CancellationToken token)

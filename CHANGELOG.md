@@ -5,6 +5,42 @@ horaria de Colombia.
 
 ## [Sin publicar] — Fase 5
 
+### Cambiado (pedidos del 29/10/2026, rama `integracion-back-front-fase-5`)
+
+- **Sin la pantalla «Preguntas de Checklist»**: se quitaron la página `/checklists/preguntas`, su formulario y su opción
+  del menú. Las preguntas se editan dentro de cada checklist; el API `api/preguntaschecklist` no cambia.
+- **Visor de evidencias**: al tocar una foto en Evidencias, en la ejecución de la inspección (paso «Evidencias») o en su
+  resultado, se abre en grande (`VisorImagenDialog` y `wwwroot/js/visor-imagen.js`). Se acerca con la rueda del mouse,
+  los botones o pellizcando; con zoom se mueve arrastrando y el doble clic la vuelve a ajustar. Es de solo lectura.
+- **Resultado «Satisfactorio»** (`InspeccionResultados.Satisfactorio`): sale al firmar una inspección sin ninguna
+  novedad. Con novedades sigue igual: «Pendiente» hasta resolver la última y después «Conforme». Las firmadas sin
+  novedades antes de este cambio siguen como «Conforme» y el reporte «Inspecciones por fechas» las cuenta como
+  satisfactorias.
+- **Filtros de varios valores** en Reportes y en el tablero. Se pueden elegir varios equipos, usuarios, plantas, áreas,
+  estados y criticidades a la vez.
+  - Contrato: `ReporteFiltroDto` pasa a listas (`Plantas`, `Areas`, `IdEquipos`, `IdUsuarios`, `Estados`, `Criticidades`)
+    y la URL repite la clave (`?plantas=Norte&plantas=Sur`).
+  - El tablero acepta `?planta=` repetido, y `DashboardFiltroAplicadoDto` y `DashboardTendenciaDto` traen `Plantas`
+    (antes `Planta`).
+  - Equipos y usuarios se eligen con el buscador nuevo `BuscadorMultiple`, que los agrega como etiquetas. Las áreas
+    que se ofrecen son las de las plantas elegidas.
+  - El pie del PDF y la auditoría nombran los equipos por su código y los usuarios por su nombre, en lugar del id.
+  - Se probaron en pantalla y por HTTP todos los filtros: cada reporte trae solo lo que coincide.
+- **Roles oculta**: la pantalla «Roles» sale del menú y su dirección ya no abre nada. El componente se conserva, y los
+  roles se siguen asignando en «Roles de Usuario».
+- **Contraseñas** (decisión del 29/10/2026):
+  - No caducan: `Seguridad:DiasExpiracionPassword` pasa a 0. Con un valor mayor que 0 vuelve la caducidad.
+  - La que pone el Administrador al crear un usuario ya no es temporal: el usuario entra sin tener que cambiarla.
+  - Restablecer la contraseña sigue dando una temporal.
+- **PDF sin desbordes** (`AjusteTexto`):
+  - El ancho de cada columna sale de su contenido: las cortas (fechas, códigos, estados) quedan en una línea y el resto
+    se reparte entre las que tienen más información.
+  - Una palabra que no cabe en su celda (correos, el JSON de la auditoría, nombres de archivo, la huella) se parte en
+    renglones; antes se salía de la celda.
+  - Aplica a los reportes, la auditoría, el tablero y el registro de la inspección.
+  - Se revisaron los PDF convertidos a imagen: nada se sale de su celda.
+- Evidencias: un nombre de archivo largo sin espacios ya no ensancha la tarjeta ni la página a 375 px.
+
 ### Completado en la integración (rama `integracion-back-front-fase-5`, 29/10/2026)
 
 Lo que faltaba del cronograma al mezclar todas las ramas. No tenía rama: el tablero y la búsqueda de usuarios de FE-2,

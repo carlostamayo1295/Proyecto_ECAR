@@ -1445,7 +1445,7 @@ public class HttpClientService
     private static string ConFiltros(string ruta, params (string Clave, object? Valor)[] filtros)
     {
         var partes = new List<string>();
-        foreach (var (clave, valor) in filtros)
+        foreach (var (clave, valor) in Expandir(filtros))
         {
             var texto = valor switch
             {
@@ -1470,6 +1470,28 @@ public class HttpClientService
         }
 
         return ruta + (ruta.Contains('?') ? "&" : "?") + string.Join("&", partes);
+    }
+
+    /// <summary>
+    /// Una lista (varias plantas, varios equipos) va en la URL repitiendo la clave: ?plantas=A&amp;plantas=B,
+    /// que es como ASP.NET la convierte en List.
+    /// </summary>
+    private static IEnumerable<(string Clave, object? Valor)> Expandir(IEnumerable<(string Clave, object? Valor)> filtros)
+    {
+        foreach (var (clave, valor) in filtros)
+        {
+            if (valor is System.Collections.IEnumerable lista and not string)
+            {
+                foreach (var elemento in lista)
+                {
+                    yield return (clave, elemento);
+                }
+            }
+            else
+            {
+                yield return (clave, valor);
+            }
+        }
     }
 
     /// <summary>
@@ -1572,22 +1594,23 @@ public class HttpClientService
     /// <summary>
     /// Indicadores del tablero (SRS §6; Fase 5, B-01). Sin filtros, el mes en curso; desde y hasta son días en hora
     /// de Colombia y el rango no puede pasar de un año (400). La respuesta trae en Filtros los que se aplicaron.
-    /// Nunca devuelve null.
+    /// Nunca devuelve null. Desde el 29/10/2026 acepta varias plantas; sin plantas, todas.
     /// </summary>
     public Task<ApiResponse<DashboardDto>> GetDashboardAsync(DateTime? desde = null, DateTime? hasta = null,
-        string? planta = null) =>
+        IReadOnlyCollection<string>? plantas = null) =>
         EnviarAsync<DashboardDto>(HttpMethod.Get,
-            ConFiltros("api/dashboard", ("desde", desde), ("hasta", hasta), ("planta", planta)));
+            ConFiltros("api/dashboard", ("desde", desde), ("hasta", hasta), ("planta", plantas)));
 
     /// <summary>Tendencia del tablero (B-02): de 1 a 52 semanas que empiezan el lunes, la actual incluida.</summary>
-    public Task<ApiResponse<DashboardTendenciaDto>> GetTendenciaTableroAsync(int semanas = 8, string? planta = null) =>
+    public Task<ApiResponse<DashboardTendenciaDto>> GetTendenciaTableroAsync(int semanas = 8,
+        IReadOnlyCollection<string>? plantas = null) =>
         EnviarAsync<DashboardTendenciaDto>(HttpMethod.Get,
-            ConFiltros("api/dashboard/tendencia", ("semanas", semanas), ("planta", planta)));
+            ConFiltros("api/dashboard/tendencia", ("semanas", semanas), ("planta", plantas)));
 
     /// <summary>El tablero en PDF con los mismos filtros (B-03); cada descarga queda en la auditoría.</summary>
     public Task<ApiResponse<bool>> DescargarTableroPdfAsync(DateTime? desde = null, DateTime? hasta = null,
-        string? planta = null) =>
-        DescargarArchivoAsync(ConFiltros("api/dashboard/pdf", ("desde", desde), ("hasta", hasta), ("planta", planta)),
+        IReadOnlyCollection<string>? plantas = null) =>
+        DescargarArchivoAsync(ConFiltros("api/dashboard/pdf", ("desde", desde), ("hasta", hasta), ("planta", plantas)),
             $"ECAR_tablero_{DateTime.Now:yyyyMMdd_HHmm}.pdf");
 
     public Task<ApiResponse<IntegridadInspeccionDto>> VerificarIntegridadInspeccionAsync(long id) =>
@@ -1622,9 +1645,9 @@ public class HttpClientService
     private static string UrlReporte(string tipo, ReporteFiltroDto filtro, string formato, int? page, int? pageSize) =>
         ConFiltros($"api/reportes/{tipo}",
             ("formato", formato), ("page", page), ("pageSize", pageSize),
-            ("desde", filtro.Desde), ("hasta", filtro.Hasta), ("planta", filtro.Planta), ("area", filtro.Area),
-            ("idEquipo", filtro.IdEquipo), ("idUsuario", filtro.IdUsuario), ("estado", filtro.Estado),
-            ("criticidad", filtro.Criticidad));
+            ("desde", filtro.Desde), ("hasta", filtro.Hasta), ("plantas", filtro.Plantas), ("areas", filtro.Areas),
+            ("idEquipos", filtro.IdEquipos), ("idUsuarios", filtro.IdUsuarios), ("estados", filtro.Estados),
+            ("criticidades", filtro.Criticidades));
 
     // --- Cuentas (endpoints 23 a 26; el login sigue en AuthService) ---
 

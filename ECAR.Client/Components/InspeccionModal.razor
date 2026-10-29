@@ -41,7 +41,7 @@
                 ReadOnly="true" HelperText="Se registra la fecha y hora del servidor al guardar" Class="mb-3"
                 Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Event" />
 
-            @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
+            @* Sin campo de Resultado: lo calcula el servidor al firmar (Satisfactorio o Pendiente). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
                 Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3"
                 HelperText="Observaciones generales. El resultado lo calcula el sistema al firmar" />

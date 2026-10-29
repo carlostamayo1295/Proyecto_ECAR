@@ -117,15 +117,15 @@ public class AuditoriaController : ControllerBase
 
     private static readonly Columna[] ColumnasExcel =
     [
-        new("Id", 0), new("Fecha y hora", 0), new("Tabla", 0), new("Registro", 0), new("Acción", 0),
-        new("Usuario", 0), new("Id usuario", 0), new("Motivo", 0), new("Valor anterior", 0),
-        new("Valor nuevo", 0), new("IP", 0), new("Agente", 0), new("Hash anterior", 0), new("Hash", 0)
+        new("Id"), new("Fecha y hora"), new("Tabla"), new("Registro"), new("Acción"),
+        new("Usuario"), new("Id usuario"), new("Motivo"), new("Valor anterior"),
+        new("Valor nuevo"), new("IP"), new("Agente"), new("Hash anterior"), new("Hash")
     ];
 
     private static readonly Columna[] ColumnasPdf =
     [
-        new("Id", 1.1), new("Fecha y hora", 2.3), new("Tabla", 2.3), new("Registro", 1.4), new("Acción", 2),
-        new("Usuario", 3.4), new("Motivo", 3.4), new("Antes", 4), new("Después", 4), new("IP", 1.8)
+        new("Id"), new("Fecha y hora"), new("Tabla"), new("Registro"), new("Acción"),
+        new("Usuario"), new("Motivo"), new("Antes"), new("Después"), new("IP")
     ];
 
     private static string? Resumir(string? json) =>

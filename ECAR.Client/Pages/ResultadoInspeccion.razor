@@ -3,6 +3,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject AuthorizationService AuthorizationService
+@inject IDialogService DialogService
 
 <RolRouteGuard Roles="@(new[] { RolesSistema.Administrador, RolesSistema.Operador, RolesSistema.Estandar, RolesSistema.Supervisor })"
                 MensajeNoAutorizado="Necesita un rol del sistema para ver el resultado de una inspección.">
@@ -137,8 +138,11 @@
                                 <MudPaper Class="pa-2" Outlined="true">
                                     @if (_miniaturas.TryGetValue(evidencia.IdEvidencia, out var dataUrl) && dataUrl != null)
                                     {
-                                        <MudImage Src="@dataUrl" Alt="Evidencia" ObjectFit="ObjectFit.Cover"
-                                            Width="150" Height="150" Class="rounded" />
+                                        <button type="button" class="miniatura-ampliable" title="Ver en grande"
+                                                @onclick="@(() => VisorImagenDialog.AbrirAsync(DialogService, dataUrl, evidencia.NombreOriginal))">
+                                            <MudImage Src="@dataUrl" Alt="Evidencia" ObjectFit="ObjectFit.Cover"
+                                                Width="150" Height="150" Class="rounded" />
+                                        </button>
                                     }
                                     else
                                     {

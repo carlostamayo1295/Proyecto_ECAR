@@ -12,7 +12,7 @@
 @*
   Portada. Sin sesión: bienvenida y acceso al login. Con sesión: el tablero de indicadores del
   SRS §6 (equipos, inspecciones y novedades), calculado por GET api/dashboard, con filtros por
-  periodo y planta (F-21), la tendencia semanal (F-22) y la exportación a PDF (F-23).
+  periodo y plantas (F-21), la tendencia semanal (F-22) y la exportación a PDF (F-23).
 *@
 <MudContainer MaxWidth="MaxWidth.Large" Class="home-container">
     @if (cargando)
@@ -77,7 +77,7 @@
                 <MudText Typo="Typo.h4" Class="welcome-title">Tablero</MudText>
                 @* F-21: el periodo y la planta que aplicó el servidor se ven en el título. *@
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Indicadores de @tablero.Periodo · @(tablero.Filtros.Planta ?? "todas las plantas")
+                    Indicadores de @tablero.Periodo · @TextoPlantas(tablero.Filtros.Plantas)
                     · actualizado a las @FormatoEstados.HoraColombia(tablero.GeneradoEn, "HH:mm") (hora de Colombia)
                 </MudText>
             </div>
@@ -118,7 +118,9 @@
                     </MudItem>
                 }
                 <MudItem xs="12" sm="6" md="3">
-                    <MudSelect T="string" Label="Planta" Value="@planta" ValueChanged="CambiarPlantaAsync"
+                    @* Varias plantas a la vez (29/10/2026); ninguna, todas. *@
+                    <MudSelect T="string" Label="Plantas" MultiSelection="true" SelectedValues="@plantasElegidas"
+                               SelectedValuesChanged="CambiarPlantasAsync"
                                Variant="Variant.Outlined" Dense="true" Clearable="true" Placeholder="Todas las plantas">
                         @foreach (var nombre in plantas)
                         {
@@ -197,7 +199,7 @@
         <MudPaper Class="pa-4 mb-4 tendencia" Elevation="1">
             <MudText Typo="Typo.h6">Tendencia de las últimas @SemanasTendencia semanas</MudText>
             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
-                Por semana, de lunes a domingo · @(planta ?? "todas las plantas") · no depende del periodo
+                Por semana, de lunes a domingo · @TextoPlantas(plantasElegidas) · no depende del periodo
             </MudText>
             @if (tendencia is null)
             {
@@ -445,7 +447,7 @@
     private string periodo = "mes:0";
     private DateTime? rangoDesde;
     private DateTime? rangoHasta;
-    private string? planta;
+    private List<string> plantasElegidas = new();
     private List<string> plantas = new();
     private bool actualizando;
     private bool exportando;
@@ -465,6 +467,14 @@
         MaxNumYAxisTicks = 6,
         LineStrokeWidth = 2,
         ShowDataMarkers = true
+    };
+
+    /// <summary>«todas las plantas», «Planta Norte» o «Planta Norte y Planta Sur».</summary>
+    private static string TextoPlantas(IReadOnlyList<string> elegidas) => elegidas.Count switch
+    {
+        0 => "todas las plantas",
+        1 => elegidas[0],
+        _ => $"{string.Join(", ", elegidas.Take(elegidas.Count - 1))} y {elegidas[^1]}"
     };
 
     /// <summary>Hoy en Colombia (UTC−5), como los días del servidor.</summary>
@@ -497,8 +507,8 @@
         actualizando = true;
         errorFiltros = null;
 
-        var pedidoTablero = HttpClientService.GetDashboardAsync(desde, hasta, planta);
-        var pedidoTendencia = HttpClientService.GetTendenciaTableroAsync(SemanasTendencia, planta);
+        var pedidoTablero = HttpClientService.GetDashboardAsync(desde, hasta, plantasElegidas);
+        var pedidoTendencia = HttpClientService.GetTendenciaTableroAsync(SemanasTendencia, plantasElegidas);
         var respuesta = await pedidoTablero;
         var respuestaTendencia = await pedidoTendencia;
         actualizando = false;
@@ -601,9 +611,9 @@
         }
     }
 
-    private async Task CambiarPlantaAsync(string? valor)
+    private async Task CambiarPlantasAsync(IEnumerable<string?>? valores)
     {
-        planta = string.IsNullOrWhiteSpace(valor) ? null : valor;
+        plantasElegidas = (valores ?? []).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!).ToList();
         await CargarAsync();
     }
 
@@ -617,7 +627,7 @@
         // Los filtros que el servidor aplicó a lo que se ve, para que el PDF diga lo mismo.
         exportando = true;
         var respuesta = await HttpClientService.DescargarTableroPdfAsync(tablero.Filtros.Desde, tablero.Filtros.Hasta,
-            tablero.Filtros.Planta);
+            tablero.Filtros.Plantas);
         exportando = false;
 
         if (!respuesta.Success)

@@ -187,7 +187,7 @@ public class BackendPhaseThreeFirmaTests
         var response = Assert.IsType<ApiResponse<InspeccionResultadoDto>>(ok.Value);
         Assert.True(response.Success);
         Assert.Equal(InspeccionEstados.Cerrada, response.Data!.Estado);
-        Assert.Equal(InspeccionResultados.Conforme, response.Data.Resultado);
+        Assert.Equal(InspeccionResultados.Satisfactorio, response.Data.Resultado);
         Assert.False(response.Data.ConNovedad);
         Assert.True(response.Data.TieneFirma);
         Assert.Equal(64, response.Data.FirmaHash!.Length);
@@ -195,7 +195,7 @@ public class BackendPhaseThreeFirmaTests
         var guardada = await context.Inspecciones.AsNoTracking()
             .SingleAsync(i => i.IdInspeccion == inspeccion.IdInspeccion);
         Assert.Equal(InspeccionEstados.Cerrada, guardada.Estado);
-        Assert.Equal(InspeccionResultados.Conforme, guardada.Resultado);
+        Assert.Equal(InspeccionResultados.Satisfactorio, guardada.Resultado);
         Assert.NotNull(guardada.FechaCierre);
         Assert.Equal(FirmaPngValida, guardada.FirmaDigital);
         Assert.Equal("Sin hallazgos", guardada.Observaciones);

@@ -13,6 +13,9 @@ public static class TableroPdf
 {
     public const string Titulo = "Tablero de indicadores";
 
+    /// <summary>Tamaño de letra normal del documento (ExportadorTabla.Documento).</summary>
+    private const double TamanoPt = 9;
+
     public static byte[] Generar(DashboardDto tablero, string filtros, string generadoPor, DateTime generadoUtc) =>
         ExportadorTabla.Renderizar(Crear(tablero, filtros, generadoPor, generadoUtc));
 
@@ -64,9 +67,13 @@ public static class TableroPdf
 
     private static void Tabla(Section seccion, string etiqueta, string valor, IReadOnlyList<ConteoDto> filas, string vacia)
     {
-        var anchos = ExportadorTabla.AnchosAjustados([new(etiqueta, 13), new(valor, 4)],
-            ExportadorTabla.AnchoUtilCm(seccion.PageSetup));
+        // Anchos según el contenido y palabras largas partidas (AjusteTexto): un nombre de área muy largo
+        // ya no se sale de la celda.
+        var textos = filas.Select(f => (IReadOnlyList<string>)[f.Etiqueta, ExportadorTabla.Texto(f.Cantidad)]).ToList();
+        using var ajuste = new AjusteTexto(TamanoPt);
+        var anchos = ajuste.Anchos([etiqueta, valor], textos, ExportadorTabla.AnchoUtilCm(seccion.PageSetup));
         var tabla = seccion.AddTable();
+        AjusteTexto.Preparar(tabla);
         tabla.Borders.Width = 0.4;
         tabla.Borders.Color = Colors.Gray;
         tabla.AddColumn(Unit.FromCentimeter(anchos[0]));
@@ -76,14 +83,14 @@ public static class TableroPdf
         encabezado.HeadingFormat = true;
         encabezado.Shading.Color = Color.FromRgb(0xDC, 0xE6, 0xF2);
         encabezado.Format.Font.Bold = true;
-        encabezado.Cells[0].AddParagraph(etiqueta);
-        encabezado.Cells[1].AddParagraph(valor);
+        ajuste.Escribir(encabezado.Cells[0].AddParagraph(), etiqueta, anchos[0], negrita: true);
+        ajuste.Escribir(encabezado.Cells[1].AddParagraph(), valor, anchos[1], negrita: true);
 
-        foreach (var conteo in filas)
+        foreach (var texto in textos)
         {
             var fila = tabla.AddRow();
-            fila.Cells[0].AddParagraph(conteo.Etiqueta);
-            fila.Cells[1].AddParagraph(ExportadorTabla.Texto(conteo.Cantidad));
+            ajuste.Escribir(fila.Cells[0].AddParagraph(), texto[0], anchos[0]);
+            ajuste.Escribir(fila.Cells[1].AddParagraph(), texto[1], anchos[1]);
         }
 
         if (filas.Count == 0)

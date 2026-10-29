@@ -47,8 +47,14 @@ public static class InspeccionEstados
 public static class InspeccionResultados
 {
     /// <summary>
-    /// Ninguna respuesta reportó novedad, o todas sus novedades ya se resolvieron (o se anularon).
-    /// Que hubo novedades queda en las propias novedades y en TotalNovedades.
+    /// Se firmó sin ninguna novedad: todas las respuestas fueron conformes (decisión de ECAR, 29/10/2026).
+    /// </summary>
+    public const string Satisfactorio = "Satisfactorio";
+
+    /// <summary>
+    /// Tuvo novedades y todas ya se resolvieron (o se anularon). Que las hubo queda en las propias
+    /// novedades y en TotalNovedades. Las firmadas sin novedades antes del 29/10/2026 también quedaron
+    /// así: desde entonces salen <see cref="Satisfactorio"/>.
     /// </summary>
     public const string Conforme = "Conforme";
 
@@ -64,7 +70,7 @@ public static class InspeccionResultados
     /// </summary>
     public const string ConNovedad = "ConNovedad";
 
-    public static bool EsValido(string resultado) => resultado is Conforme or Pendiente or ConNovedad;
+    public static bool EsValido(string resultado) => resultado is Satisfactorio or Conforme or Pendiente or ConNovedad;
 
     /// <summary>Texto para pantalla: "Con novedad" en lugar del valor interno "ConNovedad".</summary>
     public static string Texto(string? resultado) => resultado switch

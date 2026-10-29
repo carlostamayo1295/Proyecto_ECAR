@@ -70,7 +70,7 @@ public class DashboardPdfTests
     private static async Task<DashboardDto> TableroAsync(ECARDbContext db, DateTime? desde = null, DateTime? hasta = null,
         string? planta = null)
     {
-        var resultado = await new DashboardController(db).GetDashboard(desde, hasta, planta);
+        var resultado = await new DashboardController(db).GetDashboard(desde, hasta, planta is null ? null : [planta]);
         return Assert.IsType<ApiResponse<DashboardDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
     }
 
@@ -122,7 +122,7 @@ public class DashboardPdfTests
 
         var ddl = DdlWriter.WriteToString(TableroPdf.Crear(tablero, DashboardController.TextoFiltros(tablero.Filtros),
             "Sara Supervisora", DateTime.UtcNow));
-        var pdf = Assert.IsType<FileContentResult>(await new DashboardController(db).GetDashboardPdf(new Supervisor(), desde, Hoy, " Planta 2 "));
+        var pdf = Assert.IsType<FileContentResult>(await new DashboardController(db).GetDashboardPdf(new Supervisor(), desde, Hoy, [" Planta 2 "]));
 
         Assert.Equal(1, tablero.TotalEquipos);
         Assert.Equal(1, tablero.NovedadesPendientes);
@@ -137,7 +137,7 @@ public class DashboardPdfTests
     {
         var db = await SeedAsync();
 
-        await new DashboardController(db).GetDashboardPdf(new Supervisor(), planta: "Planta 1");
+        await new DashboardController(db).GetDashboardPdf(new Supervisor(), plantas: ["Planta 1"]);
 
         var evento = Assert.Single(await db.Auditoria.Where(a => a.Accion == AuditoriaAcciones.Exportacion).ToListAsync());
         Assert.Equal(AuditoriaTablas.Sistema, evento.Tabla);
@@ -155,6 +155,22 @@ public class DashboardPdfTests
         Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new Supervisor(), Hoy, Hoy.AddDays(-1)));
         Assert.IsType<BadRequestObjectResult>(await c.GetDashboardPdf(new Supervisor(), Hoy.AddYears(-2), Hoy));
         Assert.False(await db.Auditoria.AnyAsync(a => a.Accion == AuditoriaAcciones.Exportacion));
+    }
+
+    // 29/10/2026: el tablero filtra por varias plantas a la vez, y el PDF las nombra.
+    [Fact]
+    public async Task El_tablero_filtra_por_varias_plantas_a_la_vez()
+    {
+        var db = await SeedAsync();
+        var c = new DashboardController(db);
+
+        var resultado = await c.GetDashboard(Hoy.AddDays(-60), Hoy, ["Planta 1", " Planta 2 ", "planta 1"]);
+        var tablero = Assert.IsType<ApiResponse<DashboardDto>>(Assert.IsType<OkObjectResult>(resultado.Result).Value).Data!;
+
+        Assert.Equal(["Planta 1", "Planta 2"], tablero.Filtros.Plantas);
+        Assert.Equal(2, tablero.TotalEquipos);
+        Assert.EndsWith("plantas Planta 1 y Planta 2", DashboardController.TextoFiltros(tablero.Filtros));
+        Assert.Equal("todas las plantas", DashboardController.TextoPlantas([]));
     }
 
     // El periodo del título (pantalla y PDF) es el nombre del mes solo si es el mes entero o el mes en
