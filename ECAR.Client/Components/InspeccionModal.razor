@@ -36,9 +36,9 @@
             </MudSelect>
 
             @* La fecha la registra el servidor al guardar (ALCOA+ contemporáneo): solo se muestra. *@
-            <MudDatePicker Label="Fecha de inspección" @bind-Date="fechaInspeccion" Variant="Variant.Outlined"
-                Disabled="true" HelperText="Se registra la fecha y hora del servidor al guardar" Class="mb-3" />
-
+            <MudTextField T="string" Label="Fecha de inspección" Value="@(fechaInspeccion?.ToString("dd/MM/yyyy"))"
+                          Variant="Variant.Outlined" ReadOnly="true" Class="mb-3"
+                          HelperText="Se registra la fecha y hora del servidor al guardar" />
             @* Sin campo de Resultado: lo calcula el servidor al firmar (Conforme / ConNovedad). *@
             <MudTextField T="string" Label="Observaciones" @bind-Value="observaciones"
                 Variant="Variant.Outlined" Lines="3" Immediate="true" Class="mb-3"
