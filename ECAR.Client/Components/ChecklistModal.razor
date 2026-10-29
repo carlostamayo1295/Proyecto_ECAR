@@ -37,19 +37,12 @@
                     var index = i;
                     <MudPaper Elevation="0" Class="pregunta-row mb-3 pa-3">
                         <MudGrid>
-                            <MudItem xs="12" sm="5">
-                                <MudTextField T="string" Label="Pregunta" @bind-Value="preguntas[index].Pregunta"
+                            @* Sin tipo de respuesta desde el 29/10/2026: todas son Sí/No, y en la inspección cada una
+                               lleva además «¿Presenta novedad?». *@
+                            <MudItem xs="12" sm="8">
+                                <MudTextField T="string" Label="Pregunta (Sí / No)" @bind-Value="preguntas[index].Pregunta"
                                     Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
                                     Immediate="true" Disabled="@tieneRespuestasRegistradas" />
-                            </MudItem>
-                            <MudItem xs="12" sm="3">
-                                <MudSelect T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
-                                    Variant="Variant.Outlined" Required="true" RequiredError="Requerido" Disabled="@tieneRespuestasRegistradas">
-                                    @foreach (var tipo in TiposRespuesta.Todos)
-                                    {
-                                        <MudSelectItem T="string" Value="@tipo.Valor">@tipo.Etiqueta</MudSelectItem>
-                                    }
-                                </MudSelect>
                             </MudItem>
                             @* F-10: el interruptor y la papelera comparten columna, uno a cada extremo; en el
                                teléfono bajan de línea debajo de la pregunta y nunca se superponen. *@
@@ -141,14 +134,15 @@
             }
         }
 
-        if (preguntas.Any(p => string.IsNullOrWhiteSpace(p.Pregunta) || string.IsNullOrWhiteSpace(p.TipoRespuesta)))
+        if (preguntas.Any(p => string.IsNullOrWhiteSpace(p.Pregunta)))
         {
-            Snackbar.Add("Todas las preguntas deben tener texto y tipo de respuesta", Severity.Warning);
+            Snackbar.Add("Todas las preguntas deben tener texto", Severity.Warning);
             return;
         }
 
         var preguntasDto = preguntas
-            .Select(p => new CreatePreguntaChecklistDto { Pregunta = p.Pregunta, TipoRespuesta = p.TipoRespuesta, Obligatoria = p.Obligatoria })
+            // Todas Sí/No: una pregunta de texto de antes pasa a Sí/No al guardar el checklist.
+            .Select(p => new CreatePreguntaChecklistDto { Pregunta = p.Pregunta, TipoRespuesta = TiposRespuesta.SiNo, Obligatoria = p.Obligatoria })
             .ToList();
 
         if (IsEditMode && Checklist != null)

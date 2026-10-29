@@ -25,6 +25,7 @@ namespace ECAR.API.Services
                 .Select(i => new HistorialEquipoFilaDto
                 {
                     IdInspeccion = i.IdInspeccion,
+                    Sede = i.Sede,
                     CodigoInterno = i.Equipo.CodigoInterno,
                     ActivoFijo = i.Equipo.ActivoFijo,
                     NombreEquipo = i.Equipo.NombreEquipo,
@@ -45,6 +46,7 @@ namespace ECAR.API.Services
                 .Select(i => new HistorialAreaFilaDto
                 {
                     IdInspeccion = i.IdInspeccion,
+                    Sede = i.Sede,
                     Planta = i.Equipo.Ubicacion != null ? i.Equipo.Ubicacion.Planta : SinUbicacion,
                     Area = i.Equipo.Ubicacion != null ? i.Equipo.Ubicacion.Area : SinUbicacion,
                     Equipo = i.Equipo.CodigoInterno + " - " + i.Equipo.NombreEquipo,
@@ -59,6 +61,7 @@ namespace ECAR.API.Services
                 .Select(i => new HistorialUsuarioFilaDto
                 {
                     IdInspeccion = i.IdInspeccion,
+                    Sede = i.Sede,
                     Usuario = i.Usuario.Nombre,
                     Equipo = i.Equipo.CodigoInterno + " - " + i.Equipo.NombreEquipo,
                     FechaInspeccion = i.FechaInspeccion,
@@ -77,6 +80,9 @@ namespace ECAR.API.Services
             var plantas = Valores(filtro.Plantas);
             var areas = Valores(filtro.Areas);
             var equipos = filtro.IdEquipos.Distinct().ToList();
+            var sedes = Valores(filtro.Sedes);
+            if (sedes.Count > 0)
+                query = query.Where(n => n.Inspeccion.Sede != null && sedes.Contains(n.Inspeccion.Sede));
             if (estados.Count > 0)
                 query = query.Where(n => estados.Contains(n.Estado));
             if (criticidades.Count > 0)
@@ -94,6 +100,7 @@ namespace ECAR.API.Services
                 .Select(n => new EquipoNovedadFilaDto
                 {
                     IdNovedad = n.IdNovedad,
+                    Sede = n.Inspeccion.Sede,
                     Equipo = n.Inspeccion.Equipo.CodigoInterno + " - " + n.Inspeccion.Equipo.NombreEquipo,
                     Area = n.Inspeccion.Equipo.Ubicacion != null
                         ? n.Inspeccion.Equipo.Ubicacion.Planta + " - " + n.Inspeccion.Equipo.Ubicacion.Area
@@ -159,6 +166,9 @@ namespace ECAR.API.Services
             var usuarios = filtro.IdUsuarios.Distinct().ToList();
             var plantas = Valores(filtro.Plantas);
             var areas = Valores(filtro.Areas);
+            var sedes = Valores(filtro.Sedes);
+            if (sedes.Count > 0)
+                query = query.Where(i => i.Sede != null && sedes.Contains(i.Sede));
             if (equipos.Count > 0)
                 query = query.Where(i => equipos.Contains(i.IdEquipo));
             if (usuarios.Count > 0)

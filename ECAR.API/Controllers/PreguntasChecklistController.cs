@@ -218,9 +218,15 @@ namespace ECAR.API.Controllers
                 return "El texto de la pregunta y el tipo de respuesta son obligatorios.";
             }
 
+            // Desde el 29/10/2026 toda pregunta nueva o editada es Sí/No.
+            if (TiposRespuesta.EsValidoParaGuardar(tipoRespuesta))
+            {
+                return null;
+            }
+
             return TiposRespuesta.EsValido(tipoRespuesta.Trim())
-                ? null
-                : $"El tipo de respuesta '{tipoRespuesta}' no es válido. Valores permitidos: {TiposRespuesta.ValoresPermitidos}";
+                ? TiposRespuesta.MensajeSoloSiNo
+                : $"El tipo de respuesta '{tipoRespuesta}' no es válido. {TiposRespuesta.MensajeSoloSiNo}";
         }
 
         private Task<bool> ChecklistUsadoAsync(long idChecklist) =>

@@ -2,6 +2,7 @@ using ECAR.API.Configuration;
 using ECAR.API.Controllers;
 using ECAR.API.Services;
 using ECAR.Infrastructure.Data;
+using ECAR.Shared;
 using ECAR.Shared.DTOs;
 using ECAR.Shared.Responses;
 using Microsoft.AspNetCore.Mvc;
@@ -33,15 +34,26 @@ internal static class FirmaPruebas
     public static VerificadorIntegridad CrearVerificador(IEvidenciaStorage storage, string clave = ClaveHmac) =>
         new(Options.Create(new FirmaOptions { ClaveHmac = clave }), storage);
 
-    public static Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarConPassword(
+    /// <summary>
+    /// Firma como lo haría la pantalla: con la contraseña de pruebas y, si la inspección no tiene sede, con
+    /// <paramref name="sede"/> (obligatoria desde el 29/10/2026). Con <paramref name="sede"/> null no la pone.
+    /// </summary>
+    public static async Task<ActionResult<ApiResponse<InspeccionResultadoDto>>> FirmarConPassword(
         this InspeccionesController controller,
         ECARDbContext context,
         long id,
         FirmarInspeccionDto dto,
-        IEvidenciaStorage? storage = null)
+        IEvidenciaStorage? storage = null,
+        string? sede = Sedes.Rionegro)
     {
         dto.Password ??= Password;
-        return controller.FirmarInspeccion(id, dto, CrearAuthService(context),
+        if (sede != null && await context.Inspecciones.FindAsync(id) is { Sede: null } inspeccion)
+        {
+            inspeccion.Sede = sede;
+            await context.SaveChangesAsync();
+        }
+
+        return await controller.FirmarInspeccion(id, dto, CrearAuthService(context),
             CrearVerificador(storage ?? new AlmacenVacio()));
     }
 

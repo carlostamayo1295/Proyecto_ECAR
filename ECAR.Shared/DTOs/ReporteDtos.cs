@@ -40,6 +40,9 @@ public class ReporteFiltroDto
     public List<long> IdUsuarios { get; set; } = new();
     public List<string> Estados { get; set; } = new();
     public List<string> Criticidades { get; set; } = new();
+
+    /// <summary>Sedes de la inspección (Rionegro, Medellín), 29/10/2026.</summary>
+    public List<string> Sedes { get; set; } = new();
 }
 
 /// <summary>
@@ -57,6 +60,8 @@ public class UsuarioBusquedaDto
 public class HistorialEquipoFilaDto
 {
     public long IdInspeccion { get; set; }
+    /// <summary>Sede de la inspección (Rionegro o Medellín); vacía en las de antes del 29/10/2026.</summary>
+    public string? Sede { get; set; }
     public string CodigoInterno { get; set; } = string.Empty;
     public string ActivoFijo { get; set; } = string.Empty;
     public string NombreEquipo { get; set; } = string.Empty;
@@ -73,6 +78,8 @@ public class HistorialEquipoFilaDto
 public class HistorialAreaFilaDto
 {
     public long IdInspeccion { get; set; }
+    /// <summary>Sede de la inspección (Rionegro o Medellín); vacía en las de antes del 29/10/2026.</summary>
+    public string? Sede { get; set; }
     public string Planta { get; set; } = string.Empty;
     public string Area { get; set; } = string.Empty;
     public string Equipo { get; set; } = string.Empty;
@@ -88,6 +95,8 @@ public class HistorialAreaFilaDto
 public class HistorialUsuarioFilaDto
 {
     public long IdInspeccion { get; set; }
+    /// <summary>Sede de la inspección (Rionegro o Medellín); vacía en las de antes del 29/10/2026.</summary>
+    public string? Sede { get; set; }
     public string Usuario { get; set; } = string.Empty;
     public string Equipo { get; set; } = string.Empty;
     public DateTime FechaInspeccion { get; set; }
@@ -99,6 +108,8 @@ public class HistorialUsuarioFilaDto
 public class EquipoNovedadFilaDto
 {
     public long IdNovedad { get; set; }
+    /// <summary>Sede de la inspección (Rionegro o Medellín); vacía en las de antes del 29/10/2026.</summary>
+    public string? Sede { get; set; }
     public string Equipo { get; set; } = string.Empty;
     public string? Area { get; set; }
     public string Novedad { get; set; } = string.Empty;

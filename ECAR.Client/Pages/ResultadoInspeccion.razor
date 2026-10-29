@@ -53,6 +53,8 @@
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.body2"><b>Equipo:</b> @resultado.NombreEquipo (@resultado.CodigoInterno)</MudText>
                     <MudText Typo="Typo.body2"><b>Ubicación:</b> @(string.IsNullOrWhiteSpace(resultado.UbicacionNombre) ? "Sin ubicación" : resultado.UbicacionNombre)</MudText>
+                    @* La sede se registra desde el 29/10/2026: las anteriores no la tienen. *@
+                    <MudText Typo="Typo.body2"><b>Sede:</b> @(resultado.Sede ?? "Sin registrar")</MudText>
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.body2"><b>Fecha de firma:</b> @(resultado.FechaCierre is { } fechaCierre ? FormatoEstados.HoraColombia(fechaCierre) : "—")</MudText>
@@ -110,10 +112,16 @@
                                     </MudText>
                                 }
                             </td>
-                            <td style="width: 120px">
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                         Color="@(pregunta.EsNovedad ? Color.Warning : Color.Default)"
-                                         Text="@FormatoRespuesta.Mostrar(pregunta.Respuesta)" />
+                            @* La respuesta y el «¿Presenta novedad?» (29/10/2026, es lo que creó la novedad) en una
+                               celda: lado a lado en pantalla ancha y uno bajo el otro en el teléfono. *@
+                            <td style="width: 1%">
+                                <div class="d-flex flex-wrap justify-end gap-1">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0"
+                                             Text="@FormatoRespuesta.Mostrar(pregunta.Respuesta)" />
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0"
+                                             Color="@(pregunta.EsNovedad ? Color.Warning : Color.Default)" title="¿Presenta novedad?"
+                                             Text="@(pregunta.EsNovedad ? "Con novedad" : "Sin novedad")" />
+                                </div>
                             </td>
                         </tr>
                     }

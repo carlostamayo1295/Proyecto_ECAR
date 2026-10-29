@@ -24,6 +24,13 @@ public class RespuestaInspeccion
     [Column("Observacion")]
     public string? Observacion { get; set; }
 
+    /// <summary>
+    /// «¿Presenta novedad?» (29/10/2026): true crea una novedad al firmar. Null en las respuestas de
+    /// antes de ese día, cuando la novedad salía de responder «No».
+    /// </summary>
+    [Column("PresentaNovedad")]
+    public bool? PresentaNovedad { get; set; }
+
     // Propiedades de navegación
     [ForeignKey("IdInspeccion")]
     public virtual Inspeccion Inspeccion { get; set; } = null!;

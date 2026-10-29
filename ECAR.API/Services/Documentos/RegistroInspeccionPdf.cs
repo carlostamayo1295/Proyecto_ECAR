@@ -57,6 +57,7 @@ public static class RegistroInspeccionPdf
             ("Ubicación", equipo.Ubicacion == null ? "—" : $"{equipo.Ubicacion.Planta} - {equipo.Ubicacion.Area}"),
             ("Checklist", $"{inspeccion.Checklist.Nombre} (versión {inspeccion.Checklist.Version})"),
             ("Inspector", inspeccion.Usuario.Nombre),
+            ("Sede", inspeccion.Sede ?? "—"),
             ("Inicio", $"{HoraColombia.Texto(inspeccion.FechaInspeccion)} ({HoraColombia.Zona})"),
             ("Cierre", inspeccion.FechaCierre is { } cierre ? $"{HoraColombia.Texto(cierre)} ({HoraColombia.Zona})" : "—"),
             ("Estado", InspeccionEstados.Texto(inspeccion.Estado)),
@@ -89,20 +90,21 @@ public static class RegistroInspeccionPdf
         var filas = inspeccion.Checklist.Preguntas.OrderBy(p => p.Orden).ThenBy(p => p.IdPregunta).Select(pregunta =>
         {
             respuestas.TryGetValue(pregunta.IdPregunta, out var respuesta);
-            var esNovedad = pregunta.TipoRespuesta == TiposRespuesta.SiNo &&
-                            string.Equals(respuesta?.Respuesta, "No", StringComparison.OrdinalIgnoreCase);
+            // Desde el 29/10/2026 la novedad la marca «¿Presenta novedad?» (ReglaNovedad; las anteriores, por «No»).
+            var esNovedad = ReglaNovedad.Presenta(inspeccion, pregunta, respuesta) == true;
             return (EsNovedad: esNovedad, Textos: (IReadOnlyList<string>)
             [
                 (++numero).ToString(),
                 pregunta.Pregunta + (pregunta.Obligatoria ? " *" : string.Empty),
-                Valor(respuesta?.Respuesta, pregunta.TipoRespuesta) + (esNovedad ? " (novedad)" : string.Empty),
+                Valor(respuesta?.Respuesta, pregunta.TipoRespuesta),
+                esNovedad ? "Sí (novedad)" : "No",
                 string.IsNullOrWhiteSpace(respuesta?.Observacion) ? "—" : respuesta!.Observacion
             ]);
         }).ToList();
 
         const double tamano = 8.5;
         using var ajuste = new AjusteTexto(tamano);
-        string[] encabezados = ["#", "Pregunta", "Respuesta", "Observación"];
+        string[] encabezados = ["#", "Pregunta", "Respuesta", "¿Presenta novedad?", "Observación"];
         var anchos = ajuste.Anchos(encabezados, filas.Select(f => f.Textos).ToList(), anchoCm);
 
         var tabla = seccion.AddTable();
@@ -134,8 +136,8 @@ public static class RegistroInspeccionPdf
 
             for (var c = 0; c < textos.Count; c++)
             {
-                // La respuesta de una novedad va en negrita.
-                ajuste.Escribir(fila.Cells[c].AddParagraph(), textos[c], anchos[c], negrita: esNovedad && c == 2);
+                // «Sí (novedad)» va en negrita.
+                ajuste.Escribir(fila.Cells[c].AddParagraph(), textos[c], anchos[c], negrita: esNovedad && c == 3);
             }
         }
 

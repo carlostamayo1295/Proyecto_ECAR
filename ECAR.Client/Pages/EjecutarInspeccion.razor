@@ -221,6 +221,13 @@
             return false;
         }
 
+        // La sede es de toda la inspección y obligatoria para firmar (29/10/2026).
+        if (string.IsNullOrWhiteSpace(inspeccion.Sede))
+        {
+            Snackbar.Add("Elija la sede de la inspección (Rionegro o Medellín)", Severity.Warning);
+            return false;
+        }
+
         // El aviso dice cuáles faltan por su número de orden, no solo cuántas: con un checklist
         // largo, "faltan 2" obliga al técnico a repasar todo el formulario en el teléfono.
         var faltantes = NumerosDe(inspeccion.Preguntas.Where(p => p.FaltaResponder));

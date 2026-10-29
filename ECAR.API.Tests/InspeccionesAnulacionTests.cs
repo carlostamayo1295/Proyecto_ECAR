@@ -120,6 +120,7 @@ public class InspeccionesAnulacionTests
             IdUsuario = tecnico.IdUsuario,
             IdChecklist = checklist.IdChecklist,
             FechaInspeccion = DateTime.UtcNow,
+            Sede = Sedes.Medellin,
             Estado = estado
         };
         context.Inspecciones.Add(inspeccion);

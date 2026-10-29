@@ -33,4 +33,16 @@ public class RespuestaEjecucionDto
 
     /// <summary>Obligatoria cuando la respuesta reporta novedad (regla 4 del SRS).</summary>
     public string? Observacion { get; set; }
+
+    /// <summary>
+    /// «¿Presenta novedad?» (29/10/2026). true crea una novedad al firmar y exige la observación; false
+    /// o null, no. Es independiente de la respuesta: responder «No» ya no es novedad por sí solo.
+    /// </summary>
+    public bool? PresentaNovedad { get; set; }
+}
+
+/// <summary>Entrada de PUT /api/inspecciones/{id}/sede: Rionegro o Medellín (<see cref="ECAR.Shared.Sedes"/>).</summary>
+public class SedeDto
+{
+    public string Sede { get; set; } = string.Empty;
 }

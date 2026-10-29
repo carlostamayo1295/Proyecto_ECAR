@@ -20,6 +20,12 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
     public const string AlgoritmoHmacV2 = "HMACSHA256-v2";
 
     /// <summary>
+    /// Igual que <see cref="AlgoritmoHmacV2"/> más la sede de la inspección y, en cada respuesta, el
+    /// «¿Presenta novedad?» (29/10/2026): desde entonces es lo que decide la novedad, así que se firma.
+    /// </summary>
+    public const string AlgoritmoHmacV3 = "HMACSHA256-v3";
+
+    /// <summary>
     /// Sello de la resolución de una novedad. Su texto empieza por "registro=novedad", así que
     /// nunca coincide con el de una inspección aunque use la misma clave.
     /// </summary>
@@ -43,8 +49,8 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
             : inspeccion.FirmaAlgoritmo;
     }
 
-    /// <summary>El sello con que se firma hoy una inspección (<see cref="AlgoritmoHmacV2"/>).</summary>
-    public Task<string> CalcularSelloAsync(Inspeccion inspeccion) => CalcularSelloAsync(inspeccion, AlgoritmoHmacV2);
+    /// <summary>El sello con que se firma hoy una inspección (<see cref="AlgoritmoHmacV3"/>).</summary>
+    public Task<string> CalcularSelloAsync(Inspeccion inspeccion) => CalcularSelloAsync(inspeccion, AlgoritmoHmacV3);
 
     public async Task<bool> VerificarAsync(Inspeccion inspeccion)
     {
@@ -67,6 +73,9 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
             case AlgoritmoHmacV2:
                 esperado = await CalcularSelloAsync(inspeccion, AlgoritmoHmacV2);
                 break;
+            case AlgoritmoHmacV3:
+                esperado = await CalcularSelloAsync(inspeccion, AlgoritmoHmacV3);
+                break;
             default:
                 return false;
         }
@@ -77,10 +86,11 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
     /// <summary>
     /// El texto que se sella. <see cref="AlgoritmoHmac"/> incluye el resultado y se conserva para
     /// verificar las inspecciones firmadas antes de las novedades; <see cref="AlgoritmoHmacV2"/> no.
+    /// <see cref="AlgoritmoHmacV3"/> agrega la sede y el «¿Presenta novedad?» de cada respuesta.
     /// </summary>
-    public async Task<string> ConstruirContenidoCanonicoAsync(Inspeccion inspeccion, string version = AlgoritmoHmacV2)
+    public async Task<string> ConstruirContenidoCanonicoAsync(Inspeccion inspeccion, string version = AlgoritmoHmacV3)
     {
-        if (version is not (AlgoritmoHmac or AlgoritmoHmacV2))
+        if (version is not (AlgoritmoHmac or AlgoritmoHmacV2 or AlgoritmoHmacV3))
         {
             throw new ArgumentException($"Versión de sello desconocida: {version}", nameof(version));
         }
@@ -105,15 +115,27 @@ public class VerificadorIntegridad(IOptions<FirmaOptions> opciones, IEvidenciaSt
         constructor
             .Append("observaciones=").Append(FirmaInspeccion.Escapar(inspeccion.Observaciones)).Append('|')
             .Append("firmaNombre=").Append(FirmaInspeccion.Escapar(inspeccion.FirmaNombre)).Append('|')
-            .Append("firmaSignificado=").Append(FirmaInspeccion.Escapar(inspeccion.FirmaSignificado)).Append('|')
-            .Append("respuestas=[");
+            .Append("firmaSignificado=").Append(FirmaInspeccion.Escapar(inspeccion.FirmaSignificado)).Append('|');
+        if (version == AlgoritmoHmacV3)
+        {
+            constructor.Append("sede=").Append(FirmaInspeccion.Escapar(inspeccion.Sede)).Append('|');
+        }
+
+        constructor.Append("respuestas=[");
 
         foreach (var respuesta in inspeccion.Respuestas.OrderBy(r => r.IdPregunta))
         {
             constructor
                 .Append('{').Append(respuesta.IdPregunta).Append(';')
                 .Append(FirmaInspeccion.Escapar(respuesta.Respuesta)).Append(';')
-                .Append(FirmaInspeccion.Escapar(respuesta.Observacion)).Append('}');
+                .Append(FirmaInspeccion.Escapar(respuesta.Observacion));
+            if (version == AlgoritmoHmacV3)
+            {
+                // «s», «n» o «-» (sin marcar, que al firmar cuenta como que no presenta novedad).
+                constructor.Append(';').Append(respuesta.PresentaNovedad switch { true => 's', false => 'n', null => '-' });
+            }
+
+            constructor.Append('}');
         }
 
         constructor.Append("]|evidencias=[");

@@ -31,6 +31,9 @@ public class InspeccionEjecucionDto
     public long IdUsuario { get; set; }
     public string NombreUsuario { get; set; } = string.Empty;
 
+    /// <summary>Sede (Rionegro o Medellín); se elige en el formulario y es obligatoria para firmar.</summary>
+    public string? Sede { get; set; }
+
     // --- Contenido del flujo ---
     public List<PreguntaEjecucionDto> Preguntas { get; set; } = new();
     public List<EvidenciaDto> Evidencias { get; set; } = new();

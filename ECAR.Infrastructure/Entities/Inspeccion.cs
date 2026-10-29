@@ -38,6 +38,11 @@ public class Inspeccion
     [Column("Observaciones")]
     public string? Observaciones { get; set; }
 
+    /// <summary>Sede de ECAR (Sedes: Rionegro o Medellín), obligatoria para firmar desde el 29/10/2026.</summary>
+    [MaxLength(30)]
+    [Column("Sede")]
+    public string? Sede { get; set; }
+
     [Column("FirmaDigital")]
     public string? FirmaDigital { get; set; }
 
