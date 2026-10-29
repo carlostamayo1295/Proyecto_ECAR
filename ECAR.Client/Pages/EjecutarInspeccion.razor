@@ -21,7 +21,7 @@
     {
         <MudAlert Severity="Severity.Error" Class="my-4">
             No fue posible cargar la inspección.
-            <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-2"
+            <MudButton Variant="Variant.Filled" Color="Color.Default" Class="ml-2"
                        OnClick="@(() => NavigationManager.NavigateTo("/inspecciones"))">
                 Volver al listado
             </MudButton>
@@ -68,7 +68,7 @@
                de firma tiene su propio botón de cierre. *@
             <ActionContent Context="stepper">
                 <div class="d-flex justify-space-between align-center gap-2 mt-4" style="width:100%">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                    <MudButton Variant="Variant.Filled" Color="Color.Default"
                                Disabled="@(pasoActivo == 0)"
                                StartIcon="@Icons.Material.Filled.ArrowBack"
                                OnClick="@(() => stepper.PreviousStepAsync())">

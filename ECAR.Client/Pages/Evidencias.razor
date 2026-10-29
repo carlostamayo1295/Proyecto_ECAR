@@ -168,7 +168,9 @@
     private int currentPage = 1;
     private int pageSize = 12;
     private int totalPages = 1;
-    private bool isLoading = false;
+    // true hasta la primera respuesta: con false, el primer render mostraba «No hay … para mostrar»
+    // antes de que llegaran los datos (Fase 5, F-02).
+    private bool isLoading = true;
 
     private bool esAdmin;
     private bool ejecutaInspecciones;

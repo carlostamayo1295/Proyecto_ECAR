@@ -3,6 +3,101 @@
 Los cambios relevantes de ECAR se documentan aquí desde la Fase 4. Las fechas usan la zona
 horaria de Colombia.
 
+## [Sin publicar] — Fase 5
+
+### Corregido (rama `feature/fase5-cierre-backend`, 28/10/2026; B-06, B-07 y B-09)
+
+- **B-06 · Validaciones de contraseña (ECAR-225):** se retiró de los DTO de usuarios la regla antigua de
+  6 caracteres. La creación, el cambio y el restablecimiento usan una sola política de 10 caracteres con letras
+  y números. Los rechazos distinguen contraseña requerida, actual incorrecta, longitud, combinación y
+  reutilización, siempre con mensajes en español.
+- **B-07 · Cuenta bloqueada al firmar (ECAR-226):** `POST /api/inspecciones/{id}/firmar` y
+  `POST /api/novedades/{id}/resolver` devuelven 423 si la cuenta ya estaba bloqueada o si el bloqueo se activa
+  en ese mismo intento. La operación no modifica ni cierra el registro. El cliente reconoce el contrato por
+  `ApiResponse.CodigoHttp` y no por el texto del mensaje.
+- **B-09 · Regresión (ECAR-227):** la suite cubre bloqueo, caducidad, contraseña temporal, cambio obligatorio y
+  reautenticación al firmar inspecciones y resolver novedades.
+
+### Corregido (rama `fase5/base-front-juanalberto`, 26/10/2026; tareas de FE-0 del cronograma)
+
+- **F-01 Tema.** `theme.css` pintaba de azul todo `.mud-button-root`. Por eso los botones de ícono, los interruptores y
+  los adornos de los campos salían como círculos azules, los `Outlined` y `Text` quedaban ilegibles y un botón
+  deshabilitado parecía activo.
+  - Ahora solo los botones con relleno son azules, con texto blanco.
+  - `Color.Error` se ve rojo y `Color.Warning` naranja.
+  - Los deshabilitados se ven grises.
+  - El primario de MudBlazor es el azul de ECAR (antes el morado por defecto).
+- **F-02 Carga.** Las 13 listas mostraban «No hay … para mostrar» antes de que llegaran los datos. Ahora empiezan
+  cargando.
+- **F-03 Auditoría.** Cerrar la alerta de «Verificar integridad» lanzaba `NullReferenceException` y salía la barra
+  roja de error.
+- **F-04 Menú lateral.** Se resalta la página actual, «Administración» es un grupo desplegable y el cajón ya no tiene
+  barra de desplazamiento horizontal (`MudNavMenu` en lugar de `MudList`).
+- **F-05 Login.** Se muestra sin la barra azul ni el menú, y cabe en la pantalla sin desplazarse.
+
+### Agregado (rama `fase5/servicios-front-juanalberto`, 27/10/2026; F-06 de FE-0)
+
+- **`HttpClientService` para lo nuevo del backend**. Ningún método devuelve `null`.
+  - `GetDashboardAsync(desde, hasta, planta)` (B-01): la llamada sin argumentos sigue igual.
+  - `GetTendenciaTableroAsync(semanas, planta)` (B-02).
+  - `DescargarTableroPdfAsync(desde, hasta, planta)` (B-03).
+  - `BuscarUsuariosReportesAsync(texto)` (B-04).
+  - `CreateChecklistAsync` y `UpdateChecklistAsync` pasan al estilo de la Fase 4, con el 409 de B-05 en `Message`.
+- **`ApiResponse.CodigoHttp`**: solo en el cliente (`[JsonIgnore]`, no viaja en el JSON). Lo llena `LectorRespuestaApi` con
+  el código HTTP de la respuesta, para reconocer la cuenta bloqueada (423) sin leer el texto del mensaje (F-36).
+- Revisión de la integración (F-08): las 14 pantallas del menú a 1366, 1024, 768 y 375 px sin desbordes ni botones
+  ocultos, y los colores de F-11 y la fila del checklist de F-10 comprobados en pantalla.
+
+### Corregido (ramas `fase5/checklist-erica` y `fase5/colores-erica`, 25 y 26/10/2026; tareas de FE-1)
+
+- **F-10 Checklist:** «Agregar pregunta» se lee y la fila de la pregunta ya no se superpone a 375 px.
+- **F-11 Colores por tipo de acción** (sobre F-01):
+  - «Desbloquear», en la lista y en su diálogo, y «Regenerar» del QR, en naranja.
+  - «Activar» en azul y sin papelera en Checklists, Equipos y Usuarios.
+  - `ConfirmDialog` con clase propia: «Confirmar» rojo y «Cancelar» azul en cualquier pantalla.
+
+### Agregado (rama `fase5/tablero-pdf-alejandro`, 24/10/2026)
+
+- **B-03 · Tablero en PDF** (ECAR-224): `GET /api/dashboard/pdf` genera el tablero en A4 vertical con
+  MigraDoc (`Services/Documentos/TableroPdf.cs`): periodo, indicadores, equipos por criticidad y por área, y
+  el pie común de `ExportadorTabla.Documento` con los filtros. Usa los filtros de B-01 (`desde`, `hasta`,
+  `planta`; por defecto el mes en curso, un año como máximo) y el mismo cálculo que `GET /api/dashboard`,
+  así que la pantalla y el PDF no pueden discrepar. Cada PDF queda en la auditoría como `Exportacion`
+  (`Reporte = "tablero"`). Pruebas en `DashboardPdfTests`. Incluye la rama `feature/carlos-tamayo` (B-01).
+
+### Agregado (rama `feature/carlos-tamayo`, 23/10/2026; entró con las de Alejandro y Juan David)
+
+- **B-01 · Tablero con filtros**: `GET /api/dashboard?desde=&hasta=&planta=`. Sin filtros, el mes en curso; el rango
+  no puede superar un año. La respuesta trae en `Filtros` los que se aplicaron.
+- **B-02 · Tendencia**: `GET /api/dashboard/tendencia?semanas=8&planta=`, de 1 a 52 semanas que empiezan el lunes
+  (hora de Colombia); por semana, inspecciones firmadas y novedades registradas y resueltas.
+
+### Agregado (rama `feature/juan-david-lopez-t-ECAR-221-222`, 24/10/2026)
+
+- **Búsqueda de usuarios para reportes** (B-04, ECAR-221, 24/10/2026): `GET /api/reportes/usuarios?texto=`, para el
+  Administrador y el Supervisor (Operador y Estándar reciben 403). Busca en el nombre y el correo, incluye a los
+  inactivos y devuelve como máximo 20, solo con id, nombre y correo (sin contraseña ni roles). El filtro «Usuario» de
+  la pantalla de reportes sigue llamando a `api/usuarios`, que es solo del Administrador: **el cliente debe pasar a
+  `api/reportes/usuarios`** para que el Supervisor pueda usarlo.
+- **Sin nombres repetidos en checklists activos** (B-05, ECAR-222, 24/10/2026): `POST /api/checklists` y el cambio de
+  nombre en `PUT /api/checklists/{id}` responden 409 si ya hay otro checklist activo con ese nombre, sin distinguir
+  mayúsculas, minúsculas ni espacios externos, y piden usar «Nueva versión». El nombre se guarda sin espacios externos.
+  Reenviar el mismo nombre al editar no se valida, y «Nueva versión» no cambia. Activar una versión
+  (`PUT /api/checklists/{id}/activar` o `Activo = true` en el PUT) sigue comparando el nombre exacto.
+- **Pruebas de integración de la Fase 5 con SQL Server** (B-08, ECAR-223, 24/10/2026), en `ECAR.IntegrationTests`:
+  filtros del tablero (`DashboardSqlServerTests`: planta, periodo con los bordes del día en hora de Colombia,
+  validaciones y valores por defecto), tendencia semanal (`DashboardTendenciaSqlServerTests`: semanas de lunes a
+  domingo en Colombia, semanas vacías, planta y límites de 1 a 52) y nombres repetidos de checklists
+  (`ChecklistNombresSqlServerTests`). Los datos del tablero se siembran con `DatosTablero`, una planta por prueba.
+  La suite de integración corre ahora **en serie** y con 120 s por comando: en paralelo, cada clase creaba y migraba su
+  base a la vez, y migrar una base entera en un solo comando pasaba de los 30 s por defecto; fallaba al azar.
+
+### Integrado en `fase5/integracion-parcial` (27/10/2026; pendiente de `develop`)
+
+- `fase5/base-front-juanalberto`, `fase5/colores-erica`, `fase5/checklist-erica`, `fase5/tablero-pdf-alejandro`
+  (incluye `feature/carlos-tamayo`) y `feature/juan-david-lopez-t-ECAR-221-222`. Compila con 0 avisos; 311 pruebas del
+  API y 44 contra SQL Server superadas.
+
 ## [Sin publicar] — Fase 4
 
 ### Cambiado (rama `Prueba_nuevo_novedades`, 19/10/2026)

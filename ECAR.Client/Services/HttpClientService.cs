@@ -375,41 +375,16 @@ public class HttpClientService
         }
     }
 
-    public async Task<ApiResponse<ChecklistDto>?> CreateChecklistAsync(CreateChecklistDto createDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PostAsJsonAsync("api/checklists", createDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ChecklistDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error creating checklist: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>
+    /// Fase 5 (B-05): con el nombre de un checklist activo el API responde 409 y pide usar «Nueva versión»; el motivo
+    /// llega en Message, listo para mostrar. Como los métodos de la Fase 4, nunca devuelve null.
+    /// </summary>
+    public Task<ApiResponse<ChecklistDto>> CreateChecklistAsync(CreateChecklistDto createDto) =>
+        EnviarAsync<ChecklistDto>(HttpMethod.Post, "api/checklists", createDto);
 
-    public async Task<ApiResponse<ChecklistDto>?> UpdateChecklistAsync(long id, UpdateChecklistDto updateDto)
-    {
-        try
-        {
-            await AddAuthorizationHeaderAsync();
-            var response = await _httpClient.PutAsJsonAsync($"api/checklists/{id}", updateDto);
-            var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<ChecklistDto>>();
-            await RemoveAuthorizationHeaderAsync();
-            return apiResponse;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating checklist: {ex.Message}");
-            await RemoveAuthorizationHeaderAsync();
-            return null;
-        }
-    }
+    /// <summary>Renombrar con el nombre de otro checklist activo también responde 409 (B-05). Nunca devuelve null.</summary>
+    public Task<ApiResponse<ChecklistDto>> UpdateChecklistAsync(long id, UpdateChecklistDto updateDto) =>
+        EnviarAsync<ChecklistDto>(HttpMethod.Put, $"api/checklists/{id}", updateDto);
 
     /// <summary>Fase 4 (§3.3): desactivar un checklist exige motivo, que queda en la auditoría.</summary>
     public Task<ApiResponse<bool>> DeleteChecklistAsync(long id, string motivo) =>
@@ -1511,7 +1486,9 @@ public class HttpClientService
             if (!response.IsSuccessStatusCode)
             {
                 var error = await LectorRespuestaApi.LeerAsync<bool>(response);
-                return ApiResponse<bool>.ErrorResponse(error.Message, error.Errors);
+                var fallo = ApiResponse<bool>.ErrorResponse(error.Message, error.Errors);
+                fallo.CodigoHttp = error.CodigoHttp;
+                return fallo;
             }
 
             var tipo = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
@@ -1592,9 +1569,26 @@ public class HttpClientService
     public Task<ApiResponse<EvidenciaDto>> RetirarEvidenciaAsync(long id, string motivo) =>
         EnviarAsync<EvidenciaDto>(HttpMethod.Post, $"api/evidencias/{id}/retirar", new MotivoDto { Motivo = motivo });
 
-    /// <summary>Indicadores de la portada (SRS §6 "Dashboard"); nunca devuelve null.</summary>
-    public Task<ApiResponse<DashboardDto>> GetDashboardAsync() =>
-        EnviarAsync<DashboardDto>(HttpMethod.Get, "api/dashboard");
+    /// <summary>
+    /// Indicadores del tablero (SRS §6; Fase 5, B-01). Sin filtros, el mes en curso; desde y hasta son días en hora
+    /// de Colombia y el rango no puede pasar de un año (400). La respuesta trae en Filtros los que se aplicaron.
+    /// Nunca devuelve null.
+    /// </summary>
+    public Task<ApiResponse<DashboardDto>> GetDashboardAsync(DateTime? desde = null, DateTime? hasta = null,
+        string? planta = null) =>
+        EnviarAsync<DashboardDto>(HttpMethod.Get,
+            ConFiltros("api/dashboard", ("desde", desde), ("hasta", hasta), ("planta", planta)));
+
+    /// <summary>Tendencia del tablero (B-02): de 1 a 52 semanas que empiezan el lunes, la actual incluida.</summary>
+    public Task<ApiResponse<DashboardTendenciaDto>> GetTendenciaTableroAsync(int semanas = 8, string? planta = null) =>
+        EnviarAsync<DashboardTendenciaDto>(HttpMethod.Get,
+            ConFiltros("api/dashboard/tendencia", ("semanas", semanas), ("planta", planta)));
+
+    /// <summary>El tablero en PDF con los mismos filtros (B-03); cada descarga queda en la auditoría.</summary>
+    public Task<ApiResponse<bool>> DescargarTableroPdfAsync(DateTime? desde = null, DateTime? hasta = null,
+        string? planta = null) =>
+        DescargarArchivoAsync(ConFiltros("api/dashboard/pdf", ("desde", desde), ("hasta", hasta), ("planta", planta)),
+            $"ECAR_tablero_{DateTime.Now:yyyyMMdd_HHmm}.pdf");
 
     public Task<ApiResponse<IntegridadInspeccionDto>> VerificarIntegridadInspeccionAsync(long id) =>
         EnviarAsync<IntegridadInspeccionDto>(HttpMethod.Get, $"api/inspecciones/{id}/integridad");
@@ -1616,6 +1610,14 @@ public class HttpClientService
     public Task<ApiResponse<bool>> DescargarReporteAsync(string tipo, ReporteFiltroDto filtro, string formato) =>
         DescargarArchivoAsync(UrlReporte(tipo, filtro, formato, null, null),
             $"ECAR_{tipo}_{filtro.Desde:yyyyMMdd}_{filtro.Hasta:yyyyMMdd}.{formato}");
+
+    /// <summary>
+    /// Usuarios para el filtro «Usuario» de los reportes (Fase 5, B-04): Administrador y Supervisor; busca en el
+    /// nombre y el correo y devuelve como máximo 20, con id, nombre y correo. En Reportes sustituye a
+    /// GetUsuariosAsync, que es solo del Administrador y le fallaba al Supervisor.
+    /// </summary>
+    public Task<ApiResponse<List<UsuarioBusquedaDto>>> BuscarUsuariosReportesAsync(string? texto = null) =>
+        EnviarAsync<List<UsuarioBusquedaDto>>(HttpMethod.Get, ConFiltros("api/reportes/usuarios", ("texto", texto)));
 
     private static string UrlReporte(string tipo, ReporteFiltroDto filtro, string formato, int? page, int? pageSize) =>
         ConFiltros($"api/reportes/{tipo}",

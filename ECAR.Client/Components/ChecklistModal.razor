@@ -2,7 +2,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-<MudDialog Options="Opciones">
+<MudDialog Options="Opciones" Class="form-enter">
     <TitleContent>
         <MudText Typo="Typo.h6">@(IsEditMode ? "Editar Checklist" : "Crear Nuevo Checklist")</MudText>
     </TitleContent>
@@ -42,7 +42,7 @@
                                     Variant="Variant.Outlined" Required="true" RequiredError="La pregunta es requerida"
                                     Immediate="true" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
-                            <MudItem xs="6" sm="3">
+                            <MudItem xs="12" sm="3">
                                 <MudSelect T="string" Label="Tipo de Respuesta" @bind-Value="preguntas[index].TipoRespuesta"
                                     Variant="Variant.Outlined" Required="true" RequiredError="Requerido" Disabled="@tieneRespuestasRegistradas">
                                     @foreach (var tipo in TiposRespuesta.Todos)
@@ -51,11 +51,14 @@
                                     }
                                 </MudSelect>
                             </MudItem>
-                            <MudItem xs="4" sm="3" Class="d-flex align-center">
-                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria" Color="Color.Primary" Disabled="@tieneRespuestasRegistradas" />
-                            </MudItem>
-                            <MudItem xs="2" sm="1" Class="d-flex align-center justify-end">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemovePregunta(index)" Disabled="@tieneRespuestasRegistradas" />
+                            @* F-10: el interruptor y la papelera comparten columna, uno a cada extremo; en el
+                               teléfono bajan de línea debajo de la pregunta y nunca se superponen. *@
+                            <MudItem xs="12" sm="4" Class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                <MudSwitch T="bool" Label="Obligatoria" @bind-Value="preguntas[index].Obligatoria"
+                                    Color="Color.Primary" Disabled="@tieneRespuestasRegistradas" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                    aria-label="Quitar pregunta" title="Quitar pregunta"
+                                    OnClick="() => RemovePregunta(index)" Disabled="@tieneRespuestasRegistradas" />
                             </MudItem>
                         </MudGrid>
                     </MudPaper>
@@ -66,14 +69,16 @@
                 <MudAlert Severity="Severity.Info" Class="mb-3">Este checklist no tiene preguntas todavía</MudAlert>
             }
 
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPregunta" Disabled="@tieneRespuestasRegistradas">
-                Agregar Pregunta
+            @* F-10: Filled para que se lea; Outlined dejaba el texto lila sobre el fondo azul de theme.css. *@
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="AddPregunta" Disabled="@tieneRespuestasRegistradas">
+                Agregar pregunta
             </MudButton>
         </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Cancel" Class="dialog-button cancel-btn">Cancelar</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button">Guardar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit" Class="dialog-button enter-guardar">Guardar</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -193,11 +198,62 @@
                 Snackbar.Add("Checklist creado exitosamente", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }
+            else if (result?.CodigoHttp == 409)
+            {
+                // F-12: ya existe un checklist activo con ese nombre (B-05). Se ofrece su «Nueva versión».
+                await OfrecerNuevaVersionAsync(result.Message);
+            }
             else
             {
                 Snackbar.Add(result?.Message ?? "Error al crear checklist", Severity.Error);
             }
         }
+    }
+
+    /// <summary>
+    /// F-12: el nombre ya lo tiene un checklist activo. Muestra el mensaje del API y ofrece
+    /// crear una nueva versión de ese checklist en lugar de uno repetido.
+    /// </summary>
+    private async Task OfrecerNuevaVersionAsync(string mensajeApi)
+    {
+        var existente = await BuscarActivoConNombreAsync(nombre);
+        if (existente == null)
+        {
+            // No se encontró (por ejemplo, otro usuario lo desactivó): solo se muestra el mensaje.
+            Snackbar.Add(mensajeApi, Severity.Warning);
+            return;
+        }
+
+        var parametros = new DialogParameters
+        {
+            ["Message"] = $"{mensajeApi}. ¿Quiere crear una nueva versión de «{existente.Nombre}» " +
+                          $"(versión {existente.Version})? Se copiarán sus preguntas actuales; " +
+                          "las que escribió aquí no se guardan."
+        };
+        var confirmacion = await DialogService.ShowAsync<ConfirmDialog>("Ya existe un checklist con ese nombre", parametros);
+        var respuesta = await confirmacion.Result;
+        if (respuesta is null || respuesta.Canceled)
+        {
+            return; // Sigue en el formulario para cambiar el nombre.
+        }
+
+        var dialogo = await DialogService.ShowAsync<NuevaVersionChecklistDialog>("Nueva Versión",
+            new DialogParameters { ["Checklist"] = existente });
+        var resultado = await dialogo.Result;
+        if (resultado is not null && !resultado.Canceled)
+        {
+            // La versión nueva ya se creó: se cierra el formulario y la lista se recarga.
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    /// <summary>El checklist activo con el mismo nombre, sin distinguir mayúsculas ni espacios (como B-05).</summary>
+    private async Task<ChecklistDto?> BuscarActivoConNombreAsync(string nombreBuscado)
+    {
+        var buscado = nombreBuscado.Trim();
+        var respuesta = await HttpClientService.GetChecklistsAsync(1, 100, buscado);
+        return respuesta?.Data?.Data?.FirstOrDefault(c =>
+            c.Activo && string.Equals(c.Nombre.Trim(), buscado, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task Cancel()

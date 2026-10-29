@@ -56,7 +56,7 @@
             @* Immediate: el valor ya está enlazado cuando se pulsa Enter. *@
             <MudTextField T="string" Label="Correo o Usuario AD" @bind-Value="loginDto.CorreoOrUsuarioAD" Variant="Variant.Outlined" Required="false" RequiredError="El correo o usuario AD es requerido" Class="mb-3" AdornmentIcon="@Icons.Material.Filled.Email" Adornment="Adornment.Start"
                 Immediate="true" OnKeyDown="EnterIniciaSesion" />
-            <MudTextField T="string" Label="Password" @bind-Value="loginDto.Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="false" RequiredError="El password es requerido" Class="mb-4" AdornmentIcon="@Icons.Material.Filled.Lock" Adornment="Adornment.Start"
+            <MudTextField T="string" Label="Contraseña" @bind-Value="loginDto.Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="false" RequiredError="La contraseña es requerida" Class="mb-4" AdornmentIcon="@Icons.Material.Filled.Lock" Adornment="Adornment.Start"
                 Immediate="true" OnKeyDown="EnterIniciaSesion" />
 
             @if (isLoading)

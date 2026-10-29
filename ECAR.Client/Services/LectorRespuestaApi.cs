@@ -24,7 +24,14 @@ public static class LectorRespuestaApi
     public static async Task<ApiResponse<T>> LeerAsync<T>(HttpResponseMessage response,
         Func<HttpStatusCode, string>? mensajeSegunEstado = null)
     {
-        var mensaje = mensajeSegunEstado ?? MensajeSegunEstado;
+        var resultado = await LeerCuerpoAsync<T>(response, mensajeSegunEstado ?? MensajeSegunEstado);
+        resultado.CodigoHttp = (int)response.StatusCode;
+        return resultado;
+    }
+
+    private static async Task<ApiResponse<T>> LeerCuerpoAsync<T>(HttpResponseMessage response,
+        Func<HttpStatusCode, string> mensaje)
+    {
         var texto = await response.Content.ReadAsStringAsync();
         if (!string.IsNullOrWhiteSpace(texto))
         {

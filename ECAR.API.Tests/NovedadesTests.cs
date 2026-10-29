@@ -396,6 +396,30 @@ public class NovedadesTests
     }
 
     [Fact]
+    public async Task El_quinto_intento_incorrecto_bloquea_y_responde_423_sin_resolver_la_novedad()
+    {
+        var e = await SeedAsync();
+        var (_, novedades) = await FirmadaConDosNovedadesAsync(e);
+        var idNovedad = novedades[0].IdNovedad;
+
+        for (var intento = 0; intento < 4; intento++)
+        {
+            var incorrecta = await ResolverAsync(e, e.OtroTecnico, idNovedad, password: $"Incorrecta{intento}");
+            Assert.IsType<BadRequestObjectResult>(incorrecta.Result);
+            e.Db.ChangeTracker.Clear();
+        }
+
+        var quinto = await ResolverAsync(e, e.OtroTecnico, idNovedad, password: "Incorrecta4");
+        e.Db.ChangeTracker.Clear();
+        var conLaCorrecta = await ResolverAsync(e, e.OtroTecnico, idNovedad);
+
+        Assert.Equal(StatusCodes.Status423Locked, Assert.IsType<ObjectResult>(quinto.Result).StatusCode);
+        Assert.Equal(StatusCodes.Status423Locked, Assert.IsType<ObjectResult>(conLaCorrecta.Result).StatusCode);
+        Assert.Equal(NovedadEstados.Pendiente,
+            (await e.Db.Novedades.AsNoTracking().SingleAsync(n => n.IdNovedad == idNovedad)).Estado);
+    }
+
+    [Fact]
     public async Task Sin_lo_que_se_hizo_o_con_una_firma_que_no_es_PNG_responde_400_con_la_lista()
     {
         var e = await SeedAsync();

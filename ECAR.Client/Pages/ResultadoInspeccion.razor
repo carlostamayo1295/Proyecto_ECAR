@@ -1,7 +1,6 @@
 ﻿@page "/inspecciones/{IdInspeccion:long}/resultado"
 @inject HttpClientService Http
 @inject NavigationManager Navigation
-@inject IJSRuntime jsRuntime
 @inject ISnackbar Snackbar
 @inject AuthorizationService AuthorizationService
 
@@ -16,7 +15,7 @@
     {
         <MudAlert Severity="Severity.Error" Class="my-4">
             @(_error ?? "No se pudo cargar el resultado de la inspección.")
-            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="VolverListado" Class="ml-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="VolverListado" Class="ml-2">
                 Volver al listado
             </MudButton>
         </MudAlert>
@@ -52,15 +51,15 @@
             <MudGrid Spacing="3" Class="mb-4">
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.body2"><b>Equipo:</b> @resultado.NombreEquipo (@resultado.CodigoInterno)</MudText>
-                    <MudText Typo="Typo.body2"><b>Ubicación:</b> @resultado.UbicacionNombre</MudText>
+                    <MudText Typo="Typo.body2"><b>Ubicación:</b> @(string.IsNullOrWhiteSpace(resultado.UbicacionNombre) ? "Sin ubicación" : resultado.UbicacionNombre)</MudText>
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudText Typo="Typo.body2"><b>Fecha de firma:</b> @resultado.FechaCierre?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                    <MudText Typo="Typo.body2"><b>Fecha de firma:</b> @(resultado.FechaCierre is { } fechaCierre ? FormatoEstados.HoraColombia(fechaCierre) : "—")</MudText>
                     <MudText Typo="Typo.body2"><b>Inspector responsable:</b> @resultado.NombreUsuario</MudText>
                 </MudItem>
             </MudGrid>
 
-            <!-- Bloque de Auditoría y Hash (SHA-256) - Visible solo para Auditor/Administrador -->
+            <!-- Bloque de Auditoría y Hash (SHA-256) - Visible solo para Supervisor/Administrador -->
             @if (_puedeVerHash)
             {
                 <MudPaper Elevation="2" Class="pa-4 mb-4">
@@ -164,7 +163,7 @@
                 }
 
                 @* Manifestación de la firma (Fase 4, Parte 11 §11.50). Queda dentro del área de
-                   impresión, así que también sale en "Imprimir / PDF". *@
+                   impresión. *@
                 @if (ManifestacionFirma(resultado) is { } manifestacion)
                 {
                     <MudText Typo="Typo.body2" Class="d-block mt-2">@manifestacion</MudText>
@@ -179,9 +178,6 @@
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_descargando"
                            StartIcon="@Icons.Material.Filled.Download" OnClick="DescargarRegistroAsync">
                     @(_descargando ? "Generando…" : "Descargar registro PDF")
-                </MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImprimirReporte">
-                    <MudIcon Icon="@Icons.Material.Filled.Print" Class="mr-2" /> Imprimir / PDF
                 </MudButton>
             </div>
 
@@ -267,11 +263,7 @@
     {
         Navigation.NavigateTo("/inspecciones");
     }
-
-    private async Task ImprimirReporte()
-    {
-        await jsRuntime.InvokeVoidAsync("window.print");
-    }
+    
 
 
     private async Task VerificarIntegridadAsync()

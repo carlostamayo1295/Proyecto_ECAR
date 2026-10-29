@@ -15,7 +15,6 @@ public class UpdateUsuarioDto
 
     public bool? Activo { get; set; }
 
-    [MinLength(6, ErrorMessage = "El password debe tener al menos 6 caracteres")]
     public string? Password { get; set; }
 
     public List<long>? RoleIds { get; set; }

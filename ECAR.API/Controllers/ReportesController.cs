@@ -32,6 +32,39 @@ namespace ECAR.API.Controllers
             _currentUser = currentUser;
         }
 
+        /// <summary>Máximo de usuarios por búsqueda: el filtro del cliente pide 20.</summary>
+        public const int MaximoUsuariosBusqueda = 20;
+
+        /// <summary>
+        /// Búsqueda de usuarios para el filtro «Usuario» (B-04). GET api/usuarios es solo del
+        /// Administrador; esta la usa también el Supervisor y devuelve solo id, nombre y correo.
+        /// Incluye a los inactivos, porque sus inspecciones siguen en los reportes.
+        /// </summary>
+        [HttpGet("usuarios")]
+        public async Task<ActionResult<ApiResponse<List<UsuarioBusquedaDto>>>> GetUsuarios([FromQuery] string? texto = null)
+        {
+            var query = _context.Usuarios.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(texto))
+            {
+                var term = texto.Trim();
+                query = query.Where(u => u.Nombre.Contains(term) || u.Correo.Contains(term));
+            }
+
+            var usuarios = await query
+                .OrderBy(u => u.Nombre)
+                .Take(MaximoUsuariosBusqueda)
+                .Select(u => new UsuarioBusquedaDto
+                {
+                    IdUsuario = u.IdUsuario,
+                    Nombre = u.Nombre,
+                    Correo = u.Correo
+                })
+                .ToListAsync();
+
+            return Ok(ApiResponse<List<UsuarioBusquedaDto>>.SuccessResponse(usuarios));
+        }
+
         [HttpGet("historial-equipo")]
         public Task<IActionResult> GetHistorialEquipo([FromQuery] ReporteFiltroDto filtro,
             [FromQuery] string formato = ReporteFormatos.Json, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
